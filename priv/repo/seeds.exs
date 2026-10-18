@@ -35,6 +35,26 @@ feeds = [
     name: "Mein-Deal",
     slug: "mein-deal",
     url: "https://www.mein-deal.com/feed/"
+  },
+  %{
+    name: "Preisjäger",
+    slug: "preisjaeger",
+    url: "https://www.preisjaeger.at/rss"
+  },
+  %{
+    name: "Dealabs",
+    slug: "dealabs",
+    url: "https://www.dealabs.com/rss"
+  },
+  %{
+    name: "Reddit Deals",
+    slug: "reddit-deals",
+    url: "https://www.reddit.com/r/dealdoktor/.rss"
+  },
+  %{
+    name: "Reddit BAPC",
+    slug: "reddit-bapcsales",
+    url: "https://www.reddit.com/r/bapcsales/.rss"
   }
 ]
 
@@ -76,3 +96,27 @@ Enum.each(deals_to_backfill, fn deal ->
   })
   |> Repo.update()
 end)
+
+# Default admin account
+admin_email = "admin@dealscout.de"
+admin_pass = "dealscout2026!"
+
+case Repo.get_by(DealScout.Accounts.User, email: admin_email) do
+  nil ->
+    %DealScout.Accounts.User{
+      email: admin_email,
+      confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      is_admin: true
+    }
+    |> DealScout.Accounts.User.password_changeset(%{password: admin_pass})
+    |> Repo.insert!()
+
+  user ->
+    user
+    |> Ecto.Changeset.change(%{
+      is_admin: true,
+      confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> DealScout.Accounts.User.password_changeset(%{password: admin_pass})
+    |> Repo.update!()
+end

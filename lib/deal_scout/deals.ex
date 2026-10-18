@@ -5,7 +5,7 @@ defmodule DealScout.Deals do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Deals.{Deal, Merchant, MerchantGuard}
+  alias DealScout.Deals.{Deal, Merchant, MerchantGuard, Deduplicator, Cache}
 
   @pubsub DealScout.PubSub
   @topic "deals:feed"
@@ -28,31 +28,57 @@ defmodule DealScout.Deals do
   - :merchant - filter by merchant slug
   - :exclude_dropshippers - boolean to filter out dropshippers
   - :min_temperature - integer threshold
+  - :group_deals - boolean to consolidate duplicate deals (default true)
   - :limit - max records (default 60)
   - :offset - pagination offset
   """
   def list_deals(opts \\ []) do
+    case Cache.get_deals(opts) do
+      {:ok, cached_deals} ->
+        cached_deals
+
+      :fallback ->
+        query_deals_from_db(opts)
+    end
+  end
+
+  defp query_deals_from_db(opts) do
     search = Keyword.get(opts, :search)
     feed_id = Keyword.get(opts, :feed_id)
     merchant_slug = Keyword.get(opts, :merchant)
     exclude_dropshippers = Keyword.get(opts, :exclude_dropshippers, false)
     min_temperature = Keyword.get(opts, :min_temperature)
+    group_deals = Keyword.get(opts, :group_deals, true)
     limit = Keyword.get(opts, :limit, 60)
     offset = Keyword.get(opts, :offset, 0)
 
-    Deal
-    |> join(:inner, [d], f in assoc(d, :feed), as: :feed)
-    |> join(:left, [d], m in assoc(d, :merchant), as: :merchant)
-    |> preload([d, feed: f, merchant: m], feed: f, merchant: m)
-    |> filter_by_search(search)
-    |> filter_by_feed(feed_id)
-    |> filter_by_merchant(merchant_slug)
-    |> filter_by_dropshippers(exclude_dropshippers)
-    |> filter_by_min_temperature(min_temperature)
-    |> order_by([d], desc: d.published_at, desc: d.id)
-    |> limit(^limit)
-    |> offset(^offset)
-    |> Repo.all()
+    query =
+      Deal
+      |> join(:inner, [d], f in assoc(d, :feed), as: :feed)
+      |> join(:left, [d], m in assoc(d, :merchant), as: :merchant)
+      |> filter_by_search(search)
+      |> filter_by_feed(feed_id)
+      |> filter_by_merchant(merchant_slug)
+      |> filter_by_dropshippers(exclude_dropshippers)
+      |> filter_by_min_temperature(min_temperature)
+      |> filter_by_grouping(group_deals)
+      |> order_by([d], desc: d.published_at, desc: d.id)
+      |> limit(^limit)
+      |> offset(^offset)
+
+    if group_deals do
+      query
+      |> preload([d, feed: f, merchant: m],
+        feed: f,
+        merchant: m,
+        duplicates: [:feed, :merchant]
+      )
+      |> Repo.all()
+    else
+      query
+      |> preload([d, feed: f, merchant: m], feed: f, merchant: m)
+      |> Repo.all()
+    end
   end
 
   defp filter_by_search(query, nil), do: query
@@ -107,9 +133,15 @@ defmodule DealScout.Deals do
     where(query, [d], not is_nil(d.temperature) and d.temperature >= ^min_temp)
   end
 
+  defp filter_by_grouping(query, true) do
+    where(query, [d], is_nil(d.canonical_deal_id))
+  end
+
+  defp filter_by_grouping(query, false), do: query
+
   def get_deal!(id) do
     Deal
-    |> preload([:feed, :merchant])
+    |> preload([:feed, :merchant, duplicates: [:feed, :merchant]])
     |> Repo.get!(id)
   end
 
@@ -248,9 +280,33 @@ defmodule DealScout.Deals do
     raw_merchant =
       attrs[:merchant_name] || attrs["merchant_name"] || attrs[:merchant] || attrs["merchant"]
 
+    canonical_id =
+      cond do
+        attrs[:canonical_deal_id] ->
+          attrs[:canonical_deal_id]
+
+        attrs["canonical_deal_id"] ->
+          attrs["canonical_deal_id"]
+
+        true ->
+          candidate_attrs =
+            attrs
+            |> Map.put(:merchant_id, merchant_id)
+            |> Map.put(:title, attrs[:title] || attrs["title"])
+            |> Map.put(:price, attrs[:price] || attrs["price"])
+            |> Map.put(:url, attrs[:url] || attrs["url"])
+            |> Map.put(:published_at, attrs[:published_at] || attrs["published_at"])
+
+          case Deduplicator.find_canonical_deal(candidate_attrs) do
+            %{id: cid} -> cid
+            _ -> nil
+          end
+      end
+
     deal_attrs =
       attrs
       |> Map.put(:merchant_id, merchant_id)
+      |> Map.put(:canonical_deal_id, canonical_id)
       |> Map.put_new(:raw_merchant, raw_merchant)
 
     %Deal{}
@@ -264,12 +320,37 @@ defmodule DealScout.Deals do
         {:duplicate, attrs[:guid] || attrs["guid"]}
 
       {:ok, %Deal{} = deal} ->
-        deal = Repo.preload(deal, [:feed, :merchant])
+        deal = Repo.preload(deal, [:feed, :merchant, duplicates: [:feed]])
+        Cache.refresh()
         broadcast_deal({:ok, deal})
 
       error ->
         error
     end
+  end
+
+  @doc """
+  Runs through all deals chronologically and assigns canonical_deal_id to duplicates.
+  """
+  def deduplicate_all_deals do
+    deals =
+      Deal
+      |> order_by([d], asc: d.published_at, asc: d.id)
+      |> Repo.all()
+
+    Enum.reduce(deals, 0, fn deal, count ->
+      case Deduplicator.find_canonical_deal(deal) do
+        %Deal{id: cid} when cid != deal.id ->
+          deal
+          |> Deal.changeset(%{canonical_deal_id: cid})
+          |> Repo.update!()
+
+          count + 1
+
+        _ ->
+          count
+      end
+    end)
   end
 
   @doc """

@@ -18,6 +18,8 @@ defmodule DealScout.Deals.Deal do
 
     belongs_to :feed, DealScout.Feeds.Feed
     belongs_to :merchant, DealScout.Deals.Merchant
+    belongs_to :canonical_deal, DealScout.Deals.Deal, foreign_key: :canonical_deal_id
+    has_many :duplicates, DealScout.Deals.Deal, foreign_key: :canonical_deal_id
     has_many :user_matches, DealScout.Alerts.UserMatch
 
     timestamps(type: :utc_datetime)
@@ -29,6 +31,7 @@ defmodule DealScout.Deals.Deal do
     |> cast(attrs, [
       :feed_id,
       :merchant_id,
+      :canonical_deal_id,
       :guid,
       :title,
       :url,

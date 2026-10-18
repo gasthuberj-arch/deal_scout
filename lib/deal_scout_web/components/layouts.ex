@@ -122,6 +122,11 @@ defmodule DealScoutWeb.Layouts do
                 Matches
               </.link>
             </li>
+            <li>
+              <.link navigate={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
+                <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
+              </.link>
+            </li>
           <% end %>
         </ul>
       </div>
@@ -148,6 +153,14 @@ defmodule DealScoutWeb.Layouts do
               <div class="divider my-1"></div>
               <li><.link navigate={~p"/alerts"}>My Alert Keywords</.link></li>
               <li><.link navigate={~p"/matches"}>Matched Deals</.link></li>
+              <li><.link navigate={~p"/analytics"}>Deal Intelligence</.link></li>
+              <%= if @current_scope.user.is_admin do %>
+                <li>
+                  <.link navigate={~p"/admin/system"} class="text-error font-medium">
+                    <.icon name="hero-shield-check" class="size-3.5" /> Admin System Ops
+                  </.link>
+                </li>
+              <% end %>
               <li><.link navigate={~p"/users/settings"}>Settings</.link></li>
               <div class="divider my-1"></div>
               <li>

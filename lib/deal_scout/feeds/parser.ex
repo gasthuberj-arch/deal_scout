@@ -16,13 +16,82 @@ defmodule DealScout.Feeds.Parser do
       {:ok, document} ->
         items = Floki.find(document, "item")
 
-        Enum.map(items, fn item ->
-          parse_item(item, feed_id)
-        end)
-        |> Enum.reject(&is_nil/1)
+        if items != [] do
+          Enum.map(items, fn item ->
+            parse_item(item, feed_id)
+          end)
+          |> Enum.reject(&is_nil/1)
+        else
+          entries = Floki.find(document, "entry")
+
+          Enum.map(entries, fn entry ->
+            parse_atom_entry(entry, feed_id)
+          end)
+          |> Enum.reject(&is_nil/1)
+        end
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  def parse_atom_entry(entry, feed_id) do
+    raw_title = entry |> Floki.find("title") |> Floki.text() |> clean_text_string()
+
+    link =
+      case Floki.find(entry, "link") |> Floki.attribute("href") do
+        [href | _] when is_binary(href) and href != "" -> href
+        _ -> entry |> Floki.find("link") |> Floki.text() |> clean_text_string()
+      end
+
+    guid = entry |> Floki.find("id") |> Floki.text() |> clean_text_string()
+    guid = if guid == "", do: link, else: guid
+
+    pub_date_str =
+      entry
+      |> Floki.find("updated, published")
+      |> Floki.text()
+      |> clean_text_string()
+
+    published_at = parse_datetime(pub_date_str)
+
+    raw_description =
+      case Floki.find(entry, "content, summary") do
+        [desc_node | _] ->
+          Floki.raw_html(desc_node)
+
+        _ ->
+          ""
+      end
+
+    description = clean_text_string(raw_description)
+    clean_text = clean_html(description)
+
+    {temperature, title} = extract_temperature(raw_title)
+    merchant_name = extract_merchant(entry, description, link)
+    price = extract_price(entry, title, description)
+    image_url = extract_image_url(entry, description)
+    {idealo_url, geizhals_url} = extract_comparison_links(raw_description <> " " <> clean_text)
+
+    if title != "" and link != "" do
+      %{
+        feed_id: feed_id,
+        guid: guid,
+        title: title,
+        url: link,
+        description: description,
+        clean_text: clean_text,
+        price: price,
+        merchant: merchant_name,
+        merchant_name: merchant_name,
+        image_url: image_url,
+        published_at: published_at,
+        temperature: temperature,
+        idealo_url: idealo_url,
+        geizhals_url: geizhals_url
+      }
+    else
+      nil
     end
   end
 
@@ -118,6 +187,8 @@ defmodule DealScout.Feeds.Parser do
 
   defp clean_url(url) when is_binary(url) do
     url
+    |> decode_html_entities()
+    |> String.replace(~r/<.*$/, "")
     |> String.replace(~r/[)"'\]>.,;]+$/, "")
     |> String.trim()
   end
@@ -242,11 +313,21 @@ defmodule DealScout.Feeds.Parser do
       str
       |> String.replace("€", "")
       |> String.replace(" ", "")
-      |> String.replace(".", "")
-      |> String.replace(",", ".")
       |> String.trim()
 
-    case Decimal.parse(cleaned) do
+    normalized =
+      cond do
+        String.contains?(cleaned, ".") and String.contains?(cleaned, ",") ->
+          cleaned |> String.replace(".", "") |> String.replace(",", ".")
+
+        String.contains?(cleaned, ",") ->
+          String.replace(cleaned, ",", ".")
+
+        true ->
+          cleaned
+      end
+
+    case Decimal.parse(normalized) do
       {dec, ""} -> dec
       _ -> nil
     end

@@ -15,9 +15,10 @@ defmodule DealScout.Application do
          repos: Application.fetch_env!(:deal_scout, :ecto_repos), skip: skip_migrations?()},
         {DNSCluster, query: Application.get_env(:deal_scout, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: DealScout.PubSub},
+        DealScoutWeb.Presence,
         # Start to serve requests, typically the last entry
         DealScoutWeb.Endpoint
-      ] ++ background_workers()
+      ] ++ cache_workers() ++ background_workers()
 
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
@@ -36,6 +37,14 @@ defmodule DealScout.Application do
   defp skip_migrations?() do
     # By default, sqlite migrations are run when using a release
     System.get_env("RELEASE_NAME") == nil
+  end
+
+  defp cache_workers() do
+    if Application.get_env(:deal_scout, :start_deals_cache, true) do
+      [DealScout.Deals.Cache]
+    else
+      []
+    end
   end
 
   defp background_workers() do

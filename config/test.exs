@@ -11,6 +11,7 @@ config :bcrypt_elixir, :log_rounds, 1
 config :deal_scout, DealScout.Repo,
   database: Path.expand("../deal_scout_test.db", __DIR__),
   pool_size: 5,
+  busy_timeout: 10_000,
   pool: Ecto.Adapters.SQL.Sandbox
 
 # We don't run a server during test. If one is required,
@@ -40,5 +41,5 @@ config :phoenix_live_view,
 config :phoenix,
   sort_verified_routes_query_params: true
 
-# Disable background feed poller in test
-config :deal_scout, start_feed_poller: false
+# Disable background feed poller & in-memory cache in test
+config :deal_scout, start_feed_poller: false, start_deals_cache: false

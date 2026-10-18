@@ -52,12 +52,25 @@ defmodule DealScoutWeb.Router do
       live "/alerts/new", AlertLive.Index, :new
       live "/alerts/:id/edit", AlertLive.Index, :edit
       live "/matches", MatchLive.Index, :index
+      live "/analytics", AnalyticsLive.Index, :index
 
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end
 
     post "/users/update-password", UserSessionController, :update_password
+  end
+
+  scope "/admin", DealScoutWeb.Admin do
+    pipe_through [:browser, :require_authenticated_user, :require_admin_user]
+
+    live_session :require_admin_user,
+      on_mount: [
+        {DealScoutWeb.UserAuth, :require_authenticated},
+        {DealScoutWeb.UserAuth, :require_admin}
+      ] do
+      live "/system", SystemLive.Index, :index
+    end
   end
 
   scope "/", DealScoutWeb do

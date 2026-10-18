@@ -87,4 +87,112 @@ defmodule DealScoutWeb.DealLiveTest do
 
     refute render(view) =~ "Security Notice"
   end
+
+  test "renders duplicate deal pills and toggles grouping", %{conn: conn, feed: feed1} do
+    feed2 =
+      Repo.insert!(%Feed{
+        name: "DealDoktor",
+        slug: "dealdoktor",
+        url: "https://www.dealdoktor.de/feed/"
+      })
+
+    {:ok, orig} =
+      DealScout.Deals.insert_deal(%{
+        feed_id: feed1.id,
+        guid: "deal-ps5-orig",
+        title: "Sony PlayStation 5 Slim Digital",
+        url: "https://www.amazon.de/dp/B0CLT544NZ",
+        price: Decimal.new("399.00"),
+        merchant: "Amazon",
+        published_at: DateTime.utc_now()
+      })
+
+    {:ok, dup} =
+      DealScout.Deals.insert_deal(%{
+        feed_id: feed2.id,
+        guid: "deal-ps5-dup",
+        title: "PS5 Slim Digital Konsole",
+        url: "https://www.amazon.de/dp/B0CLT544NZ?tag=dd-21",
+        price: Decimal.new("395.00"),
+        merchant: "Amazon",
+        published_at: DateTime.utc_now()
+      })
+
+    assert dup.canonical_deal_id == orig.id
+
+    {:ok, view, html} = live(conn, ~p"/")
+
+    # Canonical deal is visible
+    assert html =~ orig.title
+    # "Also on:" pill is rendered with DealDoktor and price
+    assert html =~ "Also on:"
+    assert html =~ "DealDoktor"
+    assert html =~ "395"
+
+    # Click Toggle Group Duplicates
+    view
+    |> element("button[phx-click='toggle_group_deals']")
+    |> render_click()
+
+    # When ungrouped, both deals appear in stream
+    updated_html = render(view)
+    assert updated_html =~ orig.title
+    assert updated_html =~ dup.title
+  end
+
+  test "renders country badge and foreign keyboard warning banner", %{conn: conn, feed: feed} do
+    {:ok, _fr_laptop} =
+      DealScout.Deals.insert_deal(%{
+        feed_id: feed.id,
+        guid: "deal-laptop-fr",
+        title: "ASUS ZenBook 14 OLED Laptop",
+        url: "https://www.amazon.fr/dp/B08N5WRWNW",
+        clean_text: "Top Notebook mit Intel Core Ultra",
+        price: Decimal.new("899.00"),
+        merchant: "Amazon FR",
+        published_at: DateTime.utc_now()
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/")
+
+    # Country badge rendered
+    assert html =~ "🇫🇷"
+    assert html =~ "France"
+
+    # Foreign keyboard alert banner rendered
+    assert html =~ "Foreign Keyboard Layout"
+    assert html =~ "AZERTY"
+  end
+
+  test "infinite scroll marker is rendered and load_more event appends deals", %{
+    conn: conn,
+    feed: feed
+  } do
+    for i <- 1..35 do
+      {:ok, _} =
+        DealScout.Deals.insert_deal(%{
+          feed_id: feed.id,
+          guid: "deal-scroll-#{i}",
+          title: "Unique Gadget Model #{i}",
+          url: "https://example#{i}.com/scroll-#{i}",
+          price: Decimal.new("#{50 + i}.00"),
+          merchant: "MerchantShop#{i}",
+          published_at: DateTime.utc_now() |> DateTime.add(-i * 60, :second)
+        })
+    end
+
+    {:ok, view, html} = live(conn, ~p"/")
+
+    # Initial page loads with infinite scroll marker
+    assert html =~ "infinite-scroll-marker"
+    assert html =~ "Loading more deals..."
+
+    # Trigger load_more
+    view
+    |> element("#infinite-scroll-marker button")
+    |> render_click()
+
+    updated_html = render(view)
+    assert updated_html =~ "Unique Gadget Model 35"
+  end
 end

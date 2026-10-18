@@ -231,6 +231,22 @@ defmodule DealScoutWeb.UserAuth do
     end
   end
 
+  def on_mount(:require_admin, _params, session, socket) do
+    socket = mount_current_scope(socket, session)
+
+    if socket.assigns.current_scope && socket.assigns.current_scope.user &&
+         socket.assigns.current_scope.user.is_admin do
+      {:cont, socket}
+    else
+      socket =
+        socket
+        |> Phoenix.LiveView.put_flash(:error, "You must be an administrator to access this page.")
+        |> Phoenix.LiveView.redirect(to: ~p"/")
+
+      {:halt, socket}
+    end
+  end
+
   def on_mount(:require_sudo_mode, _params, session, socket) do
     socket = mount_current_scope(socket, session)
 
@@ -247,14 +263,37 @@ defmodule DealScoutWeb.UserAuth do
   end
 
   defp mount_current_scope(socket, session) do
-    Phoenix.Component.assign_new(socket, :current_scope, fn ->
-      {user, _} =
-        if user_token = session["user_token"] do
-          Accounts.get_user_by_session_token(user_token)
-        end || {nil, nil}
+    socket =
+      Phoenix.Component.assign_new(socket, :current_scope, fn ->
+        {user, _} =
+          if user_token = session["user_token"] do
+            Accounts.get_user_by_session_token(user_token)
+          end || {nil, nil}
 
-      Scope.for_user(user)
-    end)
+        Scope.for_user(user)
+      end)
+
+    if Phoenix.LiveView.connected?(socket) do
+      socket_id = socket.id || "#{inspect(self())}"
+
+      user_key =
+        if socket.assigns[:current_scope] && socket.assigns.current_scope.user,
+          do: socket.assigns.current_scope.user.email,
+          else: "anon:#{socket_id}"
+
+      try do
+        unless DealScoutWeb.Presence.get_by_key("deals:presence", socket_id) != [] do
+          DealScoutWeb.Presence.track(self(), "deals:presence", socket_id, %{
+            user: user_key,
+            online_at: System.system_time(:second)
+          })
+        end
+      rescue
+        _ -> :ok
+      end
+    end
+
+    socket
   end
 
   @doc "Returns the path to redirect to after log in."
@@ -276,6 +315,21 @@ defmodule DealScoutWeb.UserAuth do
       |> put_flash(:error, "You must log in to access this page.")
       |> maybe_store_return_to()
       |> redirect(to: ~p"/users/log-in")
+      |> halt()
+    end
+  end
+
+  @doc """
+  Plug for routes that require the user to be an administrator.
+  """
+  def require_admin_user(conn, _opts) do
+    if conn.assigns.current_scope && conn.assigns.current_scope.user &&
+         conn.assigns.current_scope.user.is_admin do
+      conn
+    else
+      conn
+      |> put_flash(:error, "You must be an administrator to access this page.")
+      |> redirect(to: ~p"/")
       |> halt()
     end
   end

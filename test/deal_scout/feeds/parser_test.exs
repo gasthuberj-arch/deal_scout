@@ -68,4 +68,31 @@ defmodule DealScout.Feeds.ParserTest do
     assert idealo == "https://www.idealo.de/preisvergleich/OffersOfProduct/9999.html"
     assert geizhals == "https://geizhals.de/asus-rog-a1111.html"
   end
+
+  @sample_atom """
+  <?xml version="1.0" encoding="UTF-8"?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <title>reddit: deals</title>
+    <entry>
+      <title>[Amazon] Logitech MX Master 3S Wireless Mouse - 79.99€ (was 109€)</title>
+      <link href="https://www.reddit.com/r/dealdoktor/comments/12345/logitech_mx_master/" />
+      <id>t3_12345</id>
+      <updated>2026-10-18T14:20:00+00:00</updated>
+      <content type="html">&lt;p&gt;Direct link: https://www.amazon.de/dp/B09HM94VDS&lt;/p&gt;&lt;p&gt;Idealo: https://www.idealo.de/preisvergleich/OffersOfProduct/mx3s.html&lt;/p&gt;</content>
+    </entry>
+  </feed>
+  """
+
+  test "parses Atom feed entries (Reddit format)" do
+    deals = Parser.parse_feed(@sample_atom, 99)
+    assert length(deals) == 1
+
+    deal = hd(deals)
+    assert deal.feed_id == 99
+    assert deal.guid == "t3_12345"
+    assert deal.url == "https://www.reddit.com/r/dealdoktor/comments/12345/logitech_mx_master/"
+    assert deal.title =~ "Logitech MX Master 3S"
+    assert Decimal.equal?(deal.price, Decimal.new("79.99"))
+    assert deal.idealo_url == "https://www.idealo.de/preisvergleich/OffersOfProduct/mx3s.html"
+  end
 end

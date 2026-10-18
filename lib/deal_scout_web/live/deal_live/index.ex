@@ -2,8 +2,11 @@ defmodule DealScoutWeb.DealLive.Index do
   use DealScoutWeb, :live_view
 
   alias DealScout.Deals
+  alias DealScout.Deals.CrossBorderGuard
   alias DealScout.Feeds
   alias DealScout.Feeds.Poller
+
+  @page_size 30
 
   @impl true
   def mount(_params, _session, socket) do
@@ -20,10 +23,13 @@ defmodule DealScoutWeb.DealLive.Index do
       |> assign(:selected_feed, "all")
       |> assign(:selected_merchant, "all")
       |> assign(:hide_dropshippers, false)
+      |> assign(:group_deals, true)
       |> assign(:min_temperature, nil)
       |> assign(:search_query, "")
       |> assign(:loading, false)
       |> assign(:interstitial_deal, nil)
+      |> assign(:page_offset, 0)
+      |> assign(:has_more?, true)
       |> load_deals()
 
     {:ok, socket}
@@ -35,6 +41,7 @@ defmodule DealScoutWeb.DealLive.Index do
     selected_merchant = params["merchant"] || "all"
     search_query = params["q"] || ""
     hide_dropshippers = params["no_dropship"] == "true"
+    group_deals = params["group"] != "false"
 
     min_temperature =
       case Integer.parse(params["temp"] || "") do
@@ -48,6 +55,7 @@ defmodule DealScoutWeb.DealLive.Index do
       |> assign(:selected_merchant, selected_merchant)
       |> assign(:search_query, search_query)
       |> assign(:hide_dropshippers, hide_dropshippers)
+      |> assign(:group_deals, group_deals)
       |> assign(:min_temperature, min_temperature)
       |> load_deals()
 
@@ -84,6 +92,13 @@ defmodule DealScoutWeb.DealLive.Index do
   end
 
   @impl true
+  def handle_event("toggle_group_deals", _params, socket) do
+    new_val = !socket.assigns.group_deals
+
+    {:noreply, push_patch_with_filters(socket, %{group: if(new_val, do: "true", else: "false")})}
+  end
+
+  @impl true
   def handle_event("set_min_temp", %{"temp" => temp_str}, socket) do
     val = if temp_str == "all" || temp_str == "", do: nil, else: temp_str
     {:noreply, push_patch_with_filters(socket, %{temp: val})}
@@ -111,6 +126,52 @@ defmodule DealScoutWeb.DealLive.Index do
   end
 
   @impl true
+  def handle_event("load_more", _params, socket) do
+    if socket.assigns.has_more? do
+      new_offset = socket.assigns.page_offset + @page_size
+
+      feed_id =
+        case socket.assigns.selected_feed do
+          "all" ->
+            nil
+
+          slug ->
+            case Enum.find(socket.assigns.feeds, &(&1.slug == slug)) do
+              %{id: id} -> id
+              _ -> nil
+            end
+        end
+
+      merchant_slug =
+        if socket.assigns.selected_merchant == "all",
+          do: nil,
+          else: socket.assigns.selected_merchant
+
+      more_deals =
+        Deals.list_deals(
+          search: socket.assigns.search_query,
+          feed_id: feed_id,
+          merchant: merchant_slug,
+          exclude_dropshippers: socket.assigns.hide_dropshippers,
+          min_temperature: socket.assigns.min_temperature,
+          group_deals: socket.assigns.group_deals,
+          limit: @page_size,
+          offset: new_offset
+        )
+
+      has_more? = length(more_deals) >= @page_size
+
+      {:noreply,
+       socket
+       |> assign(:page_offset, new_offset)
+       |> assign(:has_more?, has_more?)
+       |> stream(:deals, more_deals)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_info({:new_deal, deal}, socket) do
     if matches_filters?(deal, socket.assigns) do
       {:noreply, stream_insert(socket, :deals, deal, at: 0)}
@@ -133,6 +194,13 @@ defmodule DealScoutWeb.DealLive.Index do
         if(assigns.hide_dropshippers, do: "true", else: "false")
       )
 
+    group =
+      Map.get(
+        overrides,
+        :group,
+        if(assigns.group_deals, do: "true", else: "false")
+      )
+
     temp =
       Map.get(
         overrides,
@@ -146,6 +214,7 @@ defmodule DealScoutWeb.DealLive.Index do
         {"merchant", merchant != "all" && merchant},
         {"q", query != "" && query},
         {"no_dropship", no_dropship == "true" && "true"},
+        {"group", group == "false" && "false"},
         {"temp", temp}
       ]
       |> Enum.reject(fn {_k, v} -> !v end)
@@ -179,10 +248,15 @@ defmodule DealScoutWeb.DealLive.Index do
         merchant: merchant_slug,
         exclude_dropshippers: socket.assigns.hide_dropshippers,
         min_temperature: socket.assigns.min_temperature,
-        limit: 80
+        group_deals: socket.assigns.group_deals,
+        limit: @page_size,
+        offset: 0
       )
 
-    stream(socket, :deals, deals, reset: true)
+    socket
+    |> assign(:page_offset, 0)
+    |> assign(:has_more?, length(deals) >= @page_size)
+    |> stream(:deals, deals, reset: true)
   end
 
   defp matches_filters?(deal, assigns) do
@@ -203,6 +277,9 @@ defmodule DealScoutWeb.DealLive.Index do
       is_nil(assigns.min_temperature) or
         (not is_nil(deal.temperature) and deal.temperature >= assigns.min_temperature)
 
+    matches_grouping? =
+      not assigns.group_deals or is_nil(deal.canonical_deal_id)
+
     matches_search? =
       assigns.search_query == "" or
         String.contains?(String.downcase(deal.title), String.downcase(assigns.search_query)) or
@@ -217,7 +294,7 @@ defmodule DealScoutWeb.DealLive.Index do
            ))
 
     matches_feed? and matches_merchant? and matches_dropshipper? and matches_temperature? and
-      matches_search?
+      matches_grouping? and matches_search?
   end
 
   @impl true
@@ -371,6 +448,20 @@ defmodule DealScoutWeb.DealLive.Index do
                 <span>Hide Dropshippers</span>
               </button>
 
+              <!-- Group Duplicates Toggle -->
+              <button
+                phx-click="toggle_group_deals"
+                class={[
+                  "btn btn-xs rounded-lg gap-1",
+                  @group_deals && "btn-neutral",
+                  !@group_deals && "btn-ghost border border-base-300"
+                ]}
+                title="Consolidate duplicate deals across portals"
+              >
+                <.icon name="hero-squares-plus" class="size-3.5" />
+                <span>Group Duplicates</span>
+              </button>
+
               <!-- Selected Merchant Filter Pill -->
               <%= if @selected_merchant != "all" do %>
                 <div class="badge badge-primary gap-1 py-3 px-2 text-xs font-semibold">
@@ -419,12 +510,32 @@ defmodule DealScoutWeb.DealLive.Index do
                         {deal.temperature}°
                       </span>
                     <% end %>
+
+                    <% country = CrossBorderGuard.detect_country(deal) %>
+                    <%= if country do %>
+                      <span
+                        class="badge badge-sm badge-ghost border border-base-300 gap-1 font-medium text-[11px]"
+                        title={"Dispatched / Origin: #{country.name}"}
+                      >
+                        <span>{country.flag}</span>
+                        <span>{country.name}</span>
+                      </span>
+                    <% end %>
                   </div>
 
                   <span title={DateTime.to_iso8601(deal.published_at)}>
                     {format_time_ago(deal.published_at)}
                   </span>
                 </div>
+
+                <!-- Foreign Keyboard Layout Warning Banner -->
+                <% kb_warning = CrossBorderGuard.keyboard_warning(deal) %>
+                <%= if kb_warning do %>
+                  <div class="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                    <.icon name="hero-exclamation-triangle" class="size-4 shrink-0 text-amber-500" />
+                    <span>{kb_warning.message}</span>
+                  </div>
+                <% end %>
 
                 <!-- Deal Image & Title Row -->
                 <div class="flex gap-4">
@@ -486,6 +597,28 @@ defmodule DealScoutWeb.DealLive.Index do
                   <p class="text-xs text-base-content/70 line-clamp-2 leading-relaxed">
                     {deal.clean_text}
                   </p>
+                <% end %>
+
+                <!-- Duplicate Deals Sub-Pills -->
+                <%= if Ecto.assoc_loaded?(deal.duplicates) && deal.duplicates != [] do %>
+                  <div class="pt-2 flex flex-wrap items-center gap-1.5 border-t border-base-200/60">
+                    <span class="text-[11px] font-medium text-base-content/60">Also on:</span>
+                    <%= for dup <- deal.duplicates do %>
+                      <a
+                        href={dup.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="badge badge-sm badge-outline gap-1 hover:badge-primary transition-all text-[11px]"
+                        title={"Open offer on #{if dup.feed, do: dup.feed.name, else: "portal"}"}
+                      >
+                        <.icon name="hero-arrow-top-right-on-square" class="size-2.5 opacity-60" />
+                        <span>{if dup.feed, do: dup.feed.name, else: "Other"}</span>
+                        <%= if dup.price do %>
+                          <span class="font-semibold text-emerald-600 dark:text-emerald-400">· {dup.price} €</span>
+                        <% end %>
+                      </a>
+                    <% end %>
+                  </div>
                 <% end %>
 
                 <!-- Comparison Links (Idealo & Geizhals) -->
@@ -550,6 +683,45 @@ defmodule DealScoutWeb.DealLive.Index do
             </div>
           <% end %>
         </div>
+
+        <!-- Infinite Scroll Sentinel -->
+        <div
+          id="infinite-scroll-marker"
+          phx-hook=".InfiniteScroll"
+          class="py-8 flex flex-col items-center justify-center gap-2"
+        >
+          <%= if @has_more? do %>
+            <button
+              phx-click="load_more"
+              class="btn btn-ghost btn-sm text-base-content/60 gap-2 border border-base-300"
+            >
+              <.icon name="hero-arrow-path" class="size-4 animate-spin" />
+              <span>Loading more deals...</span>
+            </button>
+          <% else %>
+            <div class="text-xs text-base-content/40 font-medium py-4 flex items-center gap-1.5">
+              <.icon name="hero-check-circle" class="size-4 text-emerald-500" />
+              <span>You have caught up with all live deals</span>
+            </div>
+          <% end %>
+        </div>
+
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".InfiniteScroll">
+          export default {
+            mounted() {
+              this.observer = new IntersectionObserver((entries) => {
+                const target = entries[0];
+                if (target && target.isIntersecting) {
+                  this.pushEvent("load_more", {});
+                }
+              }, { threshold: 0.1, rootMargin: "250px" });
+              this.observer.observe(this.el);
+            },
+            destroyed() {
+              if (this.observer) this.observer.disconnect();
+            }
+          }
+        </script>
 
         <!-- Safety Interstitial Modal for High-Risk Deals -->
         <%= if @interstitial_deal do %>

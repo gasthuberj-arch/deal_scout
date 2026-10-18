@@ -41,6 +41,11 @@ defmodule DealScout.AccountsFixtures do
     user
   end
 
+  def admin_fixture(attrs \\ %{}) do
+    user = user_fixture(attrs)
+    user |> Ecto.Changeset.change(%{is_admin: true}) |> DealScout.Repo.update!()
+  end
+
   def user_scope_fixture do
     user = user_fixture()
     user_scope_fixture(user)
