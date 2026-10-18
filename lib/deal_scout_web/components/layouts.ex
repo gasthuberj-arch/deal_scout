@@ -201,35 +201,20 @@ defmodule DealScoutWeb.Layouts do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
-      <.flash
-        id="client-error"
-        kind={:error}
-        title={gettext("We can't find the internet")}
-        phx-disconnected={
-          show(".phx-client-error #client-error")
-          |> JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
-        }
-        phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
+      <%!-- Subtle, delayed live stream reconnection badge (avoids alarming red toasts during fast deploys) --%>
+      <div
+        id="reconnect-badge"
+        phx-disconnected={JS.remove_attribute("hidden", to: "#reconnect-badge")}
+        phx-connected={JS.set_attribute({"hidden", ""}, to: "#reconnect-badge")}
         hidden
+        class="fixed bottom-4 right-4 z-50 pointer-events-none transition-all duration-300 [animation:fade-in_0.3s_ease-out_2s_both]"
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
-
-      <.flash
-        id="server-error"
-        kind={:error}
-        title={gettext("Something went wrong!")}
-        phx-disconnected={
-          show(".phx-server-error #server-error")
-          |> JS.remove_attribute("hidden", to: ".phx-server-error #server-error")
-        }
-        phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
-        hidden
-      >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-100/95 text-base-content/80 text-xs font-medium shadow-lg backdrop-blur border border-base-content/10">
+          <span class="size-2 rounded-full bg-warning animate-ping"></span>
+          <span>{gettext("Reconnecting...")}</span>
+          <.icon name="hero-arrow-path" class="size-3 animate-spin text-base-content/60" />
+        </div>
+      </div>
     </div>
     """
   end
