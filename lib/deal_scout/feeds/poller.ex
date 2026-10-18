@@ -9,9 +9,7 @@ defmodule DealScout.Feeds.Poller do
   require Logger
 
   alias DealScout.Feeds
-  alias DealScout.Deals
-  alias DealScout.Alerts
-  alias DealScout.Feeds.Parser
+  alias DealScout.Deals.Ingestion
 
   # 2 minutes
   @default_interval_ms 120_000
@@ -101,19 +99,21 @@ defmodule DealScout.Feeds.Poller do
     etag = get_header(resp_headers, "etag")
     last_mod = get_header(resp_headers, "last-modified")
 
-    # 1. Parse items into deal attributes
-    deal_attrs_list = Parser.parse_feed(body, feed.id)
+    case Ingestion.ingest_feed(feed, body) do
+      {:ok, new_deals} ->
+        if length(new_deals) > 0 do
+          Logger.info(
+            "[DealScout.Poller] Ingested #{length(new_deals)} new deals from #{feed.name}."
+          )
+        end
 
-    # 2. Insert new deals (deduplicating on guid)
-    new_deals = Deals.insert_new_deals(deal_attrs_list)
-
-    if length(new_deals) > 0 do
-      Logger.info("[DealScout.Poller] Ingested #{length(new_deals)} new deals from #{feed.name}.")
-      # 3. Match new deals against user alert rules
-      Alerts.process_new_deals(new_deals)
+      {:error, reason} ->
+        Logger.error(
+          "[DealScout.Poller] Failed to ingest feed '#{feed.name}': #{inspect(reason)}"
+        )
     end
 
-    # 4. Update feed metadata
+    # Update feed metadata
     attrs = %{
       last_fetched_at: now,
       etag: etag || feed.etag,

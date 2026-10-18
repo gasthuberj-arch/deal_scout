@@ -41,5 +41,5 @@ config :phoenix_live_view,
 config :phoenix,
   sort_verified_routes_query_params: true
 
-# Disable background feed poller & in-memory cache in test
-config :deal_scout, start_feed_poller: false, start_deals_cache: false
+# Disable background feed poller in test
+config :deal_scout, start_feed_poller: false

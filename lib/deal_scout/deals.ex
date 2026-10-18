@@ -5,7 +5,7 @@ defmodule DealScout.Deals do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Deals.{Deal, Merchant, MerchantGuard, Deduplicator, Cache}
+  alias DealScout.Deals.{Deal, Merchant, MerchantGuard, Deduplicator}
 
   @pubsub DealScout.PubSub
   @topic "deals:feed"
@@ -17,6 +17,11 @@ defmodule DealScout.Deals do
   def broadcast_deal({:ok, %Deal{} = deal} = result) do
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     result
+  end
+
+  def broadcast_deal(%Deal{} = deal) do
+    Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
+    {:ok, deal}
   end
 
   def broadcast_deal(error), do: error
@@ -33,16 +38,6 @@ defmodule DealScout.Deals do
   - :offset - pagination offset
   """
   def list_deals(opts \\ []) do
-    case Cache.get_deals(opts) do
-      {:ok, cached_deals} ->
-        cached_deals
-
-      :fallback ->
-        query_deals_from_db(opts)
-    end
-  end
-
-  defp query_deals_from_db(opts) do
     search = Keyword.get(opts, :search)
     feed_id = Keyword.get(opts, :feed_id)
     merchant_slug = Keyword.get(opts, :merchant)
@@ -149,6 +144,16 @@ defmodule DealScout.Deals do
   Gets or creates a Merchant record and updates posting frequency and stats.
   """
   def get_or_create_merchant(merchant_name, opts \\ []) do
+    merchant = ensure_merchant(merchant_name, opts)
+    feed_slug = Keyword.get(opts, :feed_slug)
+    temperature = Keyword.get(opts, :temperature)
+    record_merchant_deal(merchant.id, feed_slug, temperature)
+  end
+
+  @doc """
+  Ensures a Merchant record exists for the given name/url without incrementing deal stats.
+  """
+  def ensure_merchant(merchant_name, opts \\ []) do
     norm_name =
       case merchant_name do
         name when is_binary(name) and name != "" ->
@@ -166,8 +171,6 @@ defmodule DealScout.Deals do
     slug = MerchantGuard.slugify(norm_name)
     url = Keyword.get(opts, :url)
     context_text = Keyword.get(opts, :context_text) || Keyword.get(opts, :text)
-    feed_slug = Keyword.get(opts, :feed_slug)
-    temperature = Keyword.get(opts, :temperature)
 
     trust_level = MerchantGuard.classify(norm_name, url, context_text)
     domain = MerchantGuard.extract_domain(url)
@@ -175,31 +178,43 @@ defmodule DealScout.Deals do
 
     case Repo.get_by(Merchant, slug: slug) do
       nil ->
-        feed_counts = if feed_slug, do: %{feed_slug => 1}, else: %{}
-        avg_temp = if temperature, do: temperature * 1.0, else: 0.0
-
         %Merchant{}
         |> Merchant.changeset(%{
           name: norm_name,
           slug: slug,
           domain: domain,
           trust_level: trust_level,
-          deal_count: 1,
-          feed_counts: feed_counts,
-          avg_temperature: avg_temp,
+          deal_count: 0,
+          feed_counts: %{},
+          avg_temperature: 0.0,
           last_seen_at: now
         })
         |> Repo.insert(
-          on_conflict: [
-            inc: [deal_count: 1],
-            set: [last_seen_at: now]
-          ],
+          on_conflict: :nothing,
           conflict_target: :slug
         )
         |> case do
-          {:ok, merchant} -> merchant
-          {:error, _} -> Repo.get_by!(Merchant, slug: slug)
+          {:ok, %Merchant{id: id}} when not is_nil(id) ->
+            Repo.get!(Merchant, id)
+
+          _ ->
+            Repo.get_by!(Merchant, slug: slug)
         end
+
+      %Merchant{} = merchant ->
+        merchant
+    end
+  end
+
+  @doc """
+  Updates merchant posting frequency, temperature average, and feed counts for a newly inserted deal.
+  """
+  def record_merchant_deal(merchant_id, feed_slug \\ nil, temperature \\ nil) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    case Repo.get(Merchant, merchant_id) do
+      nil ->
+        {:error, :merchant_not_found}
 
       %Merchant{} = merchant ->
         new_deal_count = merchant.deal_count + 1
@@ -221,7 +236,7 @@ defmodule DealScout.Deals do
           end
 
         effective_trust_level =
-          if merchant.trust_level == "verified", do: "verified", else: trust_level
+          if merchant.trust_level == "verified", do: "verified", else: merchant.trust_level
 
         merchant
         |> Merchant.changeset(%{
@@ -229,7 +244,6 @@ defmodule DealScout.Deals do
           feed_counts: updated_feed_counts,
           avg_temperature: updated_avg_temp,
           trust_level: effective_trust_level,
-          domain: merchant.domain || domain,
           last_seen_at: now
         })
         |> Repo.update()
@@ -246,14 +260,28 @@ defmodule DealScout.Deals do
   """
   def insert_deal(attrs) do
     attrs = Map.new(attrs)
+    guid = attrs[:guid] || attrs["guid"]
 
-    merchant_id =
+    if guid && Repo.exists?(from d in Deal, where: d.guid == ^guid) do
+      {:duplicate, guid}
+    else
+      do_insert_deal(attrs)
+    end
+  end
+
+  defp do_insert_deal(attrs) do
+    guid = attrs[:guid] || attrs["guid"]
+    feed_id = attrs[:feed_id] || attrs["feed_id"]
+    feed_slug = get_feed_slug(feed_id)
+    temp = attrs[:temperature] || attrs["temperature"]
+
+    merchant =
       cond do
         attrs[:merchant_id] ->
-          attrs[:merchant_id]
+          Repo.get(Merchant, attrs[:merchant_id])
 
         attrs["merchant_id"] ->
-          attrs["merchant_id"]
+          Repo.get(Merchant, attrs["merchant_id"])
 
         true ->
           name =
@@ -262,20 +290,14 @@ defmodule DealScout.Deals do
 
           url = attrs[:url] || attrs["url"]
           text = attrs[:clean_text] || attrs["clean_text"]
-          feed_id = attrs[:feed_id] || attrs["feed_id"]
-          feed_slug = get_feed_slug(feed_id)
-          temp = attrs[:temperature] || attrs["temperature"]
 
-          merchant =
-            get_or_create_merchant(name,
-              url: url,
-              text: text,
-              feed_slug: feed_slug,
-              temperature: temp
-            )
-
-          merchant.id
+          ensure_merchant(name,
+            url: url,
+            text: text
+          )
       end
+
+    merchant_id = if merchant, do: merchant.id, else: nil
 
     raw_merchant =
       attrs[:merchant_name] || attrs["merchant_name"] || attrs[:merchant] || attrs["merchant"]
@@ -317,11 +339,14 @@ defmodule DealScout.Deals do
     )
     |> case do
       {:ok, %Deal{id: nil}} ->
-        {:duplicate, attrs[:guid] || attrs["guid"]}
+        {:duplicate, guid}
 
       {:ok, %Deal{} = deal} ->
+        if merchant do
+          record_merchant_deal(merchant.id, feed_slug, temp)
+        end
+
         deal = Repo.preload(deal, [:feed, :merchant, duplicates: [:feed]])
-        Cache.refresh()
         broadcast_deal({:ok, deal})
 
       error ->

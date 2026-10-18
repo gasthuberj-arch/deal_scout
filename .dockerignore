@@ -1,0 +1,22 @@
+# Elixir / Phoenix build artifacts
+_build
+deps
+*.ez
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+deal_scout_*.db*
+
+# Git and tooling
+.git
+.github
+.agents
+skills-lock.json
+
+# Node/Assets
+assets/node_modules
+
+# Releases
+rel/*.tar.gz

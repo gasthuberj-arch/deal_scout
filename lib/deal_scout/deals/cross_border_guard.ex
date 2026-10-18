@@ -10,6 +10,8 @@ defmodule DealScout.Deals.CrossBorderGuard do
   Detects the origin country of a deal based on URL and text markers.
   Returns `%{code: string, flag: string, name: string}` or `nil`.
   """
+  def detect_country(%{cross_border_evaluated: true, country: country}), do: country
+
   def detect_country(deal_or_attrs) do
     url = get_val(deal_or_attrs, :url) || ""
     title = get_val(deal_or_attrs, :title) || ""
@@ -62,6 +64,8 @@ defmodule DealScout.Deals.CrossBorderGuard do
   Returns keyboard warning details if an imported deal is a laptop or keyboard.
   Returns `%{layout: string, flag: string, message: string}` or `nil`.
   """
+  def keyboard_warning(%{cross_border_evaluated: true, keyboard_warning: kw}), do: kw
+
   def keyboard_warning(deal_or_attrs) do
     country = detect_country(deal_or_attrs)
     title = get_val(deal_or_attrs, :title) || ""

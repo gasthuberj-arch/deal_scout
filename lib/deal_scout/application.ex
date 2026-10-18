@@ -18,7 +18,7 @@ defmodule DealScout.Application do
         DealScoutWeb.Presence,
         # Start to serve requests, typically the last entry
         DealScoutWeb.Endpoint
-      ] ++ cache_workers() ++ background_workers()
+      ] ++ background_workers()
 
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
@@ -37,14 +37,6 @@ defmodule DealScout.Application do
   defp skip_migrations?() do
     # By default, sqlite migrations are run when using a release
     System.get_env("RELEASE_NAME") == nil
-  end
-
-  defp cache_workers() do
-    if Application.get_env(:deal_scout, :start_deals_cache, true) do
-      [DealScout.Deals.Cache]
-    else
-      []
-    end
   end
 
   defp background_workers() do
