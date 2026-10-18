@@ -4,7 +4,6 @@ defmodule DealScoutWeb.DealLive.Index do
   alias DealScout.Deals
   alias DealScout.Deals.CrossBorderGuard
   alias DealScout.Feeds
-  alias DealScout.Feeds.Poller
 
   @page_size 30
 
@@ -102,16 +101,6 @@ defmodule DealScoutWeb.DealLive.Index do
   def handle_event("set_min_temp", %{"temp" => temp_str}, socket) do
     val = if temp_str == "all" || temp_str == "", do: nil, else: temp_str
     {:noreply, push_patch_with_filters(socket, %{temp: val})}
-  end
-
-  @impl true
-  def handle_event("refresh_now", _params, socket) do
-    Poller.poll_now()
-
-    {:noreply,
-     socket
-     |> put_flash(:info, "Refreshing all deal feeds...")
-     |> assign(:loading, true)}
   end
 
   @impl true
@@ -314,16 +303,6 @@ defmodule DealScoutWeb.DealLive.Index do
             <p class="text-sm text-base-content/70 mt-1">
               Aggregated real-time deal streams with Geizhals & Idealo price comparisons, community temperatures, and merchant fakeshop shield.
             </p>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <button
-              phx-click="refresh_now"
-              class="btn btn-primary btn-sm flex items-center gap-2"
-              phx-disable-with="Checking feeds..."
-            >
-              <.icon name="hero-arrow-path" class="size-4" /> Refresh Feeds
-            </button>
           </div>
         </div>
 
