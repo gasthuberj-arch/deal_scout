@@ -264,7 +264,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                         <% end %>
                         <%= if match.deal.merchant do %>
                           <span class="text-base-content/70">
-                            via {match.deal.merchant}
+                            via {match.deal.merchant.name}
                           </span>
                         <% end %>
                       </div>

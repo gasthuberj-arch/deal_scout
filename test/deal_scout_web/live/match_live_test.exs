@@ -4,7 +4,6 @@ defmodule DealScoutWeb.MatchLiveTest do
 
   alias DealScout.Repo
   alias DealScout.Feeds.Feed
-  alias DealScout.Deals.Deal
   alias DealScout.Alerts.{AlertRule, UserMatch}
 
   setup :register_and_log_in_user
@@ -13,8 +12,8 @@ defmodule DealScoutWeb.MatchLiveTest do
     feed =
       Repo.insert!(%Feed{name: "MyDealz", slug: "mydealz", url: "https://www.mydealz.de/rss"})
 
-    deal =
-      Repo.insert!(%Deal{
+    {:ok, deal} =
+      DealScout.Deals.insert_deal(%{
         feed_id: feed.id,
         guid: "deal-match-123",
         title: "Sony WH-1000XM5 Noise Cancelling Headphones",

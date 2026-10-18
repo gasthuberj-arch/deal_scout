@@ -9,11 +9,15 @@ defmodule DealScout.Deals.Deal do
     field :description, :string
     field :clean_text, :string
     field :price, :decimal
-    field :merchant, :string
+    field :raw_merchant, :string, source: :merchant
     field :image_url, :string
     field :published_at, :utc_datetime
+    field :idealo_url, :string
+    field :geizhals_url, :string
+    field :temperature, :integer
 
     belongs_to :feed, DealScout.Feeds.Feed
+    belongs_to :merchant, DealScout.Deals.Merchant
     has_many :user_matches, DealScout.Alerts.UserMatch
 
     timestamps(type: :utc_datetime)
@@ -24,17 +28,21 @@ defmodule DealScout.Deals.Deal do
     deal
     |> cast(attrs, [
       :feed_id,
+      :merchant_id,
       :guid,
       :title,
       :url,
       :description,
       :clean_text,
       :price,
-      :merchant,
+      :raw_merchant,
       :image_url,
-      :published_at
+      :published_at,
+      :idealo_url,
+      :geizhals_url,
+      :temperature
     ])
-    |> validate_required([:feed_id, :guid, :title, :url, :published_at])
+    |> validate_required([:feed_id, :merchant_id, :guid, :title, :url, :published_at])
     |> unique_constraint(:guid)
   end
 end

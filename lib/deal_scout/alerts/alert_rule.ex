@@ -8,6 +8,8 @@ defmodule DealScout.Alerts.AlertRule do
     field :negative_keywords, :string
     field :max_price, :decimal
     field :source_filter, :string, default: "all"
+    field :min_temperature, :integer
+    field :exclude_dropshippers, :boolean, default: true
     field :is_active, :boolean, default: true
 
     belongs_to :user, DealScout.Accounts.User
@@ -26,6 +28,8 @@ defmodule DealScout.Alerts.AlertRule do
       :negative_keywords,
       :max_price,
       :source_filter,
+      :min_temperature,
+      :exclude_dropshippers,
       :is_active
     ])
     |> validate_required([:user_id, :name, :keywords])

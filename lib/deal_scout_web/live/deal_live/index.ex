@@ -18,8 +18,12 @@ defmodule DealScoutWeb.DealLive.Index do
       |> assign(:page_title, "Live Deals Stream")
       |> assign(:feeds, feeds)
       |> assign(:selected_feed, "all")
+      |> assign(:selected_merchant, "all")
+      |> assign(:hide_dropshippers, false)
+      |> assign(:min_temperature, nil)
       |> assign(:search_query, "")
       |> assign(:loading, false)
+      |> assign(:interstitial_deal, nil)
       |> load_deals()
 
     {:ok, socket}
@@ -28,12 +32,23 @@ defmodule DealScoutWeb.DealLive.Index do
   @impl true
   def handle_params(params, _uri, socket) do
     selected_feed = params["feed"] || "all"
+    selected_merchant = params["merchant"] || "all"
     search_query = params["q"] || ""
+    hide_dropshippers = params["no_dropship"] == "true"
+
+    min_temperature =
+      case Integer.parse(params["temp"] || "") do
+        {val, ""} -> val
+        _ -> nil
+      end
 
     socket =
       socket
       |> assign(:selected_feed, selected_feed)
+      |> assign(:selected_merchant, selected_merchant)
       |> assign(:search_query, search_query)
+      |> assign(:hide_dropshippers, hide_dropshippers)
+      |> assign(:min_temperature, min_temperature)
       |> load_deals()
 
     {:noreply, socket}
@@ -41,16 +56,37 @@ defmodule DealScoutWeb.DealLive.Index do
 
   @impl true
   def handle_event("search", %{"q" => query}, socket) do
-    {:noreply,
-     socket
-     |> push_patch(to: ~p"/?feed=#{socket.assigns.selected_feed}&q=#{query}")}
+    {:noreply, push_patch_with_filters(socket, %{q: query})}
   end
 
   @impl true
   def handle_event("select_feed", %{"slug" => slug}, socket) do
+    {:noreply, push_patch_with_filters(socket, %{feed: slug})}
+  end
+
+  @impl true
+  def handle_event("select_merchant", %{"slug" => slug}, socket) do
+    new_merchant = if socket.assigns.selected_merchant == slug, do: "all", else: slug
+    {:noreply, push_patch_with_filters(socket, %{merchant: new_merchant})}
+  end
+
+  @impl true
+  def handle_event("clear_merchant", _params, socket) do
+    {:noreply, push_patch_with_filters(socket, %{merchant: "all"})}
+  end
+
+  @impl true
+  def handle_event("toggle_dropshippers", _params, socket) do
+    new_val = !socket.assigns.hide_dropshippers
+
     {:noreply,
-     socket
-     |> push_patch(to: ~p"/?feed=#{slug}&q=#{socket.assigns.search_query}")}
+     push_patch_with_filters(socket, %{no_dropship: if(new_val, do: "true", else: "false")})}
+  end
+
+  @impl true
+  def handle_event("set_min_temp", %{"temp" => temp_str}, socket) do
+    val = if temp_str == "all" || temp_str == "", do: nil, else: temp_str
+    {:noreply, push_patch_with_filters(socket, %{temp: val})}
   end
 
   @impl true
@@ -64,13 +100,58 @@ defmodule DealScoutWeb.DealLive.Index do
   end
 
   @impl true
+  def handle_event("open_high_risk_modal", %{"id" => deal_id}, socket) do
+    deal = Deals.get_deal!(deal_id)
+    {:noreply, assign(socket, :interstitial_deal, deal)}
+  end
+
+  @impl true
+  def handle_event("dismiss_interstitial", _params, socket) do
+    {:noreply, assign(socket, :interstitial_deal, nil)}
+  end
+
+  @impl true
   def handle_info({:new_deal, deal}, socket) do
-    # Only prepend to stream if it matches current filter
-    if matches_filters?(deal, socket.assigns.selected_feed, socket.assigns.search_query) do
+    if matches_filters?(deal, socket.assigns) do
       {:noreply, stream_insert(socket, :deals, deal, at: 0)}
     else
       {:noreply, socket}
     end
+  end
+
+  defp push_patch_with_filters(socket, overrides) do
+    assigns = socket.assigns
+
+    feed = Map.get(overrides, :feed, assigns.selected_feed)
+    merchant = Map.get(overrides, :merchant, assigns.selected_merchant)
+    query = Map.get(overrides, :q, assigns.search_query)
+
+    no_dropship =
+      Map.get(
+        overrides,
+        :no_dropship,
+        if(assigns.hide_dropshippers, do: "true", else: "false")
+      )
+
+    temp =
+      Map.get(
+        overrides,
+        :temp,
+        if(assigns.min_temperature, do: to_string(assigns.min_temperature), else: nil)
+      )
+
+    params =
+      [
+        {"feed", feed != "all" && feed},
+        {"merchant", merchant != "all" && merchant},
+        {"q", query != "" && query},
+        {"no_dropship", no_dropship == "true" && "true"},
+        {"temp", temp}
+      ]
+      |> Enum.reject(fn {_k, v} -> !v end)
+      |> URI.encode_query()
+
+    push_patch(socket, to: ~p"/?#{URI.decode_query(params)}")
   end
 
   defp load_deals(socket) do
@@ -86,27 +167,57 @@ defmodule DealScoutWeb.DealLive.Index do
           end
       end
 
+    merchant_slug =
+      if socket.assigns.selected_merchant == "all",
+        do: nil,
+        else: socket.assigns.selected_merchant
+
     deals =
       Deals.list_deals(
         search: socket.assigns.search_query,
         feed_id: feed_id,
+        merchant: merchant_slug,
+        exclude_dropshippers: socket.assigns.hide_dropshippers,
+        min_temperature: socket.assigns.min_temperature,
         limit: 80
       )
 
     stream(socket, :deals, deals, reset: true)
   end
 
-  defp matches_filters?(deal, selected_feed, search_query) do
+  defp matches_filters?(deal, assigns) do
     matches_feed? =
-      selected_feed == "all" or
-        (deal.feed && deal.feed.slug == selected_feed)
+      assigns.selected_feed == "all" or
+        (deal.feed && deal.feed.slug == assigns.selected_feed)
+
+    matches_merchant? =
+      assigns.selected_merchant == "all" or
+        (deal.merchant && deal.merchant.slug == assigns.selected_merchant)
+
+    matches_dropshipper? =
+      not assigns.hide_dropshippers or
+        is_nil(deal.merchant) or
+        deal.merchant.trust_level != "dropshipper"
+
+    matches_temperature? =
+      is_nil(assigns.min_temperature) or
+        (not is_nil(deal.temperature) and deal.temperature >= assigns.min_temperature)
 
     matches_search? =
-      search_query == "" or
-        String.contains?(String.downcase(deal.title), String.downcase(search_query)) or
-        String.contains?(String.downcase(deal.clean_text || ""), String.downcase(search_query))
+      assigns.search_query == "" or
+        String.contains?(String.downcase(deal.title), String.downcase(assigns.search_query)) or
+        String.contains?(
+          String.downcase(deal.clean_text || ""),
+          String.downcase(assigns.search_query)
+        ) or
+        (deal.merchant &&
+           String.contains?(
+             String.downcase(deal.merchant.name),
+             String.downcase(assigns.search_query)
+           ))
 
-    matches_feed? and matches_search?
+    matches_feed? and matches_merchant? and matches_dropshipper? and matches_temperature? and
+      matches_search?
   end
 
   @impl true
@@ -124,7 +235,7 @@ defmodule DealScoutWeb.DealLive.Index do
               </span>
             </h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Aggregated live feeds from MyDealz, DealDoktor, MonsterDealz, Schnäppchenfuchs, and Mein-Deal.
+              Aggregated real-time deal streams with Geizhals & Idealo price comparisons, community temperatures, and merchant fakeshop shield.
             </p>
           </div>
 
@@ -134,27 +245,13 @@ defmodule DealScoutWeb.DealLive.Index do
               class="btn btn-primary btn-sm flex items-center gap-2"
               phx-disable-with="Checking feeds..."
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="size-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              Refresh Feeds
+              <.icon name="hero-arrow-path" class="size-4" /> Refresh Feeds
             </button>
           </div>
         </div>
 
         <!-- Filter & Search Toolbar -->
-        <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div class="space-y-3">
           <!-- Feed Filter Pills -->
           <div class="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1">
             <button
@@ -183,39 +280,111 @@ defmodule DealScoutWeb.DealLive.Index do
             <% end %>
           </div>
 
-          <!-- Instant Search Input -->
-          <div class="w-full sm:w-72">
-            <form
-              id="deal-search-form"
-              phx-change="search"
-              phx-submit="search"
-              onsubmit="return false;"
-            >
-              <div class="relative">
-                <input
-                  type="text"
-                  name="q"
-                  value={@search_query}
-                  placeholder="Search deals (e.g. OLED, RTX 4080)..."
-                  class="input input-sm input-bordered w-full pl-9 pr-4 rounded-lg"
-                  phx-debounce="300"
-                />
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="size-4 absolute left-3 top-2 text-base-content/50"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          <!-- Secondary Filters Row: Search, Temperature & Dropshipper Guard -->
+          <div class="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between bg-base-100 p-3 rounded-xl border border-base-200">
+            <!-- Left: Search Bar -->
+            <div class="w-full lg:w-72">
+              <form
+                id="deal-search-form"
+                phx-change="search"
+                phx-submit="search"
+                onsubmit="return false;"
+              >
+                <div class="relative">
+                  <input
+                    type="text"
+                    name="q"
+                    value={@search_query}
+                    placeholder="Search deals (e.g. OLED, RTX 4080)..."
+                    class="input input-sm input-bordered w-full pl-9 pr-4 rounded-lg"
+                    phx-debounce="300"
                   />
-                </svg>
+                  <.icon
+                    name="hero-magnifying-glass"
+                    class="size-4 absolute left-3 top-2 text-base-content/50"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <!-- Right: Filter Toggles (Temperature, Dropshippers, Active Merchant) -->
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Temperature Pills -->
+              <div class="join border border-base-300 rounded-lg overflow-hidden">
+                <button
+                  phx-click="set_min_temp"
+                  phx-value-temp="all"
+                  class={[
+                    "join-item btn btn-xs",
+                    is_nil(@min_temperature) && "btn-primary",
+                    not is_nil(@min_temperature) && "btn-ghost"
+                  ]}
+                >
+                  All Temp
+                </button>
+                <button
+                  phx-click="set_min_temp"
+                  phx-value-temp="50"
+                  class={[
+                    "join-item btn btn-xs",
+                    @min_temperature == 50 && "btn-primary",
+                    @min_temperature != 50 && "btn-ghost"
+                  ]}
+                >
+                  🔥 50°+
+                </button>
+                <button
+                  phx-click="set_min_temp"
+                  phx-value-temp="100"
+                  class={[
+                    "join-item btn btn-xs",
+                    @min_temperature == 100 && "btn-primary",
+                    @min_temperature != 100 && "btn-ghost"
+                  ]}
+                >
+                  🔥 100°+
+                </button>
+                <button
+                  phx-click="set_min_temp"
+                  phx-value-temp="200"
+                  class={[
+                    "join-item btn btn-xs",
+                    @min_temperature == 200 && "btn-primary",
+                    @min_temperature != 200 && "btn-ghost"
+                  ]}
+                >
+                  🔥 200°+
+                </button>
               </div>
-            </form>
+
+              <!-- Dropshipper Shield Toggle -->
+              <button
+                phx-click="toggle_dropshippers"
+                class={[
+                  "btn btn-xs rounded-lg gap-1",
+                  @hide_dropshippers && "btn-warning",
+                  !@hide_dropshippers && "btn-ghost border border-base-300"
+                ]}
+                title="Hide marketplace dropshippers like Temu and AliExpress"
+              >
+                <.icon name="hero-shield-check" class="size-3.5" />
+                <span>Hide Dropshippers</span>
+              </button>
+
+              <!-- Selected Merchant Filter Pill -->
+              <%= if @selected_merchant != "all" do %>
+                <div class="badge badge-primary gap-1 py-3 px-2 text-xs font-semibold">
+                  <span>Merchant: {@selected_merchant}</span>
+                  <button
+                    phx-click="clear_merchant"
+                    class="btn btn-ghost btn-circle btn-xs size-4 min-h-0"
+                    title="Clear merchant filter"
+                  >
+                    <.icon name="hero-x-mark" class="size-3" />
+                  </button>
+                </div>
+              <% end %>
+            </div>
           </div>
         </div>
 
@@ -231,14 +400,27 @@ defmodule DealScoutWeb.DealLive.Index do
               class="card bg-base-100 border border-base-300 hover:border-primary/50 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col justify-between group"
             >
               <div class="p-5 space-y-3">
-                <!-- Card Header: Feed & Time -->
+                <!-- Card Header: Feed & Community Temperature & Time -->
                 <div class="flex items-center justify-between text-xs text-base-content/60">
-                  <span class={[
-                    "badge badge-sm font-medium",
-                    feed_badge_class(deal.feed && deal.feed.slug)
-                  ]}>
-                    {if deal.feed, do: deal.feed.name, else: "Deal"}
-                  </span>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class={[
+                      "badge badge-sm font-medium",
+                      feed_badge_class(deal.feed && deal.feed.slug)
+                    ]}>
+                      {if deal.feed, do: deal.feed.name, else: "Deal"}
+                    </span>
+
+                    <%= if deal.temperature do %>
+                      <span class={[
+                        "badge badge-sm font-bold gap-1",
+                        temperature_badge_class(deal.temperature)
+                      ]}>
+                        <.icon name="hero-fire" class="size-3" />
+                        {deal.temperature}°
+                      </span>
+                    <% end %>
+                  </div>
+
                   <span title={DateTime.to_iso8601(deal.published_at)}>
                     {format_time_ago(deal.published_at)}
                   </span>
@@ -264,17 +446,36 @@ defmodule DealScoutWeb.DealLive.Index do
                       </a>
                     </h2>
 
-                    <!-- Price & Merchant Row -->
+                    <!-- Price & Merchant Trust Row -->
                     <div class="flex flex-wrap items-center gap-2 pt-1">
                       <%= if deal.price do %>
                         <span class="text-base font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
                           {deal.price} €
                         </span>
                       <% end %>
+
+                      <!-- Merchant Intelligence Badge -->
                       <%= if deal.merchant do %>
-                        <span class="text-xs font-semibold px-2 py-0.5 rounded bg-base-200 text-base-content/80">
-                          {deal.merchant}
-                        </span>
+                        <div class="tooltip tooltip-bottom" data-tip={merchant_tooltip(deal.merchant)}>
+                          <button
+                            type="button"
+                            phx-click="select_merchant"
+                            phx-value-slug={deal.merchant.slug}
+                            class={[
+                              "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md border transition-all cursor-pointer",
+                              merchant_badge_class(deal.merchant.trust_level)
+                            ]}
+                          >
+                            <.icon name={merchant_icon(deal.merchant.trust_level)} class="size-3" />
+                            <span>{deal.merchant.name}</span>
+                          </button>
+                        </div>
+                      <% else %>
+                        <%= if deal.raw_merchant do %>
+                          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-base-200 text-base-content/80">
+                            {deal.raw_merchant}
+                          </span>
+                        <% end %>
                       <% end %>
                     </div>
                   </div>
@@ -282,54 +483,201 @@ defmodule DealScoutWeb.DealLive.Index do
 
                 <!-- Deal Description Snippet -->
                 <%= if deal.clean_text && deal.clean_text != "" do %>
-                  <p class="text-xs text-base-content/70 line-clamp-3 leading-relaxed">
+                  <p class="text-xs text-base-content/70 line-clamp-2 leading-relaxed">
                     {deal.clean_text}
                   </p>
                 <% end %>
+
+                <!-- Comparison Links (Idealo & Geizhals) -->
+                <%= if deal.idealo_url || deal.geizhals_url do %>
+                  <div class="pt-2 flex flex-wrap items-center gap-1.5 border-t border-base-200/60">
+                    <%= if deal.idealo_url do %>
+                      <a
+                        href={deal.idealo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn-xs btn-outline border-blue-500/30 hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 gap-1 rounded-lg"
+                        title="Open verified Idealo price comparison & 1-year price chart"
+                      >
+                        <.icon name="hero-chart-bar" class="size-3" />
+                        <span>Idealo Chart</span>
+                      </a>
+                    <% end %>
+
+                    <%= if deal.geizhals_url do %>
+                      <a
+                        href={deal.geizhals_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn-xs btn-outline border-orange-500/30 hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 gap-1 rounded-lg"
+                        title="Open verified Geizhals price history & specs"
+                      >
+                        <.icon name="hero-arrow-trending-up" class="size-3" />
+                        <span>Geizhals History</span>
+                      </a>
+                    <% end %>
+                  </div>
+                <% end %>
               </div>
 
-              <!-- Card Footer: Direct Link Button -->
+              <!-- Card Footer: Host & Direct Deal Button -->
               <div class="px-5 py-3 border-t border-base-200 bg-base-50/50 dark:bg-base-200/20 flex items-center justify-between">
-                <span class="text-[11px] text-base-content/50 truncate max-w-[200px]">
+                <span class="text-[11px] text-base-content/50 truncate max-w-[180px]">
                   {URI.parse(deal.url).host}
                 </span>
-                <a
-                  href={deal.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-xs btn-primary gap-1"
-                >
-                  <span>Open Deal</span>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="size-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+
+                <%= if deal.merchant && deal.merchant.trust_level == "high_risk" do %>
+                  <button
+                    phx-click="open_high_risk_modal"
+                    phx-value-id={deal.id}
+                    class="btn btn-xs btn-error gap-1 text-white shadow-sm"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </a>
+                    <.icon name="hero-shield-exclamation" class="size-3" />
+                    <span>Open Deal</span>
+                  </button>
+                <% else %>
+                  <a
+                    href={deal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn btn-xs btn-primary gap-1"
+                  >
+                    <span>Open Deal</span>
+                    <.icon name="hero-arrow-top-right-on-square" class="size-3" />
+                  </a>
+                <% end %>
               </div>
             </div>
           <% end %>
         </div>
+
+        <!-- Safety Interstitial Modal for High-Risk Deals -->
+        <%= if @interstitial_deal do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div class="card bg-base-100 w-full max-w-md shadow-2xl border-2 border-error">
+              <div class="p-6 space-y-4">
+                <div class="flex items-center gap-3 text-error">
+                  <div class="size-12 rounded-full bg-error/10 flex items-center justify-center shrink-0">
+                    <.icon name="hero-shield-exclamation" class="size-7" />
+                  </div>
+                  <div>
+                    <h3 class="font-bold text-lg text-base-content">Security Notice</h3>
+                    <p class="text-xs text-error font-semibold">Unverified or Flagged Merchant</p>
+                  </div>
+                </div>
+
+                <div class="p-3 bg-base-200/60 rounded-xl space-y-2 text-xs text-base-content/80">
+                  <p>
+                    You are leaving DealScout for:
+                    <strong class="text-base-content">
+                      {if @interstitial_deal.merchant,
+                        do: @interstitial_deal.merchant.name,
+                        else: "External Merchant"}
+                    </strong>
+                    ({URI.parse(@interstitial_deal.url).host})
+                  </p>
+                  <ul class="list-disc list-inside space-y-1 text-base-content/70">
+                    <li>Always check the legal shop <strong>Impressum</strong>.</li>
+                    <li>
+                      <strong>Never pay via direct bank transfer ("Vorkasse")</strong>
+                      to unverified sellers.
+                    </li>
+                    <li>
+                      Always use payment methods offering buyer protection (PayPal, credit card).
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-base-200">
+                  <button
+                    phx-click="dismiss_interstitial"
+                    class="btn btn-sm btn-ghost"
+                  >
+                    Stay on DealScout
+                  </button>
+                  <a
+                    href={@interstitial_deal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    phx-click="dismiss_interstitial"
+                    class="btn btn-sm btn-error text-white gap-1"
+                  >
+                    <span>Proceed to Merchant</span>
+                    <.icon name="hero-arrow-top-right-on-square" class="size-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
       </div>
     </Layouts.app>
     """
   end
 
   defp feed_badge_class("mydealz"), do: "badge-info badge-outline"
+  defp feed_badge_class("mydealz-hot"), do: "badge-warning badge-outline"
   defp feed_badge_class("dealdoktor"), do: "badge-success badge-outline"
   defp feed_badge_class("monsterdealz"), do: "badge-warning badge-outline"
   defp feed_badge_class("schnaeppchenfuchs"), do: "badge-secondary badge-outline"
   defp feed_badge_class("mein-deal"), do: "badge-error badge-outline"
   defp feed_badge_class(_), do: "badge-ghost"
+
+  defp temperature_badge_class(temp) when is_integer(temp) do
+    cond do
+      temp >= 300 ->
+        "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30"
+
+      temp >= 100 ->
+        "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+
+      temp >= 0 ->
+        "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+
+      true ->
+        "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30"
+    end
+  end
+
+  defp temperature_badge_class(_), do: "badge-ghost"
+
+  defp merchant_badge_class("verified"),
+    do:
+      "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
+
+  defp merchant_badge_class("high_risk"),
+    do: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30 hover:bg-red-500/20"
+
+  defp merchant_badge_class("dropshipper"),
+    do:
+      "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20"
+
+  defp merchant_badge_class(_),
+    do: "bg-base-200 text-base-content/80 border-base-300 hover:bg-base-300"
+
+  defp merchant_icon("verified"), do: "hero-check-badge"
+  defp merchant_icon("high_risk"), do: "hero-exclamation-triangle"
+  defp merchant_icon("dropshipper"), do: "hero-archive-box"
+  defp merchant_icon(_), do: "hero-building-storefront"
+
+  defp merchant_tooltip(merchant) do
+    breakdown =
+      (merchant.feed_counts || %{})
+      |> Enum.map(fn {slug, count} -> "#{slug}: #{count}" end)
+      |> Enum.join(", ")
+
+    parts = [
+      "Total Deals: #{merchant.deal_count}",
+      if(breakdown != "", do: "Portals: #{breakdown}", else: nil),
+      if(merchant.avg_temperature && merchant.avg_temperature > 0,
+        do: "Avg Temp: #{round(merchant.avg_temperature)}° 🔥",
+        else: nil
+      ),
+      "Trust: #{String.capitalize(merchant.trust_level || "unverified")}"
+    ]
+
+    parts |> Enum.reject(&is_nil/1) |> Enum.join(" | ")
+  end
 
   defp format_time_ago(datetime) do
     diff_sec = DateTime.diff(DateTime.utc_now(), datetime, :second)

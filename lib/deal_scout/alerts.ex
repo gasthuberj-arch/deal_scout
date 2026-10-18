@@ -107,8 +107,9 @@ defmodule DealScout.Alerts do
         where: m.user_id == ^user_id,
         join: d in assoc(m, :deal),
         join: f in assoc(d, :feed),
+        left_join: me in assoc(d, :merchant),
         join: r in assoc(m, :alert_rule),
-        preload: [deal: {d, feed: f}, alert_rule: r],
+        preload: [deal: {d, [feed: f, merchant: me]}, alert_rule: r],
         order_by: [desc: m.inserted_at],
         limit: ^limit
 

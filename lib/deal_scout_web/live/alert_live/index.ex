@@ -28,7 +28,11 @@ defmodule DealScoutWeb.AlertLive.Index do
   end
 
   defp apply_action(socket, :new, _params) do
-    rule = %AlertRule{user_id: socket.assigns.current_scope.user.id}
+    rule = %AlertRule{
+      user_id: socket.assigns.current_scope.user.id,
+      exclude_dropshippers: true
+    }
+
     changeset = Alerts.change_alert_rule(rule)
 
     socket
@@ -117,25 +121,12 @@ defmodule DealScoutWeb.AlertLive.Index do
           <div>
             <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Keyword Alert Rules</h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Configure search terms, exclusions, and price caps. When new deals hit your criteria, you'll be notified instantly.
+              Configure search terms, exclusions, price caps, and community temperature thresholds. When new deals match, you'll be notified instantly.
             </p>
           </div>
 
           <.link patch={~p"/alerts/new"} class="btn btn-primary btn-sm flex items-center gap-1">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="size-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <.icon name="hero-plus" class="size-4" />
             <span>Add Alert Rule</span>
           </.link>
         </div>
@@ -144,20 +135,7 @@ defmodule DealScoutWeb.AlertLive.Index do
         <%= if Enum.empty?(@rules) do %>
           <div class="text-center py-16 bg-base-100 border border-dashed border-base-300 rounded-2xl p-8 space-y-4">
             <div class="size-14 mx-auto rounded-full bg-primary/10 text-primary flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="size-7"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
+              <.icon name="hero-bell" class="size-7" />
             </div>
             <h2 class="text-lg font-bold">No Alert Rules Configured Yet</h2>
             <p class="text-sm text-base-content/70 max-w-md mx-auto">
@@ -209,7 +187,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                   <div>
                     <h2 class="font-bold text-base text-base-content">{rule.name}</h2>
-                    <div class="mt-2 space-y-1 text-xs">
+                    <div class="mt-2 space-y-1.5 text-xs">
                       <div>
                         <span class="font-semibold text-base-content/60">Keywords:</span>
                         <span class="font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded ml-1 font-bold">
@@ -226,18 +204,26 @@ defmodule DealScoutWeb.AlertLive.Index do
                         </div>
                       <% end %>
 
-                      <%= if rule.max_price do %>
-                        <div>
-                          <span class="font-semibold text-base-content/60">Max Price:</span>
-                          <span class="font-semibold text-emerald-600 dark:text-emerald-400 ml-1">
-                            {rule.max_price} €
+                      <div class="flex flex-wrap items-center gap-2 pt-1">
+                        <%= if rule.max_price do %>
+                          <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
+                            Max {rule.max_price} €
                           </span>
-                        </div>
-                      <% end %>
+                        <% end %>
 
-                      <div>
-                        <span class="font-semibold text-base-content/60">Source:</span>
-                        <span class="text-base-content/80 ml-1 uppercase text-[11px] font-mono">
+                        <%= if rule.min_temperature do %>
+                          <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
+                            🔥 ≥ {rule.min_temperature}°
+                          </span>
+                        <% end %>
+
+                        <%= if rule.exclude_dropshippers do %>
+                          <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold">
+                            🛡 No Dropshippers
+                          </span>
+                        <% end %>
+
+                        <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/70 uppercase text-[10px] font-mono">
                           {rule.source_filter}
                         </span>
                       </div>
@@ -285,7 +271,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     placeholder="e.g. defekt, kühler, zubehör, suche"
                   />
 
-                  <div class="grid grid-cols-2 gap-4">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <.input
                       field={@form[:max_price]}
                       type="number"
@@ -300,6 +286,23 @@ defmodule DealScoutWeb.AlertLive.Index do
                       label="Source Portal"
                       options={[{"All Portals", "all"} | Enum.map(@feeds, &{&1.name, &1.slug})]}
                     />
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <.input
+                      field={@form[:min_temperature]}
+                      type="number"
+                      label="Min. Community Temp (optional)"
+                      placeholder="e.g. 100 (ignores unrated deals)"
+                    />
+
+                    <div class="flex items-center pt-6">
+                      <.input
+                        field={@form[:exclude_dropshippers]}
+                        type="checkbox"
+                        label="Exclude dropshippers (Temu, AliExpress)"
+                      />
+                    </div>
                   </div>
 
                   <.input

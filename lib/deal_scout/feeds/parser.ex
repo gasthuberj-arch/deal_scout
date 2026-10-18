@@ -1,8 +1,11 @@
 defmodule DealScout.Feeds.Parser do
   @moduledoc """
-  Parses RSS 2.0 and Atom XML feeds into normalized Deal structs.
-  Extracts titles, prices, merchants, images, links, and clean text.
+  Parses RSS 2.0 and Atom XML feeds into normalized Deal attribute maps.
+  Extracts titles, prices, merchants, images, links, clean text,
+  temperatures, and comparison URLs (Idealo & Geizhals).
   """
+
+  alias DealScout.Deals.MerchantGuard
 
   @doc """
   Parses an XML feed string for a given feed_id.
@@ -24,20 +27,32 @@ defmodule DealScout.Feeds.Parser do
   end
 
   def parse_item(item, feed_id) do
-    title = item |> Floki.find("title") |> Floki.text() |> strip_cdata()
-    link = item |> Floki.find("link") |> Floki.text() |> strip_cdata()
-    guid = item |> Floki.find("guid") |> Floki.text() |> strip_cdata()
+    raw_title = item |> Floki.find("title") |> Floki.text() |> clean_text_string()
+    link = item |> Floki.find("link") |> Floki.text() |> clean_text_string()
+    guid = item |> Floki.find("guid") |> Floki.text() |> clean_text_string()
     guid = if guid == "", do: link, else: guid
 
-    pub_date_str = item |> Floki.find("pubdate") |> Floki.text() |> strip_cdata()
+    pub_date_str = item |> Floki.find("pubdate") |> Floki.text() |> clean_text_string()
     published_at = parse_datetime(pub_date_str)
 
-    description = item |> Floki.find("description") |> Floki.text() |> strip_cdata()
+    raw_description =
+      case Floki.find(item, "description") do
+        [desc_node | _] ->
+          # preserve inner raw HTML for link extraction
+          Floki.raw_html(desc_node)
+
+        _ ->
+          ""
+      end
+
+    description = clean_text_string(raw_description)
     clean_text = clean_html(description)
 
-    merchant = extract_merchant(item, description)
+    {temperature, title} = extract_temperature(raw_title)
+    merchant_name = extract_merchant(item, description, link)
     price = extract_price(item, title, description)
     image_url = extract_image_url(item, description)
+    {idealo_url, geizhals_url} = extract_comparison_links(raw_description <> " " <> clean_text)
 
     if title != "" and link != "" do
       %{
@@ -48,13 +63,63 @@ defmodule DealScout.Feeds.Parser do
         description: description,
         clean_text: clean_text,
         price: price,
-        merchant: merchant,
+        merchant: merchant_name,
+        merchant_name: merchant_name,
         image_url: image_url,
-        published_at: published_at
+        published_at: published_at,
+        temperature: temperature,
+        idealo_url: idealo_url,
+        geizhals_url: geizhals_url
       }
     else
       nil
     end
+  end
+
+  @doc """
+  Extracts temperature from a title string if formatted as `102° - [Title]`.
+  Returns `{temperature, clean_title}`.
+  """
+  def extract_temperature(title) when is_binary(title) do
+    case Regex.run(~r/^\s*(-?\d+)\s*°\s*-\s*(.+)$/u, title) do
+      [_, temp_str, clean_title] ->
+        case Integer.parse(temp_str) do
+          {temp, ""} -> {temp, String.trim(clean_title)}
+          _ -> {nil, title}
+        end
+
+      _ ->
+        {nil, title}
+    end
+  end
+
+  def extract_temperature(other), do: {nil, other}
+
+  @doc """
+  Extracts direct Idealo and Geizhals product URLs from text or HTML snippet.
+  """
+  def extract_comparison_links(text) when is_binary(text) do
+    idealo =
+      case Regex.run(~r/https?:\/\/(?:[a-zA-Z0-9-]+\.)?idealo\.(?:de|at)\/[^\s"'\''<>]+/i, text) do
+        [url | _] -> clean_url(url)
+        _ -> nil
+      end
+
+    geizhals =
+      case Regex.run(~r/https?:\/\/(?:[a-zA-Z0-9-]+\.)?geizhals\.(?:de|at)\/[^\s"'\''<>]+/i, text) do
+        [url | _] -> clean_url(url)
+        _ -> nil
+      end
+
+    {idealo, geizhals}
+  end
+
+  def extract_comparison_links(_), do: {nil, nil}
+
+  defp clean_url(url) when is_binary(url) do
+    url
+    |> String.replace(~r/[)"'\]>.,;]+$/, "")
+    |> String.trim()
   end
 
   defp clean_html(html) when is_binary(html) do
@@ -75,28 +140,66 @@ defmodule DealScout.Feeds.Parser do
 
   defp clean_html(_), do: ""
 
+  def clean_text_string(text) when is_binary(text) do
+    text
+    |> strip_cdata()
+    |> decode_html_entities()
+    |> String.trim()
+  end
+
+  def clean_text_string(other), do: other
+
   defp strip_cdata(text) when is_binary(text) do
     text
     |> String.replace("<![CDATA[", "")
     |> String.replace("]]>", "")
+    |> String.replace(~r/<!\[CDATA\[.*?\]\]>/s, fn match ->
+      match |> String.replace("<![CDATA[", "") |> String.replace("]]>", "")
+    end)
     |> String.trim()
   end
 
   defp strip_cdata(other), do: other
 
-  defp extract_merchant(item, description) do
+  defp decode_html_entities(text) when is_binary(text) do
+    text
+    |> String.replace("&#038;", "&")
+    |> String.replace("&#8211;", "–")
+    |> String.replace("&#8212;", "—")
+    |> String.replace("&#8220;", "“")
+    |> String.replace("&#8221;", "”")
+    |> String.replace("&#8216;", "‘")
+    |> String.replace("&#8217;", "’")
+    |> String.replace("&amp;", "&")
+    |> String.replace("&quot;", "\"")
+    |> String.replace("&apos;", "'")
+    |> String.replace("&lt;", "<")
+    |> String.replace("&gt;", ">")
+  end
+
+  defp extract_merchant(item, description, link) do
     # 1. Check pepper:merchant attribute
     merchant_tag = Floki.find(item, "pepper\\:merchant, merchant")
 
     case Floki.attribute(merchant_tag, "name") do
       [name | _] when is_binary(name) and name != "" ->
-        String.trim(name)
+        clean_text_string(name)
 
       _ ->
         # 2. Check strong/b tag in description or regex like "6,99€ - EDEKA"
-        case Regex.run(~r/\d+[,.]\d{2}\s*€?\s*-\s*([A-Za-z0-9\s&]+?)(?:<|\n|$)/, description) do
-          [_, merchant] -> String.trim(merchant)
-          _ -> nil
+        case Regex.run(~r/\d+[,.]\d{2}\s*€?\s*-\s*([A-Za-z0-9\s&.-]+?)(?:<|\n|$)/, description) do
+          [_, merchant] when merchant != "" ->
+            clean_text_string(merchant)
+
+          _ ->
+            # 3. Fallback: derive domain from link
+            case MerchantGuard.extract_domain(link) do
+              domain when is_binary(domain) and domain != "" ->
+                domain
+
+              _ ->
+                "Diverse Händler"
+            end
         end
     end
   end
@@ -180,8 +283,6 @@ defmodule DealScout.Feeds.Parser do
   defp parse_datetime(""), do: DateTime.utc_now() |> DateTime.truncate(:second)
 
   defp parse_datetime(str) when is_binary(str) do
-    # Try RFC 1123 / 822 format (e.g. "Sun, 18 Oct 2026 16:37:58 +0200")
-    # or ISO 8601
     case DateTime.from_iso8601(str) do
       {:ok, dt, _offset} ->
         DateTime.truncate(dt, :second)
@@ -195,7 +296,6 @@ defmodule DealScout.Feeds.Parser do
   end
 
   defp parse_rfc2822(str) do
-    # Parse e.g. "Sun, 18 Oct 2026 16:37:58 +0200" or "18 Oct 2026 16:37:58 +0200"
     regex =
       ~r/(?:[A-Za-z]{3},\s+)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+([+-]\d{4}|GMT|UTC)?/
 
@@ -218,7 +318,6 @@ defmodule DealScout.Feeds.Parser do
       tz = List.first(tz_rest) || "+0000"
       offset_seconds = parse_tz_offset(tz)
 
-      # Convert naive + offset into UTC DateTime
       utc_naive = NaiveDateTime.add(naive, -offset_seconds, :second)
       {:ok, DateTime.from_naive!(utc_naive, "Etc/UTC")}
     else
