@@ -93,6 +93,7 @@ defmodule DealScout.MixProject do
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind deal_scout", "esbuild deal_scout"],
       "assets.deploy": [
+        "compile",
         "tailwind deal_scout --minify",
         "esbuild deal_scout --minify",
         "phx.digest"
