@@ -87,7 +87,22 @@ defmodule DealScout.Accounts.UserNotifier do
   """
   def deliver_deal_alert(user, deal, alert_rule) do
     price_str = if deal.price, do: "#{deal.price} €", else: "Price not listed"
-    merchant_str = if deal.merchant, do: "at #{deal.merchant}", else: ""
+
+    merchant_name =
+      case deal.merchant do
+        %{name: name} when is_binary(name) and name != "" -> name
+        name when is_binary(name) and name != "" -> name
+        _ -> Map.get(deal, :raw_merchant)
+      end
+
+    merchant_str = if merchant_name && merchant_name != "", do: "at #{merchant_name}", else: ""
+
+    feed_name =
+      case deal.feed do
+        %{name: name} when is_binary(name) and name != "" -> name
+        name when is_binary(name) and name != "" -> name
+        _ -> "Deal Feed"
+      end
 
     deliver(user.email, "[DealScout] Deal Match: #{deal.title}", """
 
@@ -99,7 +114,7 @@ defmodule DealScout.Accounts.UserNotifier do
 
     Deal: #{deal.title}
     Price: #{price_str} #{merchant_str}
-    Source: #{if deal.feed, do: deal.feed.name, else: "Deal Feed"}
+    Source: #{feed_name}
 
     View Deal:
     #{deal.url}

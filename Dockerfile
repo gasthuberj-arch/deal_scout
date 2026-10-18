@@ -1,9 +1,9 @@
 # Find eligible builder and runner images on Docker Hub:
 # https://hub.docker.com/r/hexpm/elixir/tags
 
-ARG ELIXIR_VERSION=1.18.2
-ARG ERLANG_VERSION=27.2
-ARG DEBIAN_VERSION=bookworm-20250113-slim
+ARG ELIXIR_VERSION=1.18.5
+ARG ERLANG_VERSION=27.3.4.19
+ARG DEBIAN_VERSION=bookworm-20261005-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${ERLANG_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
@@ -11,7 +11,7 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 FROM ${BUILDER_IMAGE} as builder
 
 # install build dependencies
-RUN apt-get update -y && apt-get install -y build-essential git \
+RUN apt-get update -y && apt-get install -y build-essential git ca-certificates curl \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # prepare build dir

@@ -5,6 +5,8 @@ defmodule DealScout.Notifications.Dispatcher do
   and future channels (Telegram, Webhooks).
   """
 
+  require Logger
+
   alias DealScout.Alerts.UserMatch
   alias DealScout.Repo
 
@@ -16,15 +18,16 @@ defmodule DealScout.Notifications.Dispatcher do
   Dispatches a new deal match to all configured channels for the user.
   """
   def dispatch(%UserMatch{} = match) do
-    match = Repo.preload(match, [:user, :deal, :alert_rule])
+    match = Repo.preload(match, [:user, [deal: [:feed, :merchant]], :alert_rule])
 
     # 1. Real-time PubSub for LiveView
     broadcast_liveview(match)
 
     # 2. Email delivery if configured / unnotified
-    dispatch_email(match)
-
-    {:ok, match}
+    case dispatch_email(match) do
+      {:ok, updated_match} -> {:ok, updated_match}
+      _ -> {:ok, match}
+    end
   end
 
   defp broadcast_liveview(%UserMatch{user_id: user_id} = match) do
@@ -41,11 +44,23 @@ defmodule DealScout.Notifications.Dispatcher do
         |> Ecto.Changeset.change(%{notified_via_email: true})
         |> Repo.update()
 
+      {:error, reason} ->
+        Logger.error(
+          "[DealScout.Dispatcher] Failed to deliver deal alert email for match #{match.id}: #{inspect(reason)}"
+        )
+
+        {:ok, match}
+
       _ ->
         {:ok, match}
     end
   rescue
-    _ -> {:ok, match}
+    e ->
+      Logger.error(
+        "[DealScout.Dispatcher] Exception delivering deal alert email for match #{match.id}: #{Exception.message(e)}"
+      )
+
+      {:ok, match}
   end
 
   defp dispatch_email(match), do: {:ok, match}
