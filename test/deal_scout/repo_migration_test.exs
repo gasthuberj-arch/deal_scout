@@ -30,8 +30,11 @@ defmodule DealScout.RepoMigrationTest do
 
     start_supervised!(TempRepo)
     migrations_path = Application.app_dir(:deal_scout, "priv/repo/migrations")
+    prev_opts = Code.compiler_options()
+    Code.compiler_options(ignore_module_conflict: true)
 
     on_exit(fn ->
+      Code.compiler_options(prev_opts)
       File.rm(db_file)
       File.rm("#{db_file}-shm")
       File.rm("#{db_file}-wal")

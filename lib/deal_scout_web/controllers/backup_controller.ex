@@ -19,14 +19,25 @@ defmodule DealScoutWeb.BackupController do
   end
 
   defp authorized?(conn) do
-    configured_token = System.get_env("ADMIN_BACKUP_TOKEN", "dealscout-homelab-backup-key-2026")
-
-    case get_req_header(conn, "authorization") do
-      ["Bearer " <> token] ->
-        Plug.Crypto.secure_compare(String.trim(token), configured_token)
-
+    with configured_token when is_binary(configured_token) <- configured_token(),
+         ["Bearer " <> token] <- get_req_header(conn, "authorization"),
+         token = String.trim(token),
+         true <- token != "" do
+      Plug.Crypto.secure_compare(token, configured_token)
+    else
       _ ->
         false
+    end
+  end
+
+  defp configured_token do
+    case Application.get_env(:deal_scout, :backup_token, System.get_env("ADMIN_BACKUP_TOKEN")) do
+      token when is_binary(token) ->
+        token = String.trim(token)
+        if token != "", do: token, else: nil
+
+      _ ->
+        nil
     end
   end
 
@@ -60,27 +71,43 @@ defmodule DealScoutWeb.BackupController do
       {:ok, _} ->
         Logger.info("[DealScout.Backup] Successfully created atomic backup at #{backup_path}")
 
-        conn
-        |> put_resp_content_type("application/x-sqlite3")
-        |> put_resp_header(
-          "content-disposition",
-          "attachment; filename=\"deal_scout_#{timestamp}.db\""
-        )
-        |> send_file(200, backup_path)
-        |> tap(fn _ ->
-          # Clean up temporary snapshot file asynchronously after sending
-          Task.start(fn ->
-            Process.sleep(2_000)
-            File.rm(backup_path)
-          end)
-        end)
+        try do
+          conn
+          |> cleanup_on_send(backup_path)
+          |> put_resp_content_type("application/x-sqlite3")
+          |> put_resp_header(
+            "content-disposition",
+            "attachment; filename=\"deal_scout_#{timestamp}.db\""
+          )
+          |> send_file(200, backup_path)
+        after
+          File.rm(backup_path)
+        end
 
       {:error, reason} ->
+        File.rm(backup_path)
         Logger.error("[DealScout.Backup] SQLite backup failed: #{inspect(reason)}")
 
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Failed to generate SQLite backup snapshot."})
     end
+  end
+
+  defp cleanup_on_send(conn, path) do
+    parent = self()
+
+    Plug.Conn.register_before_send(conn, fn conn ->
+      Task.start(fn ->
+        ref = Process.monitor(parent)
+
+        receive do
+          {:DOWN, ^ref, :process, ^parent, _reason} ->
+            File.rm(path)
+        end
+      end)
+
+      conn
+    end)
   end
 end
