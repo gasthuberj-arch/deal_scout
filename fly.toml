@@ -12,6 +12,7 @@ primary_region = "fra"
 [env]
   PHX_SERVER = "true"
   DATABASE_PATH = "/data/deal_scout.db"
+  PORT = "8080"
 
 [mounts]
   source = "deal_scout_data"
