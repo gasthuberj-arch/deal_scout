@@ -11,18 +11,9 @@ defmodule DealScoutWeb.AnalyticsLive.Index do
       socket
       |> assign(:page_title, "Market Intelligence & Deal Analytics")
       |> assign(:stats, stats)
+      |> assign(:updated_at, DateTime.utc_now())
 
     {:ok, socket}
-  end
-
-  @impl true
-  def handle_event("refresh", _params, socket) do
-    stats = Analytics.get_deal_intelligence_stats()
-
-    {:noreply,
-     socket
-     |> assign(:stats, stats)
-     |> put_flash(:info, "Analytics metrics updated.")}
   end
 
   @impl true
@@ -42,13 +33,11 @@ defmodule DealScoutWeb.AnalyticsLive.Index do
             </p>
           </div>
 
-          <div>
-            <button
-              phx-click="refresh"
-              class="btn btn-primary btn-sm flex items-center gap-2"
-            >
-              <.icon name="hero-arrow-path" class="size-4" /> Refresh Analytics
-            </button>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-base-300/60 text-base-content/70">
+              <.icon name="hero-clock" class="size-3.5" />
+              <span>Snapshot as of {Calendar.strftime(@updated_at, "%H:%M:%S UTC")}</span>
+            </span>
           </div>
         </div>
 

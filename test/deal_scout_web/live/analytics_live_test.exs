@@ -31,7 +31,7 @@ defmodule DealScoutWeb.AnalyticsLiveTest do
     assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/analytics")
   end
 
-  test "authenticated user views analytics dashboard and updates metrics", %{
+  test "authenticated user views analytics dashboard as a snapshot", %{
     conn: conn,
     user: user,
     deal: deal
@@ -45,10 +45,9 @@ defmodule DealScoutWeb.AnalyticsLiveTest do
     assert html =~ "Ingestion Velocity"
     assert html =~ "MyDealz"
     assert html =~ deal.merchant.name
+    assert html =~ "Snapshot as of"
 
-    # Trigger refresh
-    assert view
-           |> element("button[phx-click='refresh']")
-           |> render_click() =~ "Analytics metrics updated."
+    # Confirm refresh button has been removed to protect against DB spam
+    refute has_element?(view, "button[phx-click='refresh']")
   end
 end
