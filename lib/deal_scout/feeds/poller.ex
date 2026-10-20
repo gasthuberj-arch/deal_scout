@@ -10,6 +10,7 @@ defmodule DealScout.Feeds.Poller do
   require Logger
 
   alias DealScout.Feeds
+  alias DealScout.Feeds.Fetcher
   alias DealScout.Deals.Ingestion
 
   # 2 minutes total cycle
@@ -205,7 +206,7 @@ defmodule DealScout.Feeds.Poller do
   def poll_feed(feed) do
     headers = build_headers(feed)
 
-    case Req.get(feed.url, headers: headers, receive_timeout: 15_000, retry: false) do
+    case Fetcher.fetch(feed.url, headers) do
       {:ok, %{status: 304}} ->
         Logger.debug("[DealScout.Poller] Feed '#{feed.name}' unchanged (304 Not Modified).")
 

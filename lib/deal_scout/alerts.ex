@@ -7,7 +7,7 @@ defmodule DealScout.Alerts do
   alias DealScout.Repo
   alias DealScout.Alerts.{AlertRule, UserMatch, Matcher}
   alias DealScout.Notifications.Dispatcher
-  alias DealScout.Deals.Deal
+  alias DealScout.Deals.{Deal, CrossBorderGuard}
 
   def subscribe_to_user_matches(user_id) do
     Phoenix.PubSub.subscribe(DealScout.PubSub, Dispatcher.user_topic(user_id))
@@ -163,7 +163,9 @@ defmodule DealScout.Alerts do
         query
       end
 
-    Repo.all(query)
+    query
+    |> Repo.all()
+    |> Enum.map(fn m -> %{m | deal: CrossBorderGuard.enrich(m.deal)} end)
   end
 
   def count_unread_matches(user_id) do

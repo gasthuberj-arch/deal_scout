@@ -5,7 +5,7 @@ defmodule DealScout.Deals do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Deals.{Deal, Merchant, MerchantGuard, Deduplicator}
+  alias DealScout.Deals.{Deal, Merchant, MerchantGuard, Deduplicator, CrossBorderGuard, Ingestion}
 
   @pubsub DealScout.PubSub
   @topic "deals:feed"
@@ -61,19 +61,22 @@ defmodule DealScout.Deals do
       |> limit(^limit)
       |> offset(^offset)
 
-    if group_deals do
-      query
-      |> preload([d, feed: f, merchant: m],
-        feed: f,
-        merchant: m,
-        duplicates: [:feed, :merchant]
-      )
-      |> Repo.all()
-    else
-      query
-      |> preload([d, feed: f, merchant: m], feed: f, merchant: m)
-      |> Repo.all()
-    end
+    deals =
+      if group_deals do
+        query
+        |> preload([d, feed: f, merchant: m],
+          feed: f,
+          merchant: m,
+          duplicates: [:feed, :merchant]
+        )
+        |> Repo.all()
+      else
+        query
+        |> preload([d, feed: f, merchant: m], feed: f, merchant: m)
+        |> Repo.all()
+      end
+
+    Enum.map(deals, &CrossBorderGuard.enrich/1)
   end
 
   defp filter_by_search(query, nil), do: query
@@ -138,6 +141,7 @@ defmodule DealScout.Deals do
     Deal
     |> preload([:feed, :merchant, duplicates: [:feed, :merchant]])
     |> Repo.get!(id)
+    |> CrossBorderGuard.enrich()
   end
 
   @doc """
@@ -255,103 +259,13 @@ defmodule DealScout.Deals do
   end
 
   @doc """
-  Inserts a single deal, resolving the merchant association, ignoring duplicate guid.
-  Returns {:ok, deal} or {:duplicate, guid}
+  Inserts a single deal using the unified Deal Ingestion pipeline.
+  Ensures merchant exists, performs canonical deduplication, enriches
+  cross-border origin metadata, evaluates alert rules, and broadcasts via PubSub.
+  Returns {:ok, deal} or {:duplicate, guid} or {:error, changeset}.
   """
   def insert_deal(attrs) do
-    attrs = Map.new(attrs)
-    guid = attrs[:guid] || attrs["guid"]
-
-    if guid && Repo.exists?(from d in Deal, where: d.guid == ^guid) do
-      {:duplicate, guid}
-    else
-      do_insert_deal(attrs)
-    end
-  end
-
-  defp do_insert_deal(attrs) do
-    guid = attrs[:guid] || attrs["guid"]
-    feed_id = attrs[:feed_id] || attrs["feed_id"]
-    feed_slug = get_feed_slug(feed_id)
-    temp = attrs[:temperature] || attrs["temperature"]
-
-    merchant =
-      cond do
-        attrs[:merchant_id] ->
-          Repo.get(Merchant, attrs[:merchant_id])
-
-        attrs["merchant_id"] ->
-          Repo.get(Merchant, attrs["merchant_id"])
-
-        true ->
-          name =
-            attrs[:merchant_name] || attrs["merchant_name"] || attrs[:merchant] ||
-              attrs["merchant"]
-
-          url = attrs[:url] || attrs["url"]
-          text = attrs[:clean_text] || attrs["clean_text"]
-
-          ensure_merchant(name,
-            url: url,
-            text: text
-          )
-      end
-
-    merchant_id = if merchant, do: merchant.id, else: nil
-
-    raw_merchant =
-      attrs[:merchant_name] || attrs["merchant_name"] || attrs[:merchant] || attrs["merchant"]
-
-    canonical_id =
-      cond do
-        attrs[:canonical_deal_id] ->
-          attrs[:canonical_deal_id]
-
-        attrs["canonical_deal_id"] ->
-          attrs["canonical_deal_id"]
-
-        true ->
-          candidate_attrs =
-            attrs
-            |> Map.put(:merchant_id, merchant_id)
-            |> Map.put(:title, attrs[:title] || attrs["title"])
-            |> Map.put(:price, attrs[:price] || attrs["price"])
-            |> Map.put(:url, attrs[:url] || attrs["url"])
-            |> Map.put(:published_at, attrs[:published_at] || attrs["published_at"])
-
-          case Deduplicator.find_canonical_deal(candidate_attrs) do
-            %{id: cid} -> cid
-            _ -> nil
-          end
-      end
-
-    deal_attrs =
-      attrs
-      |> Map.put(:merchant_id, merchant_id)
-      |> Map.put(:canonical_deal_id, canonical_id)
-      |> Map.put_new(:raw_merchant, raw_merchant)
-
-    %Deal{}
-    |> Deal.changeset(deal_attrs)
-    |> Repo.insert(
-      on_conflict: :nothing,
-      conflict_target: :guid
-    )
-    |> case do
-      {:ok, %Deal{id: nil}} ->
-        {:duplicate, guid}
-
-      {:ok, %Deal{} = deal} ->
-        if merchant do
-          record_merchant_deal(merchant.id, feed_slug, temp)
-        end
-
-        deal = Repo.preload(deal, [:feed, :merchant, duplicates: [:feed]])
-        broadcast_deal({:ok, deal})
-
-      error ->
-        error
-    end
+    Ingestion.ingest_deal(attrs)
   end
 
   @doc """
@@ -379,20 +293,6 @@ defmodule DealScout.Deals do
   end
 
   @doc """
-  Bulk inserts a list of parsed deal attribute maps.
-  Returns list of newly created %Deal{} structs.
-  """
-  def insert_new_deals(deal_attrs_list) when is_list(deal_attrs_list) do
-    Enum.reduce(deal_attrs_list, [], fn attrs, acc ->
-      case insert_deal(attrs) do
-        {:ok, deal} -> [deal | acc]
-        _ -> acc
-      end
-    end)
-    |> Enum.reverse()
-  end
-
-  @doc """
   Lists top merchants by deal count.
   """
   def list_merchants(opts \\ []) do
@@ -416,14 +316,5 @@ defmodule DealScout.Deals do
 
     from(d in Deal, where: d.published_at < ^cutoff)
     |> Repo.delete_all()
-  end
-
-  defp get_feed_slug(nil), do: nil
-
-  defp get_feed_slug(feed_id) do
-    case Repo.get(DealScout.Feeds.Feed, feed_id) do
-      %{slug: slug} -> slug
-      _ -> nil
-    end
   end
 end

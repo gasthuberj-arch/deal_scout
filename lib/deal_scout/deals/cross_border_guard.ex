@@ -7,6 +7,21 @@ defmodule DealScout.Deals.CrossBorderGuard do
   @keyboard_hardware_pattern ~r/\b(laptop|notebook|macbook|thinkpad|zenbook|ideapad|tastatur|keyboard|chromebook)\b/iu
 
   @doc """
+  Enriches a deal struct with precomputed country and keyboard layout flags.
+  Idempotent: if already evaluated, returns the deal immediately.
+  """
+  def enrich(%DealScout.Deals.Deal{cross_border_evaluated: true} = deal), do: deal
+
+  def enrich(%DealScout.Deals.Deal{} = deal) do
+    country = detect_country(deal)
+    keyboard_warning = keyboard_warning(deal)
+
+    %{deal | country: country, keyboard_warning: keyboard_warning, cross_border_evaluated: true}
+  end
+
+  def enrich(deal), do: deal
+
+  @doc """
   Detects the origin country of a deal based on URL and text markers.
   Returns `%{code: string, flag: string, name: string}` or `nil`.
   """

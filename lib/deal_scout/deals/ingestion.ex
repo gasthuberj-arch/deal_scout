@@ -42,6 +42,35 @@ defmodule DealScout.Deals.Ingestion do
 
   def ingest_feed(_feed, _xml_body), do: {:error, :invalid_arguments}
 
+  @doc """
+  Ingests a single deal attribute map using the unified ingestion pipeline.
+  Ensures merchant exists, deduplicates against canonical deals,
+  enriches cross-border metadata, records merchant deal stats,
+  triggers alert rule matcher, and broadcasts to PubSub.
+
+  Returns `{:ok, deal}`, `{:duplicate, guid}`, or `{:error, changeset}`.
+  """
+  def ingest_deal(attrs) when is_map(attrs) do
+    attrs = Map.new(attrs)
+    guid = attrs[:guid] || attrs["guid"]
+
+    if guid && Repo.exists?(from d in Deal, where: d.guid == ^guid) do
+      {:duplicate, guid}
+    else
+      feed_id = attrs[:feed_id] || attrs["feed_id"]
+      feed_slug = attrs[:feed_slug] || attrs["feed_slug"] || get_feed_slug(feed_id)
+
+      case insert_single_deal(attrs, feed_id, feed_slug) do
+        {:ok, deal} ->
+          Alerts.process_new_deals([deal])
+          {:ok, deal}
+
+        other ->
+          other
+      end
+    end
+  end
+
   defp process_items([], _feed_id, _feed_slug), do: []
 
   defp process_items(items, feed_id, feed_slug) do
@@ -102,27 +131,45 @@ defmodule DealScout.Deals.Ingestion do
 
     # Ensure merchant exists without incrementing deal stats yet
     merchant =
-      Deals.ensure_merchant(name,
-        url: url,
-        text: text
-      )
+      cond do
+        item[:merchant_id] ->
+          Repo.get(DealScout.Deals.Merchant, item[:merchant_id])
+
+        item["merchant_id"] ->
+          Repo.get(DealScout.Deals.Merchant, item["merchant_id"])
+
+        true ->
+          Deals.ensure_merchant(name,
+            url: url,
+            text: text
+          )
+      end
 
     merchant_id = if merchant, do: merchant.id, else: nil
 
     # Find canonical deal for cross-feed deduplication
-    candidate_attrs =
-      item
-      |> Map.put(:merchant_id, merchant_id)
-      |> Map.put(:feed_id, feed_id)
-      |> Map.put(:title, item[:title] || item["title"])
-      |> Map.put(:price, item[:price] || item["price"])
-      |> Map.put(:url, url)
-      |> Map.put(:published_at, item[:published_at] || item["published_at"])
-
     canonical_id =
-      case Deduplicator.find_canonical_deal(candidate_attrs) do
-        %{id: cid} -> cid
-        _ -> nil
+      cond do
+        item[:canonical_deal_id] ->
+          item[:canonical_deal_id]
+
+        item["canonical_deal_id"] ->
+          item["canonical_deal_id"]
+
+        true ->
+          candidate_attrs =
+            item
+            |> Map.put(:merchant_id, merchant_id)
+            |> Map.put(:feed_id, feed_id)
+            |> Map.put(:title, item[:title] || item["title"])
+            |> Map.put(:price, item[:price] || item["price"])
+            |> Map.put(:url, url)
+            |> Map.put(:published_at, item[:published_at] || item["published_at"])
+
+          case Deduplicator.find_canonical_deal(candidate_attrs) do
+            %{id: cid} -> cid
+            _ -> nil
+          end
       end
 
     deal_attrs =
@@ -149,7 +196,7 @@ defmodule DealScout.Deals.Ingestion do
         end
 
         deal = Repo.preload(deal, [:feed, :merchant, duplicates: [:feed]])
-        deal = enrich_deal_metadata(deal)
+        deal = CrossBorderGuard.enrich(deal)
 
         Deals.broadcast_deal({:ok, deal})
 
@@ -158,13 +205,6 @@ defmodule DealScout.Deals.Ingestion do
       error ->
         error
     end
-  end
-
-  defp enrich_deal_metadata(%Deal{} = deal) do
-    country = CrossBorderGuard.detect_country(deal)
-    keyboard_warning = CrossBorderGuard.keyboard_warning(deal)
-
-    %{deal | country: country, keyboard_warning: keyboard_warning, cross_border_evaluated: true}
   end
 
   defp get_feed_slug(nil), do: nil

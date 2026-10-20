@@ -110,18 +110,27 @@ defmodule DealScout.Notifications.DispatcherTest do
     rule: rule,
     match: match
   } do
+    DealScout.Notifications.WebPush.TestTransport.reset()
+
     # Enable push on rule
     {:ok, rule} =
       rule
       |> Ecto.Changeset.change(notify_push: true)
       |> Repo.update()
 
+    {rec_pub, _rec_priv} = :crypto.generate_key(:ecdh, :secp256r1)
+    rec_auth = :crypto.strong_rand_bytes(16)
+    p256dh_b64 = Base.url_encode64(rec_pub, padding: false)
+    auth_b64 = Base.url_encode64(rec_auth, padding: false)
+
+    test_endpoint = "https://fcm.googleapis.com/fcm/send/test-token"
+
     # Create push subscription for user
     Repo.insert!(%DealScout.Notifications.PushSubscription{
       user_id: user.id,
-      endpoint: "https://fcm.googleapis.com/fcm/send/test-token",
-      p256dh: "BMV...dummy",
-      auth: "dummy_auth"
+      endpoint: test_endpoint,
+      p256dh: p256dh_b64,
+      auth: auth_b64
     })
 
     match = %{match | alert_rule: rule}
@@ -130,7 +139,53 @@ defmodule DealScout.Notifications.DispatcherTest do
     assert {:ok, updated} = Dispatcher.dispatch(match)
     assert updated.notified_via_push == true
 
+    # Assert notification was received by transport with valid headers
+    deliveries = DealScout.Notifications.WebPush.TestTransport.delivered_notifications()
+    assert length(deliveries) >= 1
+    delivery = hd(deliveries)
+    assert delivery.endpoint == test_endpoint
+    assert is_binary(delivery.body)
+
     # Test send_test_notification payload delivery
     assert {:ok, _results} = DealScout.Notifications.send_test_notification(user)
+  end
+
+  test "prunes expired subscriptions when push transport returns 410 Gone", %{
+    user: user,
+    rule: rule,
+    match: match
+  } do
+    {:ok, rule} =
+      rule
+      |> Ecto.Changeset.change(notify_push: true)
+      |> Repo.update()
+
+    {rec_pub, _rec_priv} = :crypto.generate_key(:ecdh, :secp256r1)
+    rec_auth = :crypto.strong_rand_bytes(16)
+    p256dh_b64 = Base.url_encode64(rec_pub, padding: false)
+    auth_b64 = Base.url_encode64(rec_auth, padding: false)
+
+    expired_endpoint = "https://fcm.googleapis.com/fcm/send/expired-token"
+
+    sub =
+      Repo.insert!(%DealScout.Notifications.PushSubscription{
+        user_id: user.id,
+        endpoint: expired_endpoint,
+        p256dh: p256dh_b64,
+        auth: auth_b64
+      })
+
+    DealScout.Notifications.WebPush.TestTransport.stub_endpoint(
+      expired_endpoint,
+      {:ok, %{status: 410, body: "Gone"}}
+    )
+
+    match = %{match | alert_rule: rule}
+    assert {:ok, _} = Dispatcher.dispatch(match)
+
+    # Subscription was pruned from the database
+    assert Repo.get(DealScout.Notifications.PushSubscription, sub.id) == nil
+
+    DealScout.Notifications.WebPush.TestTransport.reset()
   end
 end

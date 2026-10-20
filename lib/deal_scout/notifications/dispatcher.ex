@@ -92,45 +92,49 @@ defmodule DealScout.Notifications.Dispatcher do
         user = first_match.user
         deal_count = length(matches)
 
-        if rule.notify_push do
-          deal_titles =
-            matches
-            |> Enum.take(2)
-            |> Enum.map(fn m ->
-              price_str = if m.deal.price, do: " (#{m.deal.price} €)", else: ""
-              "#{m.deal.title}#{price_str}"
-            end)
-            |> Enum.join(", ")
+        push_delivered? =
+          if rule.notify_push do
+            deal_titles =
+              matches
+              |> Enum.take(2)
+              |> Enum.map(fn m ->
+                price_str = if m.deal.price, do: " (#{m.deal.price} €)", else: ""
+                "#{m.deal.title}#{price_str}"
+              end)
+              |> Enum.join(", ")
 
-          prices = matches |> Enum.map(& &1.deal.price) |> Enum.reject(&is_nil/1)
+            prices = matches |> Enum.map(& &1.deal.price) |> Enum.reject(&is_nil/1)
 
-          min_price =
-            case prices do
-              [] -> nil
-              _ -> Enum.min(prices, Decimal)
-            end
+            min_price =
+              case prices do
+                [] -> nil
+                _ -> Enum.min(prices, Decimal)
+              end
 
-          title =
-            if min_price do
-              "🔥 #{deal_count} new deals for '#{rule.name}' (from #{min_price} €)"
-            else
-              "🔥 #{deal_count} new deals for '#{rule.name}'"
-            end
+            title =
+              if min_price do
+                "🔥 #{deal_count} new deals for '#{rule.name}' (from #{min_price} €)"
+              else
+                "🔥 #{deal_count} new deals for '#{rule.name}'"
+              end
 
-          payload = %{
-            title: title,
-            body:
-              "#{deal_titles}#{if deal_count > 2, do: " and #{deal_count - 2} more", else: ""}",
-            url: "/matches?highlight=#{first_match.id}",
-            icon: (first_match.deal && first_match.deal.image_url) || "/images/icon-192.png",
-            badge: "/images/badge-72.png",
-            idealo_url: first_match.deal && first_match.deal.idealo_url,
-            geizhals_url: first_match.deal && first_match.deal.geizhals_url,
-            tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}"
-          }
+            payload = %{
+              title: title,
+              body:
+                "#{deal_titles}#{if deal_count > 2, do: " and #{deal_count - 2} more", else: ""}",
+              url: "/matches?highlight=#{first_match.id}",
+              icon: (first_match.deal && first_match.deal.image_url) || "/images/icon-192.png",
+              badge: "/images/badge-72.png",
+              idealo_url: first_match.deal && first_match.deal.idealo_url,
+              geizhals_url: first_match.deal && first_match.deal.geizhals_url,
+              tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}"
+            }
 
-          send_push_to_user(user, payload)
-        end
+            {:ok, count} = send_push_to_user(user, payload)
+            count > 0
+          else
+            false
+          end
 
         if rule.notify_email do
           # Collapse batch into single email notification for top deal
@@ -142,7 +146,7 @@ defmodule DealScout.Notifications.Dispatcher do
         Enum.each(matches, fn m ->
           m
           |> Ecto.Changeset.change(%{
-            notified_via_push: rule.notify_push,
+            notified_via_push: push_delivered?,
             notified_via_email: rule.notify_email
           })
           |> Repo.update()
@@ -223,15 +227,18 @@ defmodule DealScout.Notifications.Dispatcher do
       tag: "match-#{match.id}"
     }
 
-    send_push_to_user(match.user, payload)
+    {:ok, count} = send_push_to_user(match.user, payload)
+    push_delivered? = count > 0
 
     if match.id do
-      case match |> Ecto.Changeset.change(%{notified_via_push: true}) |> Repo.update() do
+      case match
+           |> Ecto.Changeset.change(%{notified_via_push: push_delivered?})
+           |> Repo.update() do
         {:ok, updated} -> updated
         _ -> match
       end
     else
-      %{match | notified_via_push: true}
+      %{match | notified_via_push: push_delivered?}
     end
   end
 
@@ -274,21 +281,29 @@ defmodule DealScout.Notifications.Dispatcher do
     subscriptions =
       Repo.all(from s in PushSubscription, where: s.user_id == ^user_id)
 
-    Enum.each(subscriptions, fn sub ->
-      case WebPush.send_notification(sub, payload) do
-        {:ok, _} ->
-          sub
-          |> Ecto.Changeset.change(last_used_at: DateTime.utc_now() |> DateTime.truncate(:second))
-          |> Repo.update()
+    delivered_count =
+      Enum.reduce(subscriptions, 0, fn sub, acc ->
+        case WebPush.send_notification(sub, payload) do
+          {:ok, _} ->
+            sub
+            |> Ecto.Changeset.change(
+              last_used_at: DateTime.utc_now() |> DateTime.truncate(:second)
+            )
+            |> Repo.update()
 
-        {:error, :subscription_expired} ->
-          Repo.delete(sub)
+            acc + 1
 
-        _ ->
-          :ok
-      end
-    end)
+          {:error, :subscription_expired} ->
+            Repo.delete(sub)
+            acc
+
+          _ ->
+            acc
+        end
+      end)
+
+    {:ok, delivered_count}
   end
 
-  defp send_push_to_user(_user, _payload), do: :ok
+  defp send_push_to_user(_user, _payload), do: {:ok, 0}
 end

@@ -59,6 +59,17 @@ defmodule DealScout.Notifications.WebPush do
   end
 
   @doc """
+  Returns the configured WebPush transport adapter.
+  """
+  def transport do
+    Application.get_env(
+      :deal_scout,
+      :web_push_transport,
+      DealScout.Notifications.WebPush.ReqTransport
+    )
+  end
+
+  @doc """
   Sends a web push notification to a PushSubscription.
   `payload` can be a map (encoded to JSON) or binary string.
   """
@@ -87,7 +98,7 @@ defmodule DealScout.Notifications.WebPush do
         {"authorization", "vapid t=#{jwt},k=#{pub_b64}"}
       ]
 
-      case Req.post(endpoint, body: encrypted_body, headers: headers, retry: false) do
+      case transport().post(endpoint, encrypted_body, headers) do
         {:ok, %{status: status}} when status in 200..204 ->
           {:ok, :delivered}
 
