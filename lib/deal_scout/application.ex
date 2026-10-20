@@ -16,6 +16,7 @@ defmodule DealScout.Application do
         {DNSCluster, query: Application.get_env(:deal_scout, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: DealScout.PubSub},
         DealScoutWeb.Presence,
+        {Task.Supervisor, name: DealScout.Feeds.TaskSupervisor},
         # Start to serve requests, typically the last entry
         DealScoutWeb.Endpoint
       ] ++ background_workers()

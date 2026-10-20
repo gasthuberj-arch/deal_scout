@@ -1,8 +1,9 @@
 defmodule DealScout.Feeds.Poller do
   @moduledoc """
   Background GenServer that periodically polls configured RSS deal feeds.
-  Uses HTTP conditional requests (ETags, If-Modified-Since) to save bandwidth.
-  Parses new deals, inserts them into SQLite, and triggers the alert matcher.
+  Spreads feed requests over time (round-robin) and processes each feed inside an
+  isolated ephemeral task so that large XML DOMs and refc binaries are immediately
+  freed by the BEAM VM upon task completion. Concurrency is strictly limited to 1.
   """
 
   use GenServer
@@ -11,8 +12,12 @@ defmodule DealScout.Feeds.Poller do
   alias DealScout.Feeds
   alias DealScout.Deals.Ingestion
 
-  # 2 minutes
+  # 2 minutes total cycle
   @default_interval_ms 120_000
+  # Minimum stagger between feeds (ms)
+  @min_stagger_ms 5_000
+  # Fast stagger when manually triggered (ms)
+  @fast_stagger_ms 1_000
   @user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 DealScout/1.0"
 
   def start_link(opts \\ []) do
@@ -20,7 +25,8 @@ defmodule DealScout.Feeds.Poller do
   end
 
   @doc """
-  Manually triggers a feed polling cycle immediately.
+  Manually triggers a feed polling cycle across all active feeds.
+  Feeds are queued and polled sequentially with a short stagger.
   """
   def poll_now do
     GenServer.cast(__MODULE__, :poll_now)
@@ -33,31 +39,155 @@ defmodule DealScout.Feeds.Poller do
   @impl true
   def init(opts) do
     interval = Keyword.get(opts, :interval_ms, @default_interval_ms)
-    # Stagger initial poll slightly so the supervision tree finishes starting up
     initial_delay = Keyword.get(opts, :initial_delay_ms, 2_000)
 
-    Process.send_after(self(), :poll, initial_delay)
+    timer_ref = Process.send_after(self(), :tick, initial_delay)
 
-    {:ok, %{interval_ms: interval}}
+    {:ok,
+     %{
+       interval_ms: interval,
+       queue: [],
+       active_task: nil,
+       timer_ref: timer_ref,
+       mode: :normal
+     }}
   end
 
   @impl true
-  def handle_info(:poll, state) do
-    poll_all_feeds()
-    schedule_poll(state.interval_ms)
+  def handle_info(:tick, state) do
+    state = %{state | timer_ref: nil}
+
+    if state.active_task != nil do
+      # Previous task is still running; wait 2s before retrying
+      timer_ref = Process.send_after(self(), :tick, 2_000)
+      {:noreply, %{state | timer_ref: timer_ref}}
+    else
+      dispatch_next_feed(state)
+    end
+  end
+
+  @impl true
+  def handle_info({ref, _result}, state) do
+    Process.demonitor(ref, [:flush])
+
+    state =
+      case state.active_task do
+        {^ref, _feed_id} -> %{state | active_task: nil}
+        _ -> state
+      end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+    if reason not in [:normal, :noproc] do
+      Logger.error("[DealScout.Poller] Worker task exited abnormally: #{inspect(reason)}")
+    end
+
+    state =
+      case state.active_task do
+        {^ref, _feed_id} -> %{state | active_task: nil}
+        _ -> state
+      end
+
     {:noreply, state}
   end
 
   @impl true
   def handle_cast(:poll_now, state) do
-    poll_all_feeds()
-    {:noreply, state}
+    if state.timer_ref, do: Process.cancel_timer(state.timer_ref)
+
+    feeds = Feeds.list_active_feeds()
+    feed_ids = Enum.map(feeds, & &1.id)
+
+    new_state = %{state | queue: feed_ids, mode: :fast, timer_ref: nil}
+
+    if new_state.active_task == nil do
+      dispatch_next_feed(new_state)
+    else
+      timer_ref = Process.send_after(self(), :tick, @fast_stagger_ms)
+      {:noreply, %{new_state | timer_ref: timer_ref}}
+    end
+  end
+
+  # ============================================================================
+  # Dispatch & Queue Management
+  # ============================================================================
+
+  defp dispatch_next_feed(state) do
+    {queue, next_feed_id, mode} =
+      case state.queue do
+        [] ->
+          feeds = Feeds.list_active_feeds()
+          feed_ids = Enum.map(feeds, & &1.id)
+
+          case feed_ids do
+            [] -> {[], nil, :normal}
+            [first | rest] -> {rest, first, :normal}
+          end
+
+        [next | rest] ->
+          {rest, next, state.mode}
+      end
+
+    if is_nil(next_feed_id) do
+      # All feeds in cycle polled; schedule next tick after full interval
+      timer_ref = Process.send_after(self(), :tick, state.interval_ms)
+      {:noreply, %{state | queue: [], active_task: nil, timer_ref: timer_ref, mode: :normal}}
+    else
+      feed = Feeds.get_feed(next_feed_id)
+
+      if feed && feed.is_active do
+        task = spawn_poll_task(feed)
+
+        # Stagger calculation:
+        # In fast mode: short 1-second interval between feeds.
+        # In normal mode: spread across interval_ms (e.g. 120s / 10 feeds = 12s).
+        stagger_ms =
+          if mode == :fast do
+            @fast_stagger_ms
+          else
+            total_active = max(1, length(queue) + 1)
+            max(@min_stagger_ms, div(state.interval_ms, total_active))
+          end
+
+        timer_ref = Process.send_after(self(), :tick, stagger_ms)
+
+        {:noreply,
+         %{
+           state
+           | queue: queue,
+             active_task: {task.ref, next_feed_id},
+             timer_ref: timer_ref,
+             mode: mode
+         }}
+      else
+        # Feed deleted or disabled, skip to next immediately
+        dispatch_next_feed(%{state | queue: queue, mode: mode})
+      end
+    end
+  end
+
+  defp spawn_poll_task(feed) do
+    task_fn = fn ->
+      poll_feed(feed)
+    end
+
+    if Process.whereis(DealScout.Feeds.TaskSupervisor) do
+      Task.Supervisor.async_nolink(DealScout.Feeds.TaskSupervisor, task_fn)
+    else
+      Task.async(task_fn)
+    end
   end
 
   # ============================================================================
   # Polling Logic
   # ============================================================================
 
+  @doc """
+  Polls all active feeds synchronously. Useful in test fixtures or mix tasks.
+  """
   def poll_all_feeds do
     feeds = Feeds.list_active_feeds()
     Logger.info("[DealScout.Poller] Polling #{length(feeds)} active feeds...")
@@ -65,12 +195,17 @@ defmodule DealScout.Feeds.Poller do
     for feed <- feeds do
       poll_feed(feed)
     end
+
+    :ok
   end
 
+  @doc """
+  Polls a single feed using HTTP conditional headers.
+  """
   def poll_feed(feed) do
     headers = build_headers(feed)
 
-    case Req.get(feed.url, headers: headers, receive_timeout: 15_000) do
+    case Req.get(feed.url, headers: headers, receive_timeout: 15_000, retry: false) do
       {:ok, %{status: 304}} ->
         Logger.debug("[DealScout.Poller] Feed '#{feed.name}' unchanged (304 Not Modified).")
 
@@ -162,8 +297,4 @@ defmodule DealScout.Feeds.Poller do
   end
 
   defp get_header(_, _), do: nil
-
-  defp schedule_poll(interval_ms) do
-    Process.send_after(self(), :poll, interval_ms)
-  end
 end

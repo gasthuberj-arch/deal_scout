@@ -230,8 +230,6 @@ defmodule DealScout.Feeds.Parser do
     |> String.trim()
   end
 
-  defp strip_cdata(other), do: other
-
   defp decode_html_entities(text) when is_binary(text) do
     text
     |> String.replace("&#038;", "&")

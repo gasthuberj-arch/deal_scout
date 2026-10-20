@@ -17,6 +17,8 @@ defmodule DealScout.Feeds do
 
   def get_feed!(id), do: Repo.get!(Feed, id)
 
+  def get_feed(id), do: Repo.get(Feed, id)
+
   def get_feed_by_slug(slug) do
     Repo.get_by(Feed, slug: slug)
   end
