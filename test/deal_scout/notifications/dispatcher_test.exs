@@ -46,6 +46,7 @@ defmodule DealScout.Notifications.DispatcherTest do
         user_id: user.id,
         name: "PS5 Alert",
         keywords: "PlayStation 5",
+        notify_email: true,
         is_active: true
       })
 
@@ -78,13 +79,21 @@ defmodule DealScout.Notifications.DispatcherTest do
 
   test "dispatch/1 logs error when email delivery raises an exception", %{match: _match} do
     # Pass a corrupted match or trigger exception in email delivery
-    # We can pass an invalid user with non-string email that causes email delivery to raise
+    # We pass an invalid user with non-string email that causes email delivery to raise
     corrupted_match = %UserMatch{
       id: 99_999,
+      user_id: 99_999,
+      deal_id: 99_999,
+      alert_rule_id: 99_999,
       notified_via_email: false,
       user: %User{email: 12345},
       deal: %Deal{title: "Corrupted Deal", price: nil, merchant: nil, url: "http://example.com"},
-      alert_rule: %AlertRule{name: "Corrupted Rule", keywords: "test"}
+      alert_rule: %AlertRule{
+        id: 99_999,
+        name: "Corrupted Rule",
+        keywords: "test",
+        notify_email: true
+      }
     }
 
     log =

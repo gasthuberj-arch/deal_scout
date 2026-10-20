@@ -1,0 +1,25 @@
+{
+  "name": "DealScout - Deal Alarms & Price Hunter",
+  "short_name": "DealScout",
+  "description": "Real-time deal alarms, cross-border checks, and price comparisons.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1f2937",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -2,6 +2,9 @@ defmodule DealScoutWeb.MatchLive.Index do
   use DealScoutWeb, :live_view
 
   alias DealScout.Alerts
+  alias DealScout.Deals.CrossBorderGuard
+  alias DealScoutWeb.PWAComponents
+  alias DealScoutWeb.PushNotificationHandler
 
   @impl true
   def mount(_params, _session, socket) do
@@ -16,6 +19,8 @@ defmodule DealScoutWeb.MatchLive.Index do
       |> assign(:page_title, "Matched Deals")
       |> assign(:unread_only, false)
       |> assign(:sound_enabled, true)
+      |> assign(:highlight_id, nil)
+      |> PushNotificationHandler.init_push_assigns()
       |> load_matches()
 
     {:ok, socket}
@@ -24,10 +29,12 @@ defmodule DealScoutWeb.MatchLive.Index do
   @impl true
   def handle_params(params, _uri, socket) do
     unread_only = params["unread"] == "true"
+    highlight_id = params["highlight"]
 
     socket =
       socket
       |> assign(:unread_only, unread_only)
+      |> assign(:highlight_id, highlight_id)
       |> load_matches()
 
     {:noreply, socket}
@@ -64,8 +71,25 @@ defmodule DealScoutWeb.MatchLive.Index do
   end
 
   @impl true
+  def handle_event(event, params, socket)
+      when event in [
+             "push-status",
+             "enable_push_notifications",
+             "save-push-subscription",
+             "push-permission-denied",
+             "push-error",
+             "open_ios_modal",
+             "close_ios_modal",
+             "dismiss_push_banner"
+           ] do
+    case PushNotificationHandler.handle_push_event(event, params, socket) do
+      {:handled, updated_socket} -> {:noreply, updated_socket}
+      :unhandled -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_info({:new_match, match}, socket) do
-    # Play chime via client push_event if enabled
     socket =
       if socket.assigns.sound_enabled do
         push_event(socket, "play-chime", %{})
@@ -94,6 +118,16 @@ defmodule DealScoutWeb.MatchLive.Index do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-6" id="match-inbox" phx-hook="AudioChimeHook">
+        <!-- PWA Smart Install / Push Banner -->
+        <PWAComponents.push_install_banner
+          push_subscribed={@push_subscribed}
+          push_supported={@push_supported}
+          is_ios={@is_ios}
+          is_standalone={@is_standalone}
+          show_ios_modal={@show_ios_modal}
+          dismissed={@banner_dismissed}
+        />
+
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-200/50 p-6 rounded-2xl border border-base-300">
           <div>
@@ -122,42 +156,10 @@ defmodule DealScoutWeb.MatchLive.Index do
               title="Toggle audio notification"
             >
               <%= if @sound_enabled do %>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="size-4 text-emerald-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                </svg>
+                <.icon name="hero-speaker-wave" class="size-4 text-emerald-400" />
                 <span>Chime On</span>
               <% else %>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="size-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
-                  />
-                </svg>
+                <.icon name="hero-speaker-x-mark" class="size-4" />
                 <span>Muted</span>
               <% end %>
             </button>
@@ -189,20 +191,7 @@ defmodule DealScoutWeb.MatchLive.Index do
         <%= if Enum.empty?(@matches) do %>
           <div class="text-center py-16 bg-base-100 border border-dashed border-base-300 rounded-2xl p-8 space-y-4">
             <div class="size-14 mx-auto rounded-full bg-base-200 flex items-center justify-center text-base-content/50">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="size-7"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+              <.icon name="hero-check" class="size-7" />
             </div>
             <h2 class="text-lg font-bold">Inbox Zero</h2>
             <p class="text-sm text-base-content/70 max-w-md mx-auto">
@@ -212,11 +201,18 @@ defmodule DealScoutWeb.MatchLive.Index do
         <% else %>
           <div class="space-y-3">
             <%= for match <- @matches do %>
-              <div class={[
-                "card bg-base-100 border transition-all duration-200",
-                !match.is_read && "border-primary/50 shadow-md bg-primary/5",
-                match.is_read && "border-base-200 opacity-80"
-              ]}>
+              <% country = CrossBorderGuard.detect_country(match.deal)
+              keyboard_warn = CrossBorderGuard.keyboard_warning(match.deal) %>
+              <div
+                id={"match-#{match.id}"}
+                class={[
+                  "card bg-base-100 border transition-all duration-200",
+                  to_string(match.id) == to_string(@highlight_id) &&
+                    "ring-2 ring-primary ring-offset-2 shadow-lg",
+                  !match.is_read && "border-primary/50 shadow-md bg-primary/5",
+                  match.is_read && "border-base-200 opacity-80"
+                ]}
+              >
                 <div class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div class="flex items-start gap-4 flex-1 min-w-0">
                     <%= if match.deal.image_url do %>
@@ -231,12 +227,26 @@ defmodule DealScoutWeb.MatchLive.Index do
 
                     <div class="space-y-1.5 flex-1 min-w-0">
                       <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <%= if to_string(match.id) == to_string(@highlight_id) do %>
+                          <span class="badge badge-primary badge-sm font-bold animate-pulse">
+                            Target Deal
+                          </span>
+                        <% end %>
                         <span class="badge badge-primary badge-sm font-semibold">
                           Rule: {match.alert_rule.name}
                         </span>
                         <span class="badge badge-ghost badge-sm">
                           {if match.deal.feed, do: match.deal.feed.name, else: "Deal"}
                         </span>
+                        <%= if country do %>
+                          <span
+                            class="badge badge-ghost badge-sm gap-1"
+                            title={"Origin: #{country.name}"}
+                          >
+                            <span>{country.flag}</span>
+                            <span>{country.code}</span>
+                          </span>
+                        <% end %>
                         <%= if !match.is_read do %>
                           <span class="badge badge-xs badge-info font-bold uppercase">New</span>
                         <% end %>
@@ -256,9 +266,17 @@ defmodule DealScoutWeb.MatchLive.Index do
                         </a>
                       </h2>
 
-                      <div class="flex items-center gap-3 text-xs">
+                      <!-- Keyboard warning if foreign -->
+                      <%= if keyboard_warn do %>
+                        <div class="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20 font-medium w-fit">
+                          <span>{keyboard_warn.flag}</span>
+                          <span>{keyboard_warn.message}</span>
+                        </div>
+                      <% end %>
+
+                      <div class="flex flex-wrap items-center gap-3 text-xs pt-0.5">
                         <%= if match.deal.price do %>
-                          <span class="font-extrabold text-emerald-600 dark:text-emerald-400">
+                          <span class="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">
                             {match.deal.price} €
                           </span>
                         <% end %>
@@ -267,11 +285,43 @@ defmodule DealScoutWeb.MatchLive.Index do
                             via {match.deal.merchant.name}
                           </span>
                         <% end %>
+                        <%= if match.deal.temperature do %>
+                          <span class="text-rose-500 font-semibold">
+                            🔥 {match.deal.temperature}°
+                          </span>
+                        <% end %>
                       </div>
                     </div>
                   </div>
 
-                  <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  <div class="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0">
+                    <!-- Idealo Price Comparison Link -->
+                    <%= if match.deal.idealo_url do %>
+                      <a
+                        href={match.deal.idealo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn-xs btn-outline btn-warning gap-1 font-semibold"
+                        title="Compare price history and offers on Idealo"
+                      >
+                        <.icon name="hero-arrow-top-right-on-square" class="size-3" />
+                        <span>Idealo</span>
+                      </a>
+                    <% end %>
+
+                    <%= if match.deal.geizhals_url do %>
+                      <a
+                        href={match.deal.geizhals_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn-xs btn-outline btn-info gap-1 font-semibold"
+                        title="Compare offers on Geizhals"
+                      >
+                        <.icon name="hero-arrow-top-right-on-square" class="size-3" />
+                        <span>Geizhals</span>
+                      </a>
+                    <% end %>
+
                     <%= if !match.is_read do %>
                       <button
                         phx-click="mark_read"
@@ -290,20 +340,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                       class="btn btn-xs btn-primary gap-1"
                     >
                       <span>Open Deal</span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="size-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
+                      <.icon name="hero-arrow-top-right-on-square" class="size-3" />
                     </a>
                   </div>
                 </div>

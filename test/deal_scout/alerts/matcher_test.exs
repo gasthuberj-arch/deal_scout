@@ -108,4 +108,73 @@ defmodule DealScout.Alerts.MatcherTest do
     rule_allow = %AlertRule{keywords: "RTX 4080", exclude_dropshippers: false, is_active: true}
     assert Matcher.matches?(temu_deal, rule_allow)
   end
+
+  test "supports exact quoted phrase matching", %{deal: deal} do
+    # Deal title is "GIGABYTE GeForce RTX 4080 SUPER Gaming OC 16GB"
+    rule_exact = %AlertRule{keywords: "\"RTX 4080 SUPER\"", is_active: true}
+    assert Matcher.matches?(deal, rule_exact)
+
+    rule_wrong_order = %AlertRule{keywords: "\"SUPER 4080 RTX\"", is_active: true}
+    refute Matcher.matches?(deal, rule_wrong_order)
+  end
+
+  test "filters by merchant trust level (verified_only)", %{deal: deal} do
+    rule = %AlertRule{keywords: "RTX 4080", merchant_filter: "verified_only", is_active: true}
+    # deal merchant trust_level is "verified"
+    assert Matcher.matches?(deal, rule)
+
+    unverified_deal = %{
+      deal
+      | merchant: %Merchant{name: "RandomShop", slug: "random", trust_level: "unverified"}
+    }
+
+    refute Matcher.matches?(unverified_deal, rule)
+  end
+
+  test "filters by origin country (de_only and eu_only)", %{deal: deal} do
+    rule_de = %AlertRule{keywords: "RTX 4080", country_filter: "de_only", is_active: true}
+    # Domestic Mindfactory deal
+    assert Matcher.matches?(deal, rule_de)
+
+    # Cross-border Spanish deal
+    foreign_deal = %{
+      deal
+      | url: "https://amazon.es/dp/B0123456",
+        title: "GIGABYTE RTX 4080 [Amazon.es]"
+    }
+
+    refute Matcher.matches?(foreign_deal, rule_de)
+
+    rule_eu = %AlertRule{keywords: "RTX 4080", country_filter: "eu_only", is_active: true}
+    assert Matcher.matches?(foreign_deal, rule_eu)
+
+    us_deal = %{deal | url: "https://amazon.com/dp/B0123456", title: "GIGABYTE RTX 4080 US"}
+    refute Matcher.matches?(us_deal, rule_eu)
+  end
+
+  test "excludes foreign keyboard layouts when exclude_foreign_keyboards is true" do
+    laptop_deal = %Deal{
+      feed_id: 1,
+      title: "ASUS ROG Zephyrus G14 Gaming Laptop",
+      clean_text: "Top Notebook mit AZERTY Layout aus Frankreich.",
+      url: "https://amazon.fr/dp/B0123456",
+      price: Decimal.new("1299.00")
+    }
+
+    rule_exclude = %AlertRule{
+      keywords: "Zephyrus",
+      exclude_foreign_keyboards: true,
+      is_active: true
+    }
+
+    refute Matcher.matches?(laptop_deal, rule_exclude)
+
+    rule_allow = %AlertRule{
+      keywords: "Zephyrus",
+      exclude_foreign_keyboards: false,
+      is_active: true
+    }
+
+    assert Matcher.matches?(laptop_deal, rule_allow)
+  end
 end

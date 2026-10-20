@@ -25,6 +25,98 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/deal_scout"
 import topbar from "../vendor/topbar"
 
+function urlB64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function detectDeviceName() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return 'Apple iPhone';
+  if (/iPad/.test(ua)) return 'Apple iPad';
+  if (/Android/.test(ua)) return 'Android Device';
+  if (/Macintosh/.test(ua)) return 'Mac Computer';
+  if (/Windows/.test(ua)) return 'Windows PC';
+  if (/Linux/.test(ua)) return 'Linux Device';
+  return 'Web Browser';
+}
+
+const PushManagerHook = {
+  async mounted() {
+    const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    let permission = isSupported ? Notification.permission : 'unsupported';
+    let hasExistingSubscription = false;
+
+    if (isSupported && permission === 'granted') {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          hasExistingSubscription = true;
+        }
+      } catch (e) {
+        console.debug('Error checking subscription: ', e);
+      }
+    }
+
+    this.pushEvent('push-status', {
+      supported: isSupported,
+      permission: permission,
+      subscribed: hasExistingSubscription,
+      is_standalone: isStandalone,
+      is_ios: isIos,
+    });
+
+    this.handleEvent('request-push-subscription', async ({vapid_public_key}) => {
+      if (!isSupported) {
+        this.pushEvent('push-error', {message: 'Push notifications are not supported on this browser.'});
+        return;
+      }
+
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          this.pushEvent('push-permission-denied', {});
+          return;
+        }
+
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+
+        if (!sub) {
+          const appServerKey = urlB64ToUint8Array(vapid_public_key);
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: appServerKey,
+          });
+        }
+
+        const subJson = sub.toJSON();
+
+        this.pushEvent('save-push-subscription', {
+          endpoint: sub.endpoint,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth,
+          user_agent: navigator.userAgent,
+          device_name: detectDeviceName(),
+        });
+      } catch (err) {
+        console.error('Failed to subscribe to Web Push: ', err);
+        this.pushEvent('push-error', {message: err.message || 'Subscription failed.'});
+      }
+    });
+  },
+};
+
 const AudioChimeHook = {
   mounted() {
     this.handleEvent("play-chime", () => {
@@ -70,7 +162,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, AudioChimeHook},
+  hooks: {...colocatedHooks, AudioChimeHook, PushManager: PushManagerHook},
 })
 
 // Show progress bar on live navigation and form submits
@@ -119,6 +211,15 @@ if (process.env.NODE_ENV === "development") {
     }, true)
 
     window.liveReloader = reloader
+  })
+}
+
+// Register Progressive Web App Service Worker
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.error("ServiceWorker registration failed: ", err)
+    })
   })
 }
 

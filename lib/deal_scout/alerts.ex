@@ -7,6 +7,7 @@ defmodule DealScout.Alerts do
   alias DealScout.Repo
   alias DealScout.Alerts.{AlertRule, UserMatch, Matcher}
   alias DealScout.Notifications.Dispatcher
+  alias DealScout.Deals.Deal
 
   def subscribe_to_user_matches(user_id) do
     Phoenix.PubSub.subscribe(DealScout.PubSub, Dispatcher.user_topic(user_id))
@@ -56,19 +57,55 @@ defmodule DealScout.Alerts do
 
   @doc """
   Matches a list of newly ingested deals against all active alert rules.
-  For each match, creates a UserMatch record and dispatches notifications.
+  For each match, creates a UserMatch record and dispatches notifications
+  with canonical deduplication and polling-cycle batch collapsing.
   """
   def process_new_deals(deals) when is_list(deals) do
     rules = list_active_rules()
 
-    for deal <- deals, rule <- rules do
-      if Matcher.matches?(deal, rule) do
-        record_match(deal, rule)
+    # Collect matches grouped by rule for batch collapsing
+    matches_by_rule =
+      for rule <- rules, reduce: %{} do
+        acc ->
+          matched_for_rule =
+            for deal <- deals,
+                Matcher.matches?(deal, rule),
+                not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
+              case insert_match(deal, rule) do
+                {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
+                  match
+
+                _ ->
+                  nil
+              end
+            end
+            |> Enum.reject(&is_nil/1)
+
+          if matched_for_rule != [] do
+            Map.put(acc, rule, matched_for_rule)
+          else
+            acc
+          end
+      end
+
+    # Dispatch notifications per rule
+    for {rule, matches} <- matches_by_rule do
+      if AlertRule.in_cooldown?(rule) do
+        # Broadcast to LiveView inbox for real-time UI, but suppress push/email
+        Enum.each(matches, fn m ->
+          Phoenix.PubSub.broadcast(
+            DealScout.PubSub,
+            Dispatcher.user_topic(m.user_id),
+            {:new_match, m}
+          )
+        end)
+      else
+        Dispatcher.dispatch_batch(rule, matches)
       end
     end
   end
 
-  defp record_match(deal, rule) do
+  defp insert_match(deal, rule) do
     attrs = %{
       user_id: rule.user_id,
       deal_id: deal.id,
@@ -82,16 +119,21 @@ defmodule DealScout.Alerts do
       on_conflict: :nothing,
       conflict_target: [:user_id, :deal_id, :alert_rule_id]
     )
-    |> case do
-      {:ok, %UserMatch{id: nil}} ->
-        :duplicate
+  end
 
-      {:ok, %UserMatch{} = match} ->
-        Dispatcher.dispatch(match)
+  defp duplicate_canonical_match?(user_id, rule_id, deal) do
+    canonical_id = deal.canonical_deal_id || deal.id
+    since = DateTime.add(DateTime.utc_now(), -24 * 3600, :second)
 
-      error ->
-        error
-    end
+    query =
+      from m in UserMatch,
+        join: d in Deal,
+        on: d.id == m.deal_id,
+        where: m.user_id == ^user_id and m.alert_rule_id == ^rule_id,
+        where: m.inserted_at >= ^since,
+        where: d.canonical_deal_id == ^canonical_id or d.id == ^canonical_id
+
+    Repo.exists?(query)
   end
 
   # ============================================================================

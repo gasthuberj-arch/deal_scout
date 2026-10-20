@@ -44,7 +44,8 @@ defmodule DealScout.Application do
     if Application.get_env(:deal_scout, :start_feed_poller, true) do
       [
         {DealScout.Feeds.Poller, []},
-        {DealScout.Maintenance.Pruner, []}
+        {DealScout.Maintenance.Pruner, []},
+        {DealScout.Notifications.DigestWorker, []}
       ]
     else
       []

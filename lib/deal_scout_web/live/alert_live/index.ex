@@ -4,6 +4,8 @@ defmodule DealScoutWeb.AlertLive.Index do
   alias DealScout.Alerts
   alias DealScout.Alerts.AlertRule
   alias DealScout.Feeds
+  alias DealScoutWeb.PWAComponents
+  alias DealScoutWeb.PushNotificationHandler
 
   @impl true
   def mount(_params, _session, socket) do
@@ -18,6 +20,7 @@ defmodule DealScoutWeb.AlertLive.Index do
       |> assign(:feeds, feeds)
       |> assign(:rule, nil)
       |> assign(:form, nil)
+      |> PushNotificationHandler.init_push_assigns()
 
     {:ok, socket}
   end
@@ -30,7 +33,15 @@ defmodule DealScoutWeb.AlertLive.Index do
   defp apply_action(socket, :new, _params) do
     rule = %AlertRule{
       user_id: socket.assigns.current_scope.user.id,
-      exclude_dropshippers: true
+      exclude_dropshippers: true,
+      notify_push: true,
+      notify_email: false,
+      delivery_mode: "instant",
+      country_filter: "all",
+      exclude_foreign_keyboards: false,
+      merchant_filter: "all",
+      cooldown_minutes: 0,
+      is_active: true
     }
 
     changeset = Alerts.change_alert_rule(rule)
@@ -112,20 +123,51 @@ defmodule DealScoutWeb.AlertLive.Index do
   end
 
   @impl true
+  def handle_event(event, params, socket)
+      when event in [
+             "push-status",
+             "enable_push_notifications",
+             "save-push-subscription",
+             "push-permission-denied",
+             "push-error",
+             "open_ios_modal",
+             "close_ios_modal",
+             "dismiss_push_banner"
+           ] do
+    case PushNotificationHandler.handle_push_event(event, params, socket) do
+      {:handled, updated_socket} -> {:noreply, updated_socket}
+      :unhandled -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-6">
+        <!-- PWA Smart Install / Push Banner -->
+        <PWAComponents.push_install_banner
+          push_subscribed={@push_subscribed}
+          push_supported={@push_supported}
+          is_ios={@is_ios}
+          is_standalone={@is_standalone}
+          show_ios_modal={@show_ios_modal}
+          dismissed={@banner_dismissed}
+        />
+
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-200/50 p-6 rounded-2xl border border-base-300">
           <div>
             <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Keyword Alert Rules</h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Configure search terms, exclusions, price caps, and community temperature thresholds. When new deals match, you'll be notified instantly.
+              Configure search terms, exact phrases ("quoted"), region filters, and notifications. When hot deals match, you'll be alerted immediately on your phone.
             </p>
           </div>
 
-          <.link patch={~p"/alerts/new"} class="btn btn-primary btn-sm flex items-center gap-1">
+          <.link
+            patch={~p"/alerts/new"}
+            class="btn btn-primary btn-sm flex items-center gap-1 shadow-sm"
+          >
             <.icon name="hero-plus" class="size-4" />
             <span>Add Alert Rule</span>
           </.link>
@@ -139,20 +181,23 @@ defmodule DealScoutWeb.AlertLive.Index do
             </div>
             <h2 class="text-lg font-bold">No Alert Rules Configured Yet</h2>
             <p class="text-sm text-base-content/70 max-w-md mx-auto">
-              Create an alert rule for products you are hunting (e.g. "RTX 4080", "OLED TV", "Lego Star Wars") to receive instant notifications.
+              Create an alert rule for products you are hunting (e.g. "RTX 4080", "OLED TV", "Lego Star Wars") to receive instant phone notifications.
             </p>
             <.link patch={~p"/alerts/new"} class="btn btn-primary btn-sm">
               Create Your First Rule
             </.link>
           </div>
         <% else %>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div id="rules" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <%= for rule <- @rules do %>
-              <div class={[
-                "card bg-base-100 border transition-all duration-200",
-                rule.is_active && "border-base-300 shadow-sm",
-                !rule.is_active && "border-base-200 opacity-60 bg-base-200/30"
-              ]}>
+              <div
+                id={"rule-#{rule.id}"}
+                class={[
+                  "card bg-base-100 border transition-all duration-200",
+                  rule.is_active && "border-base-300 shadow-sm",
+                  !rule.is_active && "border-base-200 opacity-60 bg-base-200/30"
+                ]}
+              >
                 <div class="p-5 space-y-3">
                   <div class="flex items-center justify-between">
                     <span class={[
@@ -204,7 +249,67 @@ defmodule DealScoutWeb.AlertLive.Index do
                         </div>
                       <% end %>
 
-                      <div class="flex flex-wrap items-center gap-2 pt-1">
+                      <!-- Filter Badges -->
+                      <div class="flex flex-wrap items-center gap-1.5 pt-2">
+                        <!-- Channels & Mode -->
+                        <%= if rule.notify_push do %>
+                          <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
+                            <.icon name="hero-device-phone-mobile" class="size-3" />
+                            <span>Push</span>
+                          </span>
+                        <% end %>
+
+                        <%= if rule.notify_email do %>
+                          <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
+                            <.icon name="hero-envelope" class="size-3" />
+                            <span>Email</span>
+                          </span>
+                        <% end %>
+
+                        <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
+                          <%= case rule.delivery_mode do %>
+                            <% "instant" -> %>
+                              ⚡ Instant
+                            <% "hourly_digest" -> %>
+                              ⏱️ Hourly Digest
+                            <% "daily_digest" -> %>
+                              📅 Daily Digest
+                            <% other -> %>
+                              {other}
+                          <% end %>
+                        </span>
+
+                        <!-- Country Filter -->
+                        <%= if rule.country_filter == "de_only" do %>
+                          <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/80 font-semibold">
+                            🇩🇪 DE Only
+                          </span>
+                        <% end %>
+
+                        <%= if rule.country_filter == "eu_only" do %>
+                          <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/80 font-semibold">
+                            🇪🇺 EU Only
+                          </span>
+                        <% end %>
+
+                        <%= if rule.exclude_foreign_keyboards do %>
+                          <span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold">
+                            ⌨️ DE Layout
+                          </span>
+                        <% end %>
+
+                        <%= if rule.merchant_filter == "verified_only" do %>
+                          <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
+                            🛡️ Verified Stores
+                          </span>
+                        <% end %>
+
+                        <%= if rule.cooldown_minutes > 0 do %>
+                          <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/70 font-mono text-[10px]">
+                            ⏳ {rule.cooldown_minutes}m cooldown
+                          </span>
+                        <% end %>
+
                         <%= if rule.max_price do %>
                           <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
                             Max {rule.max_price} €
@@ -212,14 +317,14 @@ defmodule DealScoutWeb.AlertLive.Index do
                         <% end %>
 
                         <%= if rule.min_temperature do %>
-                          <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
+                          <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold">
                             🔥 ≥ {rule.min_temperature}°
                           </span>
                         <% end %>
 
                         <%= if rule.exclude_dropshippers do %>
                           <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold">
-                            🛡 No Dropshippers
+                            🚫 No Dropshippers
                           </span>
                         <% end %>
 
@@ -237,11 +342,11 @@ defmodule DealScoutWeb.AlertLive.Index do
 
         <!-- Modal Dialog for New / Edit Rule -->
         <%= if @live_action in [:new, :edit] do %>
-          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div class="card bg-base-100 w-full max-w-lg shadow-2xl border border-base-300">
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+            <div class="card bg-base-100 w-full max-w-xl shadow-2xl border border-base-300 my-8">
               <div class="p-6">
                 <div class="flex items-center justify-between pb-4 border-b border-base-200">
-                  <h3 class="font-bold text-lg">
+                  <h3 class="font-bold text-lg text-base-content">
                     {if @live_action == :new, do: "Create Alert Rule", else: "Edit Alert Rule"}
                   </h3>
                   <.link patch={~p"/alerts"} class="btn btn-ghost btn-circle btn-sm">✕</.link>
@@ -259,8 +364,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                   <.input
                     field={@form[:keywords]}
                     type="text"
-                    label="Required Keywords (All words in a group must match)"
-                    placeholder="e.g. RTX 4080 or OLED, 4K"
+                    label="Search Keywords (use quotes for exact phrases: &quot;Apple Watch&quot;)"
+                    placeholder="e.g. &quot;RTX 4080&quot; or OLED, 4K"
                     required
                   />
 
@@ -271,6 +376,91 @@ defmodule DealScoutWeb.AlertLive.Index do
                     placeholder="e.g. defekt, kühler, zubehör, suche"
                   />
 
+                  <!-- Channels and Delivery Mode -->
+                  <div class="p-4 bg-base-200/50 rounded-xl border border-base-300 space-y-3">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70">
+                      Notification Delivery & Channels
+                    </h4>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <.input
+                        field={@form[:delivery_mode]}
+                        type="select"
+                        label="Delivery Mode"
+                        options={[
+                          {"⚡ Instant (Alert immediately on match)", "instant"},
+                          {"⏱️ Hourly Digest (Batch matches once/hr)", "hourly_digest"},
+                          {"📅 Daily Digest (Batch matches once/day)", "daily_digest"}
+                        ]}
+                      />
+
+                      <.input
+                        field={@form[:cooldown_minutes]}
+                        type="select"
+                        label="Alert Cooldown (prevent bursts)"
+                        options={[
+                          {"Immediate (No cooldown)", 0},
+                          {"15 minutes cooldown", 15},
+                          {"30 minutes cooldown", 30},
+                          {"1 hour cooldown", 60},
+                          {"4 hours cooldown", 240}
+                        ]}
+                      />
+                    </div>
+
+                    <div class="flex items-center gap-6 pt-1">
+                      <.input
+                        field={@form[:notify_push]}
+                        type="checkbox"
+                        label="📱 Mobile Push Notification"
+                      />
+                      <.input
+                        field={@form[:notify_email]}
+                        type="checkbox"
+                        label="✉️ Email Notification"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Advanced Filters: Country, Keyboard, Merchant -->
+                  <div class="p-4 bg-base-200/50 rounded-xl border border-base-300 space-y-3">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70">
+                      Smart Deal & Region Filters
+                    </h4>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <.input
+                        field={@form[:country_filter]}
+                        type="select"
+                        label="Origin Region"
+                        options={[
+                          {"All Regions (DE, FR, ES, IT, etc.)", "all"},
+                          {"🇩🇪 Germany Only (Exclude foreign imports)", "de_only"},
+                          {"🇪🇺 EU Friendly Only (DE, FR, ES, IT, etc.)", "eu_only"}
+                        ]}
+                      />
+
+                      <.input
+                        field={@form[:merchant_filter]}
+                        type="select"
+                        label="Merchant Trust Filter"
+                        options={[
+                          {"All Merchants", "all"},
+                          {"🛡️ Verified Retailers Only (Amazon, MediaMarkt, etc.)", "verified_only"}
+                        ]}
+                      />
+                    </div>
+
+                    <div class="pt-1">
+                      <.input
+                        field={@form[:exclude_foreign_keyboards]}
+                        type="checkbox"
+                        label="⌨️ Exclude foreign keyboard layouts (AZERTY, QWERTY-ES)"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Price and Temperature Limits -->
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <.input
                       field={@form[:max_price]}

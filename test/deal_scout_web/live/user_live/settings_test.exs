@@ -209,4 +209,43 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
       assert message == "You must log in to access this page."
     end
   end
+
+  describe "push devices management" do
+    setup %{conn: conn} do
+      user = user_fixture()
+      %{conn: log_in_user(conn, user), user: user}
+    end
+
+    test "registers, tests, and removes a push notification device", %{conn: conn, user: user} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      assert has_element?(lv, "#push-settings-container")
+      assert has_element?(lv, "#push-subscriptions")
+      assert has_element?(lv, "button[phx-click='register_this_device']")
+
+      # Register device via hook event
+      render_hook(lv, "save-push-subscription", %{
+        "endpoint" => "https://push.example.com/device-1",
+        "p256dh" => "mock_p256dh",
+        "auth" => "mock_auth",
+        "device_name" => "Apple iPhone 15 Pro"
+      })
+
+      assert has_element?(lv, "#push-subscriptions", "Apple iPhone 15 Pro")
+      assert has_element?(lv, "button[phx-click='send_test_push']")
+
+      # Send test push
+      lv |> element("button[phx-click='send_test_push']") |> render_click()
+      assert has_element?(lv, "button[phx-click='send_test_push']")
+
+      # Remove device
+      [sub] = DealScout.Notifications.list_push_subscriptions_for_user(user.id)
+
+      lv
+      |> element("button[phx-click='remove_subscription'][phx-value-id='#{sub.id}']")
+      |> render_click()
+
+      refute has_element?(lv, "#push-subscriptions", "Apple iPhone 15 Pro")
+      assert DealScout.Notifications.list_push_subscriptions_for_user(user.id) == []
+    end
+  end
 end

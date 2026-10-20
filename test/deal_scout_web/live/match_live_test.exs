@@ -49,24 +49,72 @@ defmodule DealScoutWeb.MatchLiveTest do
     rule: rule,
     match: match
   } do
-    {:ok, index_live, html} = live(conn, ~p"/matches")
+    {:ok, index_live, _html} = live(conn, ~p"/matches")
 
-    assert html =~ "Matched Deals"
-    assert html =~ "1 new"
-    assert html =~ deal.title
-    assert html =~ rule.name
+    assert has_element?(index_live, "#match-#{match.id}")
+    assert has_element?(index_live, "#match-#{match.id}", deal.title)
+    assert has_element?(index_live, "#match-#{match.id}", rule.name)
 
     # Toggle chime sound
-    assert html =~ "Chime On"
-    html = index_live |> element("button[phx-click='toggle_sound']") |> render_click()
-    assert html =~ "Muted"
+    assert has_element?(index_live, "button[phx-click='toggle_sound']", "Chime On")
+    index_live |> element("button[phx-click='toggle_sound']") |> render_click()
+    assert has_element?(index_live, "button[phx-click='toggle_sound']", "Muted")
 
     # Mark single match as read
-    html =
-      index_live
-      |> element("button[phx-click='mark_read'][phx-value-id='#{match.id}']")
-      |> render_click()
+    index_live
+    |> element("button[phx-click='mark_read'][phx-value-id='#{match.id}']")
+    |> render_click()
 
-    refute html =~ "1 new"
+    refute has_element?(index_live, "#match-#{match.id} .badge-info", "NEW")
+  end
+
+  test "highlights target deal when ?highlight=ID query parameter is passed", %{
+    conn: conn,
+    match: match
+  } do
+    {:ok, index_live, _html} = live(conn, ~p"/matches?highlight=#{match.id}")
+
+    assert has_element?(index_live, "#match-#{match.id}")
+    assert has_element?(index_live, "#match-#{match.id}", "Target Deal")
+  end
+
+  test "displays Idealo comparison link and cross-border warnings on matched deal", %{
+    conn: conn,
+    user: user,
+    feed: feed,
+    rule: rule
+  } do
+    {:ok, foreign_deal} =
+      DealScout.Deals.insert_deal(%{
+        feed_id: feed.id,
+        guid: "deal-foreign-laptop-1",
+        title: "ASUS Vivobook 15 [Amazon.es]",
+        url: "https://amazon.es/dp/B0123",
+        clean_text: "Top Laptop mit AZERTY Tastatur",
+        price: Decimal.new("499.00"),
+        idealo_url: "https://www.idealo.de/preisvergleich/OffersOfProduct/12345.html",
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    match =
+      Repo.insert!(%UserMatch{
+        user_id: user.id,
+        deal_id: foreign_deal.id,
+        alert_rule_id: rule.id,
+        is_read: false
+      })
+
+    {:ok, index_live, _html} = live(conn, ~p"/matches")
+
+    # Idealo button is present with correct link
+    assert has_element?(
+             index_live,
+             "a[href='https://www.idealo.de/preisvergleich/OffersOfProduct/12345.html']",
+             "Idealo"
+           )
+
+    # Cross-border Spanish origin flag and keyboard badge
+    assert has_element?(index_live, "#match-#{match.id}", "ES")
+    assert has_element?(index_live, "#match-#{match.id}", "Non-German Keyboard Layout detected")
   end
 end

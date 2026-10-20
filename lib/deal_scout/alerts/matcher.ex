@@ -1,13 +1,16 @@
 defmodule DealScout.Alerts.Matcher do
   @moduledoc """
   Evaluates whether a Deal matches an AlertRule.
-  Supports required keywords, negative/exclusion keywords, price limits,
-  source filtering, minimum temperature, and dropshipper exclusions.
+  Supports required keywords (including quoted phrases and AND/OR grouping),
+  negative/exclusion keywords, price limits, source filtering, minimum temperature,
+  dropshipper exclusions, merchant trust verification, origin country filtering,
+  and foreign keyboard exclusion.
   """
 
   alias DealScout.Deals.Deal
   alias DealScout.Alerts.AlertRule
   alias DealScout.Deals.MerchantGuard
+  alias DealScout.Deals.CrossBorderGuard
 
   @doc """
   Returns true if the deal matches the alert rule.
@@ -17,6 +20,9 @@ defmodule DealScout.Alerts.Matcher do
          true <- matches_price?(deal, rule.max_price),
          true <- matches_temperature?(deal, rule.min_temperature),
          true <- not_dropshipper?(deal, rule.exclude_dropshippers),
+         true <- matches_merchant_trust?(deal, rule.merchant_filter),
+         true <- matches_country?(deal, rule.country_filter),
+         true <- not_foreign_keyboard?(deal, rule.exclude_foreign_keyboards),
          true <- not_excluded?(deal, rule.negative_keywords),
          true <- matches_keywords?(deal, rule.keywords) do
       true
@@ -45,8 +51,6 @@ defmodule DealScout.Alerts.Matcher do
     end
   end
 
-  # Strict temperature matching: if rule sets a min_temperature,
-  # deals without temperature rating (nil) do not qualify.
   defp matches_temperature?(_deal, nil), do: true
 
   defp matches_temperature?(deal, min_temp) when is_integer(min_temp) do
@@ -76,6 +80,46 @@ defmodule DealScout.Alerts.Matcher do
     end
   end
 
+  defp matches_merchant_trust?(_deal, nil), do: true
+  defp matches_merchant_trust?(_deal, "all"), do: true
+
+  defp matches_merchant_trust?(deal, "verified_only") do
+    case deal.merchant do
+      %{trust_level: "verified"} -> true
+      _ -> false
+    end
+  end
+
+  defp matches_merchant_trust?(_deal, _), do: true
+
+  defp matches_country?(_deal, nil), do: true
+  defp matches_country?(_deal, "all"), do: true
+
+  defp matches_country?(deal, "de_only") do
+    case CrossBorderGuard.detect_country(deal) do
+      nil -> true
+      %{code: "DE"} -> true
+      _ -> false
+    end
+  end
+
+  defp matches_country?(deal, "eu_only") do
+    case CrossBorderGuard.detect_country(deal) do
+      nil -> true
+      %{code: code} when code in ["US", "UK", "CN"] -> false
+      _ -> true
+    end
+  end
+
+  defp matches_country?(_deal, _), do: true
+
+  defp not_foreign_keyboard?(_deal, false), do: true
+  defp not_foreign_keyboard?(_deal, nil), do: true
+
+  defp not_foreign_keyboard?(deal, true) do
+    is_nil(CrossBorderGuard.keyboard_warning(deal))
+  end
+
   defp not_excluded?(_deal, nil), do: true
   defp not_excluded?(_deal, ""), do: true
 
@@ -85,8 +129,7 @@ defmodule DealScout.Alerts.Matcher do
     negative_tokens =
       negative_keywords
       |> String.split([",", ";", "\n"], trim: true)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+      |> Enum.flat_map(&extract_tokens/1)
 
     Enum.all?(negative_tokens, fn token ->
       not contains_token?(text, token)
@@ -108,19 +151,29 @@ defmodule DealScout.Alerts.Matcher do
 
       _ ->
         Enum.any?(groups, fn group ->
-          tokens =
-            group
-            |> String.split(~r/\s+/, trim: true)
-            |> Enum.reject(&(&1 == ""))
+          tokens = extract_tokens(group)
 
-          Enum.all?(tokens, fn token ->
-            contains_token?(text, token)
-          end)
+          tokens != [] and
+            Enum.all?(tokens, fn token ->
+              contains_token?(text, token)
+            end)
         end)
     end
   end
 
   defp matches_keywords?(_deal, _), do: false
+
+  defp extract_tokens(str) when is_binary(str) do
+    Regex.scan(~r/"([^"]+)"|(\S+)/, str)
+    |> Enum.map(fn
+      [_, quoted, ""] -> quoted
+      [_, "", unquoted] -> unquoted
+      [_, quoted] -> quoted
+      [full] -> full
+    end)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
 
   defp searchable_text(deal) do
     merchant_name =
