@@ -5,6 +5,8 @@
 
 app = "deal-scout"
 primary_region = "fra"
+kill_signal = "SIGTERM"
+kill_timeout = "15s"
 
 [build]
   dockerfile = "Dockerfile"
@@ -13,6 +15,8 @@ primary_region = "fra"
   PHX_SERVER = "true"
   DATABASE_PATH = "/data/deal_scout.db"
   PORT = "8080"
+  MALLOC_ARENA_MAX = "2"
+  ERL_AFLAGS = "+sbwt none +sbwtdcpu none +sbwtdio none"
 
 [mounts]
   source = "deal_scout_data"
@@ -28,8 +32,8 @@ primary_region = "fra"
 
   [http_service.concurrency]
     type = "connections"
-    hard_limit = 1000
-    soft_limit = 800
+    hard_limit = 300
+    soft_limit = 200
 
 [deploy]
   strategy = "immediate"
@@ -38,3 +42,4 @@ primary_region = "fra"
   cpu_kind = "shared"
   cpus = 1
   memory_mb = 512
+  swap_size_mb = 512

@@ -35,153 +35,178 @@ defmodule DealScoutWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar border-b border-base-300 bg-base-100/90 backdrop-blur sticky top-0 z-50 px-4 sm:px-6 lg:px-8">
-      <div class="navbar-start flex items-center gap-2">
-        <.link
-          navigate={~p"/"}
-          class="flex items-center gap-2 font-black text-xl tracking-tight text-primary hover:opacity-80 transition-opacity"
-        >
-          <span class="p-1.5 rounded-lg bg-primary/10 text-primary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="size-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+    <div class="min-h-screen flex flex-col justify-between">
+      <div>
+        <header class="navbar border-b border-base-300 bg-base-100/90 backdrop-blur sticky top-0 z-50 px-4 sm:px-6 lg:px-8">
+          <div class="navbar-start flex items-center gap-2">
+            <.link
+              navigate={~p"/"}
+              class="flex items-center gap-2 font-black text-xl tracking-tight text-primary hover:opacity-80 transition-opacity"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2.5"
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </span>
-          <span>DealScout</span>
-          <span class="badge badge-primary badge-outline badge-xs text-[10px] font-mono uppercase tracking-wider">Live</span>
-        </.link>
-      </div>
-
-      <div class="navbar-center hidden md:flex">
-        <ul class="menu menu-horizontal gap-1 font-medium text-sm">
-          <li>
-            <.link navigate={~p"/"} class="rounded-lg">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="size-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-                />
-              </svg>
-              Live Feed
+              <span class="p-1.5 rounded-lg bg-primary/10 text-primary">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="size-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2.5"
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+              </span>
+              <span>DealScout</span>
+              <span class="badge badge-primary badge-outline badge-xs text-[10px] font-mono uppercase tracking-wider">Live</span>
             </.link>
-          </li>
-          <%= if @current_scope && @current_scope.user do %>
-            <li>
-              <.link navigate={~p"/alerts"} class="rounded-lg">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="size-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-                My Alert Keywords
-              </.link>
-            </li>
-            <li>
-              <.link navigate={~p"/matches"} class="rounded-lg flex items-center gap-1.5">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="size-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Matches
-              </.link>
-            </li>
-            <li>
-              <.link navigate={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
-                <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
-              </.link>
-            </li>
-          <% end %>
-        </ul>
-      </div>
+          </div>
 
-      <div class="navbar-end flex items-center gap-2">
-        <.theme_toggle />
-        <%= if @current_scope && @current_scope.user do %>
-          <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
-              <div class="bg-primary text-primary-content rounded-full w-9">
-                <span class="text-xs uppercase font-bold">{String.slice(
-                  @current_scope.user.email,
-                  0..1
-                )}</span>
-              </div>
-            </div>
-            <ul
-              tabindex="0"
-              class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-56 border border-base-200"
-            >
-              <li class="menu-title text-xs truncate max-w-full px-2 py-1">
-                {@current_scope.user.email}
+          <div class="navbar-center hidden md:flex">
+            <ul class="menu menu-horizontal gap-1 font-medium text-sm">
+              <li>
+                <.link navigate={~p"/"} class="rounded-lg">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="size-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                    />
+                  </svg>
+                  Live Feed
+                </.link>
               </li>
-              <div class="divider my-1"></div>
-              <li><.link navigate={~p"/alerts"}>My Alert Keywords</.link></li>
-              <li><.link navigate={~p"/matches"}>Matched Deals</.link></li>
-              <li><.link navigate={~p"/analytics"}>Deal Intelligence</.link></li>
-              <%= if @current_scope.user.is_admin do %>
+              <%= if @current_scope && @current_scope.user do %>
                 <li>
-                  <.link navigate={~p"/admin/system"} class="text-error font-medium">
-                    <.icon name="hero-shield-check" class="size-3.5" /> Admin System Ops
+                  <.link navigate={~p"/alerts"} class="rounded-lg">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="size-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                      />
+                    </svg>
+                    My Alert Keywords
+                  </.link>
+                </li>
+                <li>
+                  <.link navigate={~p"/matches"} class="rounded-lg flex items-center gap-1.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="size-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    Matches
+                  </.link>
+                </li>
+                <li>
+                  <.link navigate={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
+                    <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
                   </.link>
                 </li>
               <% end %>
-              <li><.link navigate={~p"/users/settings"}>Settings</.link></li>
-              <div class="divider my-1"></div>
-              <li>
-                <.link href={~p"/users/log-out"} method="delete" class="text-error">Log out</.link>
-              </li>
             </ul>
           </div>
-        <% else %>
-          <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">Log in</.link>
-          <.link navigate={~p"/users/register"} class="btn btn-primary btn-sm">Sign up</.link>
-        <% end %>
-      </div>
-    </header>
 
-    <main class="px-4 py-8 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-      <div class="space-y-6">
-        <.adblock_banner />
-        {render_slot(@inner_block)}
-      </div>
-    </main>
+          <div class="navbar-end flex items-center gap-2">
+            <button
+              type="button"
+              onclick="document.getElementById('coffee-modal').showModal()"
+              class="btn btn-ghost btn-xs sm:btn-sm gap-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-full font-medium cursor-pointer"
+              title="Support this project"
+            >
+              <span class="text-sm sm:text-base">☕</span>
+              <span class="hidden sm:inline text-xs">Buy a coffee</span>
+            </button>
+            <.theme_toggle />
+            <%= if @current_scope && @current_scope.user do %>
+              <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
+                  <div class="bg-primary text-primary-content rounded-full w-9">
+                    <span class="text-xs uppercase font-bold">{String.slice(
+                      @current_scope.user.email,
+                      0..1
+                    )}</span>
+                  </div>
+                </div>
+                <ul
+                  tabindex="0"
+                  class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-56 border border-base-200"
+                >
+                  <li class="menu-title text-xs truncate max-w-full px-2 py-1">
+                    {@current_scope.user.email}
+                  </li>
+                  <div class="divider my-1"></div>
+                  <li><.link navigate={~p"/alerts"}>My Alert Keywords</.link></li>
+                  <li><.link navigate={~p"/matches"}>Matched Deals</.link></li>
+                  <li><.link navigate={~p"/analytics"}>Deal Intelligence</.link></li>
+                  <%= if @current_scope.user.is_admin do %>
+                    <li>
+                      <.link navigate={~p"/admin/system"} class="text-error font-medium">
+                        <.icon name="hero-shield-check" class="size-3.5" /> Admin System Ops
+                      </.link>
+                    </li>
+                  <% end %>
+                  <li><.link navigate={~p"/users/settings"}>Settings</.link></li>
+                  <li>
+                    <button
+                      type="button"
+                      onclick="document.getElementById('coffee-modal').showModal()"
+                      class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium w-full text-left cursor-pointer"
+                    >
+                      <span>☕</span> Buy a coffee
+                    </button>
+                  </li>
+                  <div class="divider my-1"></div>
+                  <li>
+                    <.link href={~p"/users/log-out"} method="delete" class="text-error">Log out</.link>
+                  </li>
+                </ul>
+              </div>
+            <% else %>
+              <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">Log in</.link>
+              <.link navigate={~p"/users/register"} class="btn btn-primary btn-sm">Sign up</.link>
+            <% end %>
+          </div>
+        </header>
 
+        <main class="px-4 py-8 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <div class="space-y-6">
+            <.adblock_banner />
+            {render_slot(@inner_block)}
+          </div>
+        </main>
+      </div>
+
+      <.footer />
+    </div>
+
+    <.coffee_modal />
     <.flash_group flash={@flash} />
     """
   end
@@ -298,5 +323,198 @@ defmodule DealScoutWeb.Layouts do
       </button>
     </div>
     """
+  end
+
+  @doc """
+  Renders the application footer with project attribution and optional coffee support modal trigger.
+  """
+  def footer(assigns) do
+    ~H"""
+    <footer class="border-t border-base-200 bg-base-100/50 py-6 px-4 sm:px-6 lg:px-8 text-xs text-base-content/60 mt-12">
+      <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-base-content/80">DealScout</span>
+          <span>•</span>
+          <span>Private deal monitor for German &amp; EU portals</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            type="button"
+            onclick="document.getElementById('coffee-modal').showModal()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 font-medium transition-colors cursor-pointer"
+          >
+            <span>☕</span>
+            <span>Support this project</span>
+          </button>
+        </div>
+      </div>
+    </footer>
+    """
+  end
+
+  @doc """
+  Renders an interactive support modal letting users choose their preferred tip / donation rail.
+  """
+  def coffee_modal(assigns) do
+    ~H"""
+    <dialog id="coffee-modal" class="modal modal-bottom sm:modal-middle">
+      <div class="modal-box bg-base-100 border border-base-200 shadow-2xl max-w-md p-6">
+        <button
+          type="button"
+          onclick="document.getElementById('coffee-modal').close()"
+          class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/50 hover:text-base-content cursor-pointer"
+        >
+          ✕
+        </button>
+
+        <div class="text-center space-y-2 mb-6">
+          <div class="inline-flex size-14 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 items-center justify-center text-2xl mx-auto shadow-inner">
+            ☕
+          </div>
+          <h3 class="font-black text-xl tracking-tight text-base-content">
+            Support an effort with no business model
+          </h3>
+          <p class="text-xs sm:text-sm text-base-content/70 leading-relaxed max-w-sm mx-auto">
+            DealScout is an independent, private tool with <strong>zero ads, zero trackers, and zero affiliate hijacking</strong>.
+            If DealScout just saved you money on a deal and you want to help cover the server coffee bill, pick whichever payment method works best for you:
+          </p>
+        </div>
+
+        <div class="space-y-2.5">
+          <!-- Ko-fi -->
+          <a
+            href={kofi_url()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-between p-3.5 rounded-xl border border-base-200 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all group"
+          >
+            <div class="flex items-center gap-3">
+              <div class="size-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center font-bold text-base shrink-0">
+                ☕
+              </div>
+              <div class="text-left min-w-0">
+                <div class="font-bold text-sm flex items-center gap-2">
+                  <span>Ko-fi</span>
+                  <span class="badge badge-success badge-xs text-[10px] font-semibold">0% platform fee</span>
+                </div>
+                <div class="text-xs text-base-content/60 truncate">
+                  Apple Pay, Google Pay, Card &amp; PayPal
+                </div>
+              </div>
+            </div>
+            <.icon
+              name="hero-arrow-top-right-on-square"
+              class="size-4 text-base-content/40 group-hover:text-amber-600 transition-colors shrink-0"
+            />
+          </a>
+
+          <!-- Buy Me a Coffee -->
+          <a
+            href={buymeacoffee_url()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-between p-3.5 rounded-xl border border-base-200 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all group"
+          >
+            <div class="flex items-center gap-3">
+              <div class="size-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-base shrink-0">
+                🟡
+              </div>
+              <div class="text-left min-w-0">
+                <div class="font-bold text-sm">Buy Me a Coffee</div>
+                <div class="text-xs text-base-content/60 truncate">Classic one-click coffee tip</div>
+              </div>
+            </div>
+            <.icon
+              name="hero-arrow-top-right-on-square"
+              class="size-4 text-base-content/40 group-hover:text-amber-600 transition-colors shrink-0"
+            />
+          </a>
+
+          <!-- PayPal.me -->
+          <a
+            href={paypal_url()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-between p-3.5 rounded-xl border border-base-200 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group"
+          >
+            <div class="flex items-center gap-3">
+              <div class="size-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-base shrink-0">
+                🅿️
+              </div>
+              <div class="text-left min-w-0">
+                <div class="font-bold text-sm">PayPal.me</div>
+                <div class="text-xs text-base-content/60 truncate">
+                  Direct balance transfer (Friends &amp; Family)
+                </div>
+              </div>
+            </div>
+            <.icon
+              name="hero-arrow-top-right-on-square"
+              class="size-4 text-base-content/40 group-hover:text-blue-600 transition-colors shrink-0"
+            />
+          </a>
+
+          <!-- GitHub Sponsors -->
+          <a
+            href={github_sponsors_url()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-between p-3.5 rounded-xl border border-base-200 hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group"
+          >
+            <div class="flex items-center gap-3">
+              <div class="size-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold text-base shrink-0">
+                🐙
+              </div>
+              <div class="text-left min-w-0">
+                <div class="font-bold text-sm">GitHub Sponsors</div>
+                <div class="text-xs text-base-content/60 truncate">
+                  0% fee for open source developers
+                </div>
+              </div>
+            </div>
+            <.icon
+              name="hero-arrow-top-right-on-square"
+              class="size-4 text-base-content/40 group-hover:text-purple-600 transition-colors shrink-0"
+            />
+          </a>
+        </div>
+
+        <div class="modal-action justify-center mt-5">
+          <button
+            type="button"
+            onclick="document.getElementById('coffee-modal').close()"
+            class="btn btn-ghost btn-sm text-xs text-base-content/60 hover:text-base-content cursor-pointer"
+          >
+            Maybe next time
+          </button>
+        </div>
+      </div>
+      <div
+        class="modal-backdrop bg-black/40 cursor-pointer"
+        onclick="document.getElementById('coffee-modal').close()"
+      >
+      </div>
+    </dialog>
+    """
+  end
+
+  def kofi_url do
+    System.get_env("KOFI_URL") ||
+      Application.get_env(:deal_scout, :kofi_url, "https://ko-fi.com")
+  end
+
+  def buymeacoffee_url do
+    System.get_env("BUYMEACOFFEE_URL") ||
+      Application.get_env(:deal_scout, :buymeacoffee_url, "https://buymeacoffee.com")
+  end
+
+  def paypal_url do
+    System.get_env("PAYPAL_ME_URL") ||
+      Application.get_env(:deal_scout, :paypal_me_url, "https://paypal.me")
+  end
+
+  def github_sponsors_url do
+    System.get_env("GITHUB_SPONSORS_URL") ||
+      Application.get_env(:deal_scout, :github_sponsors_url, "https://github.com/sponsors")
   end
 end

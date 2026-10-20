@@ -2,5 +2,4 @@
 set -eu
 
 cd -P -- "$(dirname -- "$0")"
-./deal_scout eval DealScout.Release.migrate
 PHX_SERVER=true exec ./deal_scout start
