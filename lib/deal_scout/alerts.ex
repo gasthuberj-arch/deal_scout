@@ -4,6 +4,7 @@ defmodule DealScout.Alerts do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias DealScout.Repo
   alias DealScout.Alerts.{AlertRule, UserMatch, Matcher}
   alias DealScout.Notifications.Dispatcher
@@ -51,41 +52,149 @@ defmodule DealScout.Alerts do
     Repo.all(from r in AlertRule, where: r.is_active == true, preload: [:user])
   end
 
+  @doc """
+  Auto-pauses an alert rule when its evaluation duration exceeds the compute budget.
+  Records the pause reason and last evaluation duration in microseconds.
+  """
+  def auto_pause_rule(%AlertRule{} = rule, reason, duration_us) do
+    update_alert_rule(rule, %{
+      is_active: false,
+      pause_reason: reason,
+      last_eval_duration_us: duration_us
+    })
+  end
+
+  @doc """
+  Resumes an alert rule, clearing any pause reason and setting is_active to true.
+  """
+  def resume_rule(%AlertRule{} = rule) do
+    update_alert_rule(rule, %{
+      is_active: true,
+      pause_reason: nil
+    })
+  end
+
+  @doc """
+  Pauses an alert rule manually (e.g. from the admin console).
+  """
+  def pause_rule(%AlertRule{} = rule, reason \\ "Manually paused by administrator") do
+    update_alert_rule(rule, %{
+      is_active: false,
+      pause_reason: reason
+    })
+  end
+
+  @doc """
+  Lists all alert rules that have been auto-paused (is_active is false and pause_reason is set),
+  preloading the associated user.
+  """
+  def list_auto_paused_rules do
+    Repo.all(
+      from r in AlertRule,
+        where: r.is_active == false and not is_nil(r.pause_reason),
+        preload: [:user],
+        order_by: [desc: r.updated_at]
+    )
+  end
+
+  @doc """
+  Lists the slowest alert rules ordered by last evaluation duration in microseconds descending,
+  preloading the associated user.
+  """
+  def list_slowest_rules(limit \\ 10) do
+    Repo.all(
+      from r in AlertRule,
+        where: not is_nil(r.last_eval_duration_us),
+        preload: [:user],
+        order_by: [desc: r.last_eval_duration_us],
+        limit: ^limit
+    )
+  end
+
   # ============================================================================
   # Matching & Ingestion Processing
   # ============================================================================
+
+  @default_budget_us 30_000
+
+  defp get_budget_us do
+    Application.get_env(:deal_scout, :alert_compute_budget_us, @default_budget_us)
+  end
 
   @doc """
   Matches a list of newly ingested deals against all active alert rules.
   For each match, creates a UserMatch record and dispatches notifications
   with canonical deduplication and polling-cycle batch collapsing.
+  Measures query evaluation duration, emits telemetry, and enforces the
+  compute budget circuit breaker.
   """
-  def process_new_deals(deals) when is_list(deals) do
+  def process_new_deals(deals, opts \\ []) when is_list(deals) do
     deals = Repo.preload(deals, [:merchant, :feed])
-    rules = list_active_rules()
+    rules = Keyword.get(opts, :rules) || list_active_rules()
+    budget_us = Keyword.get(opts, :budget_us) || get_budget_us()
 
     # Collect matches grouped by rule for batch collapsing
     matches_by_rule =
       for rule <- rules, reduce: %{} do
         acc ->
-          matched_for_rule =
-            for deal <- deals,
-                Matcher.matches?(deal, rule),
-                not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
-              case insert_match(deal, rule) do
-                {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
-                  match
+          start_time = System.monotonic_time(:microsecond)
 
-                _ ->
-                  nil
+          matched_deals =
+            Enum.filter(deals, fn deal ->
+              Matcher.matches?(deal, rule)
+            end)
+
+          duration_us = System.monotonic_time(:microsecond) - start_time
+
+          :telemetry.execute(
+            [:deal_scout, :alerts, :rule_eval],
+            %{duration_us: duration_us, deal_count: length(deals)},
+            %{rule_id: rule.id, user_id: rule.user_id, rule_name: rule.name}
+          )
+
+          if duration_us > budget_us do
+            reason =
+              "Auto-paused: Query evaluation took #{Float.round(duration_us / 1000, 1)}ms (exceeded 30ms compute budget). Simplify keywords or remove broad terms."
+
+            updated_rule =
+              case auto_pause_rule(rule, reason, duration_us) do
+                {:ok, updated} -> updated
+                _ -> rule
               end
-            end
-            |> Enum.reject(&is_nil/1)
 
-          if matched_for_rule != [] do
-            Map.put(acc, rule, matched_for_rule)
-          else
+            Phoenix.PubSub.broadcast(
+              DealScout.PubSub,
+              Dispatcher.user_topic(rule.user_id),
+              {:rule_auto_paused, updated_rule, reason}
+            )
+
+            Logger.warning(
+              "[Compute Guard] Auto-paused slow alert rule #{rule.id} ('#{rule.name}') for user #{rule.user_id} - took #{duration_us}µs"
+            )
+
             acc
+          else
+            from(r in AlertRule, where: r.id == ^rule.id)
+            |> Repo.update_all(set: [last_eval_duration_us: duration_us])
+
+            matched_for_rule =
+              for deal <- matched_deals,
+                  not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
+                case insert_match(deal, rule) do
+                  {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
+                    match
+
+                  _ ->
+                    nil
+                end
+              end
+              |> Enum.reject(&is_nil/1)
+
+            if matched_for_rule != [] do
+              Map.put(acc, rule, matched_for_rule)
+            else
+              acc
+            end
           end
       end
 

@@ -3,6 +3,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   alias DealScout.Analytics
   alias DealScout.Feeds.Poller
+  alias DealScout.Alerts
 
   @impl true
   def mount(_params, _session, socket) do
@@ -13,12 +14,16 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
     ops = Analytics.get_system_ops_stats()
     backup_status = DealScout.Backup.Status.get_status()
+    auto_paused_rules = Alerts.list_auto_paused_rules()
+    slowest_rules = Alerts.list_slowest_rules(10)
 
     socket =
       socket
       |> assign(:page_title, "Admin System & Operational Health")
       |> assign(:ops, ops)
       |> assign(:backup, backup_status)
+      |> assign(:auto_paused_rules, auto_paused_rules)
+      |> assign(:slowest_rules, slowest_rules)
 
     {:ok, socket}
   end
@@ -44,6 +49,8 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
      socket
      |> assign(:ops, ops)
      |> assign(:backup, backup_status)
+     |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
+     |> assign(:slowest_rules, Alerts.list_slowest_rules(10))
      |> put_flash(:info, "System operations metrics updated.")}
   end
 
@@ -54,6 +61,30 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
     {:noreply,
      socket
      |> put_flash(:info, "Triggered immediate background poll for all feeds.")}
+  end
+
+  @impl true
+  def handle_event("resume_rule", %{"id" => id}, socket) do
+    rule = Alerts.get_alert_rule!(id)
+    {:ok, _} = Alerts.resume_rule(rule)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Alert rule \"#{rule.name}\" resumed successfully.")
+     |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
+     |> assign(:slowest_rules, Alerts.list_slowest_rules(10))}
+  end
+
+  @impl true
+  def handle_event("pause_rule", %{"id" => id}, socket) do
+    rule = Alerts.get_alert_rule!(id)
+    {:ok, _} = Alerts.pause_rule(rule, "Manually paused by administrator")
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Alert rule \"#{rule.name}\" paused.")
+     |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
+     |> assign(:slowest_rules, Alerts.list_slowest_rules(10))}
   end
 
   @impl true
@@ -305,10 +336,249 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
             </table>
           </div>
         </div>
+
+        <!-- Compute Budget & Alert Query Performance Card -->
+        <div
+          id="compute-guard-console"
+          class="card bg-base-100 border border-base-300 rounded-2xl p-6 shadow-sm space-y-6"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-base-200">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="p-1.5 rounded-lg bg-warning/10 text-warning">
+                  <.icon name="hero-cpu-chip" class="size-5" />
+                </span>
+                <h2 class="text-xl font-bold tracking-tight">
+                  Compute Budget & Alert Query Performance
+                </h2>
+              </div>
+              <p class="text-xs text-base-content/70 mt-1">
+                Telemetry circuit breaker tracking slow or pathological alert queries. Rules exceeding the 30ms evaluation budget are auto-paused to protect server compute.
+              </p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-base-200 border border-base-300 text-xs">
+                <span class="text-base-content/70 font-medium">Budget Limit:</span>
+                <span class="font-mono font-bold text-primary">30.0 ms / batch</span>
+              </div>
+              <div class={[
+                "flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold",
+                if(length(@auto_paused_rules) > 0,
+                  do: "bg-error/10 border-error/30 text-error",
+                  else:
+                    "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                )
+              ]}>
+                <.icon
+                  name={
+                    if length(@auto_paused_rules) > 0,
+                      do: "hero-exclamation-triangle",
+                      else: "hero-check-circle"
+                  }
+                  class="size-4"
+                />
+                <span id="auto-paused-count">{length(@auto_paused_rules)} Auto-Paused</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 1: Auto-Paused Rules -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
+                <.icon name="hero-pause-circle" class="size-4 text-warning" />
+                <span>Auto-Paused Slow Rules ({length(@auto_paused_rules)})</span>
+              </h3>
+            </div>
+
+            <%= if @auto_paused_rules == [] do %>
+              <div
+                id="no-auto-paused-rules"
+                class="text-center py-6 px-4 rounded-xl bg-base-200/40 border border-dashed border-base-300"
+              >
+                <.icon
+                  name="hero-shield-check"
+                  class="size-8 text-emerald-500 mx-auto mb-1 opacity-70"
+                />
+                <p class="text-xs font-semibold text-base-content">
+                  All alert rules operating normally
+                </p>
+                <p class="text-[11px] text-base-content/60 mt-0.5">
+                  No rules have exceeded the 30ms compute budget threshold.
+                </p>
+              </div>
+            <% else %>
+              <div class="overflow-x-auto rounded-xl border border-base-200">
+                <table id="auto-paused-rules-table" class="table table-sm w-full">
+                  <thead class="bg-base-200/60 text-xs text-base-content/70">
+                    <tr>
+                      <th>Rule Name</th>
+                      <th>User</th>
+                      <th>Reason</th>
+                      <th class="text-right">Duration</th>
+                      <th class="text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <%= for rule <- @auto_paused_rules do %>
+                      <tr
+                        id={"auto-paused-rule-#{rule.id}"}
+                        class="hover:bg-base-200/40 transition-colors"
+                      >
+                        <td>
+                          <div class="font-bold text-sm text-base-content">{rule.name}</div>
+                          <div
+                            class="text-[11px] text-base-content/60 font-mono mt-0.5 max-w-xs truncate"
+                            title={rule.keywords}
+                          >
+                            Keywords: {rule.keywords}
+                          </div>
+                        </td>
+                        <td>
+                          <span class="text-xs font-medium text-base-content/80">
+                            {if rule.user, do: rule.user.email, else: "User ##{rule.user_id}"}
+                          </span>
+                        </td>
+                        <td class="max-w-md">
+                          <span class="text-xs text-error font-medium leading-relaxed block">
+                            {rule.pause_reason}
+                          </span>
+                        </td>
+                        <td class="text-right font-mono text-xs font-bold text-error whitespace-nowrap">
+                          {format_duration_ms(rule.last_eval_duration_us)}
+                        </td>
+                        <td class="text-right">
+                          <button
+                            id={"resume-auto-paused-rule-btn-#{rule.id}"}
+                            phx-click="resume_rule"
+                            phx-value-id={rule.id}
+                            class="btn btn-xs btn-success text-white shadow-xs"
+                          >
+                            <.icon name="hero-play" class="size-3" /> Re-enable
+                          </button>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+            <% end %>
+          </div>
+
+          <!-- Section 2: Top Slowest Rules -->
+          <div class="space-y-3 pt-2 border-t border-base-200">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
+                <.icon name="hero-chart-bar" class="size-4 text-primary" />
+                <span>Top Slowest Rules by Last Evaluation Duration</span>
+              </h3>
+            </div>
+
+            <%= if @slowest_rules == [] do %>
+              <div
+                id="no-slowest-rules"
+                class="text-center py-6 px-4 rounded-xl bg-base-200/40 border border-dashed border-base-300"
+              >
+                <.icon name="hero-clock" class="size-8 text-base-content/30 mx-auto mb-1" />
+                <p class="text-xs font-semibold text-base-content">
+                  No evaluation telemetry recorded yet
+                </p>
+                <p class="text-[11px] text-base-content/60 mt-0.5">
+                  Metrics will populate as deals are matched against active rules.
+                </p>
+              </div>
+            <% else %>
+              <div class="overflow-x-auto rounded-xl border border-base-200">
+                <table id="slowest-rules-table" class="table table-sm w-full">
+                  <thead class="bg-base-200/60 text-xs text-base-content/70">
+                    <tr>
+                      <th>Rule Name</th>
+                      <th>User</th>
+                      <th>Status</th>
+                      <th class="text-right">Last Duration</th>
+                      <th class="text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <%= for rule <- @slowest_rules do %>
+                      <tr
+                        id={"slowest-rule-#{rule.id}"}
+                        class="hover:bg-base-200/40 transition-colors"
+                      >
+                        <td>
+                          <div class="font-bold text-sm text-base-content">{rule.name}</div>
+                          <div
+                            class="text-[11px] text-base-content/60 font-mono mt-0.5 max-w-xs truncate"
+                            title={rule.keywords}
+                          >
+                            Keywords: {rule.keywords}
+                          </div>
+                        </td>
+                        <td>
+                          <span class="text-xs font-medium text-base-content/80">
+                            {if rule.user, do: rule.user.email, else: "User ##{rule.user_id}"}
+                          </span>
+                        </td>
+                        <td>
+                          <%= if rule.is_active do %>
+                            <span class="badge badge-success badge-xs text-white">Active</span>
+                          <% else %>
+                            <%= if rule.pause_reason do %>
+                              <span class="badge badge-error badge-xs text-white">Auto-Paused</span>
+                            <% else %>
+                              <span class="badge badge-ghost badge-xs">Paused</span>
+                            <% end %>
+                          <% end %>
+                        </td>
+                        <td class="text-right font-mono text-xs whitespace-nowrap">
+                          <span class={[
+                            "font-bold",
+                            (rule.last_eval_duration_us || 0) > 30_000 && "text-error",
+                            ((rule.last_eval_duration_us || 0) > 15_000 and
+                               (rule.last_eval_duration_us || 0) <= 30_000) && "text-warning",
+                            (rule.last_eval_duration_us || 0) <= 15_000 &&
+                              "text-emerald-600 dark:text-emerald-400"
+                          ]}>
+                            {format_duration_ms(rule.last_eval_duration_us)}
+                          </span>
+                        </td>
+                        <td class="text-right">
+                          <%= if rule.is_active do %>
+                            <button
+                              id={"pause-slowest-rule-btn-#{rule.id}"}
+                              phx-click="pause_rule"
+                              phx-value-id={rule.id}
+                              class="btn btn-xs btn-outline btn-error"
+                            >
+                              <.icon name="hero-pause" class="size-3" /> Pause
+                            </button>
+                          <% else %>
+                            <button
+                              id={"resume-slowest-rule-btn-#{rule.id}"}
+                              phx-click="resume_rule"
+                              phx-value-id={rule.id}
+                              class="btn btn-xs btn-outline btn-success"
+                            >
+                              <.icon name="hero-play" class="size-3" /> Re-enable
+                            </button>
+                          <% end %>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+            <% end %>
+          </div>
+        </div>
       </div>
     </Layouts.app>
     """
   end
+
+  defp format_duration_ms(nil), do: "—"
+  defp format_duration_ms(us) when is_integer(us), do: "#{Float.round(us / 1000, 2)} ms"
 
   defp format_uptime(seconds) when seconds < 60, do: "#{seconds}s"
   defp format_uptime(seconds) when seconds < 3600, do: "#{div(seconds, 60)}m #{rem(seconds, 60)}s"
