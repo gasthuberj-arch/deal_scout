@@ -70,12 +70,17 @@ defmodule DealScoutWeb.PushNotificationHandler do
      socket
      |> put_flash(
        :error,
-       "Push notifications were blocked. Please allow notifications in your browser settings to receive deal alarms."
+       "Push notifications were blocked. If you use Brave Shields or an ad blocker, it may be in the way of notification permissions. Please allow notifications in your browser settings to receive deal alarms."
      )}
   end
 
   def handle_push_event("push-error", %{"message" => msg}, socket) do
-    {:handled, put_flash(socket, :error, "Push alarm error: #{msg}")}
+    {:handled,
+     put_flash(
+       socket,
+       :error,
+       "Push alarm error: #{msg}. If you have an ad blocker or Brave Shields active, it may be blocking browser notification services."
+     )}
   end
 
   def handle_push_event("open_ios_modal", _params, socket) do

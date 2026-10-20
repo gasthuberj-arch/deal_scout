@@ -177,11 +177,55 @@ defmodule DealScoutWeb.Layouts do
 
     <main class="px-4 py-8 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div class="space-y-6">
+        <.adblock_banner />
         {render_slot(@inner_block)}
       </div>
     </main>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc """
+  Renders an educational, dismissible ad blocker advisory banner.
+  Only displays via the AdBlockDetector JS hook if an ad blocker is actively running,
+  informing the user that affiliate bargain redirects and push alarms might be blocked.
+  """
+  def adblock_banner(assigns) do
+    ~H"""
+    <aside
+      id="adblock-banner"
+      phx-hook="AdBlockDetector"
+      hidden
+      class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 text-amber-900 dark:text-amber-100 transition-all duration-300 shadow-sm"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="flex items-start gap-3.5">
+        <div class="size-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+          <.icon name="hero-shield-exclamation" class="size-5" />
+        </div>
+
+        <div class="flex-1 min-w-0 space-y-1">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 class="font-bold text-sm sm:text-base flex items-center gap-2">
+              <span>Ad blocker active: bargain redirects & alarms might be affected</span>
+              <span class="badge badge-warning badge-xs font-semibold uppercase">Good to know</span>
+            </h3>
+            <button
+              id="adblock-dismiss-btn"
+              type="button"
+              class="btn btn-ghost btn-xs text-base-content/60 self-end sm:self-center hover:bg-amber-500/20"
+            >
+              Got it
+            </button>
+          </div>
+          <p class="text-xs sm:text-sm text-base-content/75 leading-relaxed">
+            DealScout doesn't show any third-party ads, so you don't need to disable your ad blocker everywhere. However, bargain feeds (like MyDealz or Idealo) route through affiliate redirects that ad blockers often block. If clicking a deal shows a blank page or push alarms fail to register, your ad blocker is in the way.
+          </p>
+        </div>
+      </div>
+    </aside>
     """
   end
 

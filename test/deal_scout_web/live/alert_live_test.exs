@@ -106,7 +106,7 @@ defmodule DealScoutWeb.AlertLiveTest do
     index_live |> element("button[phx-click='open_ios_modal']") |> render_click()
     assert has_element?(index_live, "#ios-install-modal")
 
-    index_live |> element("button", "Got it") |> render_click()
+    index_live |> element("#ios-install-modal button", "Got it") |> render_click()
     refute has_element?(index_live, "#ios-install-modal")
 
     # Save push subscription

@@ -158,11 +158,81 @@ const AudioChimeHook = {
   }
 }
 
+async function detectAdBlocker() {
+  // 1. Bait element test (detects cosmetic element hiding rules)
+  const bait = document.createElement("div")
+  bait.className = "adsbox ad-placement pub_300x250 text-ad text-ads banner-ad ad-zone ad_iframe"
+  bait.setAttribute("aria-hidden", "true")
+  bait.style.cssText = "position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;pointer-events:none;"
+  document.body.appendChild(bait)
+
+  await new Promise(r => setTimeout(r, 60))
+
+  const isHidden =
+    bait.offsetParent === null ||
+    bait.offsetHeight === 0 ||
+    bait.offsetWidth === 0 ||
+    window.getComputedStyle(bait).display === "none" ||
+    window.getComputedStyle(bait).visibility === "hidden"
+
+  bait.remove()
+
+  if (isHidden) return true
+
+  // 2. Network test (detects network-level filters: uBlock, AdGuard, Brave Shields, Pi-hole)
+  try {
+    await fetch(
+      new Request("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", {
+        method: "HEAD",
+        mode: "no-cors",
+        cache: "no-store",
+      })
+    )
+    return false
+  } catch (_err) {
+    return true
+  }
+}
+
+const AdBlockDetectorHook = {
+  async mounted() {
+    const banner = this.el
+    const dismissBtn = banner.querySelector("#adblock-dismiss-btn")
+
+    if (sessionStorage.getItem("dealscout_adblock_dismissed") === "true") {
+      banner.hidden = true
+      return
+    }
+
+    const isBlocked = await detectAdBlocker()
+
+    if (isBlocked) {
+      banner.hidden = false
+      window.__dealscoutAdBlockDetected = true
+      document.documentElement.classList.add("adblock-active")
+
+      if (dismissBtn) {
+        dismissBtn.addEventListener("click", () => {
+          banner.hidden = true
+          sessionStorage.setItem("dealscout_adblock_dismissed", "true")
+        })
+      }
+    } else {
+      banner.hidden = true
+    }
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, AudioChimeHook, PushManager: PushManagerHook},
+  hooks: {
+    ...colocatedHooks,
+    AudioChimeHook,
+    PushManager: PushManagerHook,
+    AdBlockDetector: AdBlockDetectorHook,
+  },
 })
 
 // Show progress bar on live navigation and form submits
