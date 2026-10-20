@@ -3,11 +3,10 @@
 # This directory is indexed and streamed down to your NixOS NAS via Phoenix WebSockets.
 
 dbs:
-  - path: "${DATABASE_PATH:-/data/deal_scout.db}"
+  - path: "/data/deal_scout.db"
     replicas:
       - type: file
-        path: "${LITESTREAM_REPLICA_PATH:-/data/litestream}"
-        # Keep 48h of snapshots/WAL on server to prevent filling the 1GB Fly volume:
-        retention: "${LITESTREAM_RETENTION:-48h}"
-        retention-check-interval: "1h"
-        snapshot-interval: "${LITESTREAM_SNAPSHOT_INTERVAL:-24h}"
+        path: "/data/litestream"
+        retention: 48h
+        retention-check-interval: 1h
+        snapshot-interval: 24h
