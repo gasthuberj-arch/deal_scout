@@ -86,6 +86,72 @@ defmodule DealScoutWeb.AlertLiveTest do
     assert rule.exclude_foreign_keyboards == true
   end
 
+  test "renders modal with autofill protection, explicit IDs, and sticky footer button", %{
+    conn: conn
+  } do
+    {:ok, index_live, _} = live(conn, ~p"/alerts/new")
+
+    assert has_element?(index_live, "#alert-rule-modal")
+    assert has_element?(index_live, "#alert-rule-form[autocomplete='off']")
+    assert has_element?(index_live, "#alert-rule-name-input[data-1p-ignore='true']")
+    assert has_element?(index_live, "#alert-rule-keywords-input[data-1p-ignore='true']")
+    assert has_element?(index_live, "#save-rule-btn[type='submit']")
+    assert has_element?(index_live, "#cancel-rule-btn")
+    assert has_element?(index_live, "#close-rule-modal-btn")
+  end
+
+  test "live validates form and displays real-time errors via phx-change", %{conn: conn} do
+    {:ok, index_live, _} = live(conn, ~p"/alerts/new")
+
+    # Send validate with invalid short name and keyword
+    rendered =
+      index_live
+      |> form("#alert-rule-form", %{
+        "alert_rule" => %{
+          "name" => "A",
+          "keywords" => "k"
+        }
+      })
+      |> render_change()
+
+    assert rendered =~ "should be at least 2 character"
+  end
+
+  test "edits existing rule with validation and updates successfully", %{conn: conn, user: user} do
+    rule =
+      DealScout.Repo.insert!(%DealScout.Alerts.AlertRule{
+        user_id: user.id,
+        name: "PlayStation 5",
+        keywords: "PS5 Pro",
+        max_price: Decimal.new("800.00"),
+        is_active: true
+      })
+
+    {:ok, edit_live, _} = live(conn, ~p"/alerts/#{rule.id}/edit")
+
+    assert has_element?(edit_live, "#alert-rule-modal")
+
+    {:ok, _redirect_live, html} =
+      edit_live
+      |> form("#alert-rule-form", %{
+        "alert_rule" => %{
+          "name" => "PlayStation 5 Pro",
+          "keywords" => "\"PS5 Pro\" Disc",
+          "max_price" => "750.00"
+        }
+      })
+      |> render_submit()
+      |> follow_redirect(conn, ~p"/alerts")
+
+    assert html =~ "Alert rule updated successfully."
+    assert html =~ "PlayStation 5 Pro"
+
+    updated = Alerts.get_user_alert_rule!(user.id, rule.id)
+    assert updated.name == "PlayStation 5 Pro"
+    assert updated.keywords == "\"PS5 Pro\" Disc"
+    assert Decimal.equal?(updated.max_price, Decimal.new("750.00"))
+  end
+
   test "handles PWA push subscription event and modal toggles", %{conn: conn} do
     {:ok, index_live, _html} = live(conn, ~p"/alerts")
 
