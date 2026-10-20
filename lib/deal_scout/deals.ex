@@ -10,16 +10,20 @@ defmodule DealScout.Deals do
   @pubsub DealScout.PubSub
   @topic "deals:feed"
 
+  alias DealScout.Deals.Cache
+
   def subscribe do
     Phoenix.PubSub.subscribe(@pubsub, @topic)
   end
 
   def broadcast_deal({:ok, %Deal{} = deal} = result) do
+    Cache.invalidate_deals()
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     result
   end
 
   def broadcast_deal(%Deal{} = deal) do
+    Cache.invalidate_deals()
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     {:ok, deal}
   end
@@ -38,6 +42,12 @@ defmodule DealScout.Deals do
   - :offset - pagination offset
   """
   def list_deals(opts \\ []) do
+    Cache.fetch_deals(opts, fn ->
+      fetch_deals_from_db(opts)
+    end)
+  end
+
+  defp fetch_deals_from_db(opts) do
     search = Keyword.get(opts, :search)
     feed_id = Keyword.get(opts, :feed_id)
     merchant_slug = Keyword.get(opts, :merchant)
@@ -83,13 +93,25 @@ defmodule DealScout.Deals do
   defp filter_by_search(query, ""), do: query
 
   defp filter_by_search(query, search_term) do
-    term = "%#{search_term}%"
+    fts_term = sanitize_fts_query(search_term)
 
-    where(
-      query,
-      [d, feed: _f, merchant: m],
-      like(d.title, ^term) or like(d.clean_text, ^term) or like(m.name, ^term)
-    )
+    if fts_term != "" do
+      where(
+        query,
+        [d],
+        fragment("? IN (SELECT rowid FROM deals_fts WHERE deals_fts MATCH ?)", d.id, ^fts_term)
+      )
+    else
+      query
+    end
+  end
+
+  defp sanitize_fts_query(term) when is_binary(term) do
+    term
+    |> String.replace(~r/[^\p{L}\p{N}\s\-]/u, " ")
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map(&"\"#{&1}\"*")
+    |> Enum.join(" AND ")
   end
 
   defp filter_by_feed(query, nil), do: query

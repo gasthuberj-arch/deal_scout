@@ -46,9 +46,11 @@ if config_env() == :prod do
 
   config :deal_scout, DealScout.Repo,
     database: database_path,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     cache_size: -8000,
-    busy_timeout: 5000,
+    busy_timeout: 10_000,
+    queue_target: 500,
+    queue_interval: 2000,
     default_transaction_mode: :immediate,
     temp_store: :memory
 

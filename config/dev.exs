@@ -3,7 +3,10 @@ import Config
 # Configure your database
 config :deal_scout, DealScout.Repo,
   database: Path.expand("../deal_scout_dev.db", __DIR__),
-  pool_size: 5,
+  pool_size: 10,
+  busy_timeout: 10_000,
+  queue_target: 500,
+  queue_interval: 2000,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
 
