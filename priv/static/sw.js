@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dealscout-shell-v1';
+const CACHE_NAME = 'dealscout-shell-v2';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -9,6 +9,8 @@ const STATIC_ASSETS = [
   '/assets/js/app.js',
   '/images/icon-192.png',
   '/images/icon-512.png',
+  '/images/badge-72.png',
+  '/images/badge-96.png',
   '/favicon.ico'
 ];
 
@@ -68,11 +70,20 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const resolveUrl = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return new URL(path, self.location.origin).href;
+  };
+
   const title = data.title || 'DealScout Deal Alert';
+  const iconUrl = resolveUrl(data.icon) || resolveUrl('/images/icon-192.png');
+  const badgeUrl = resolveUrl(data.badge) || resolveUrl('/images/badge-72.png');
+
   const options = {
     body: data.body || 'New deal matching your rules!',
-    icon: data.icon || '/images/icon-192.png',
-    badge: '/images/icon-192.png',
+    icon: iconUrl,
+    badge: badgeUrl,
     data: {
       url: data.url || '/matches',
       idealo_url: data.idealo_url || null,

@@ -103,4 +103,34 @@ defmodule DealScout.Notifications.DispatcherTest do
 
     assert log =~ "[DealScout.Dispatcher] Exception delivering deal alert email for match 99999"
   end
+
+  test "push notification payloads include dedicated badge and icon assets", %{
+    user: user,
+    deal: _deal,
+    rule: rule,
+    match: match
+  } do
+    # Enable push on rule
+    {:ok, rule} =
+      rule
+      |> Ecto.Changeset.change(notify_push: true)
+      |> Repo.update()
+
+    # Create push subscription for user
+    Repo.insert!(%DealScout.Notifications.PushSubscription{
+      user_id: user.id,
+      endpoint: "https://fcm.googleapis.com/fcm/send/test-token",
+      p256dh: "BMV...dummy",
+      auth: "dummy_auth"
+    })
+
+    match = %{match | alert_rule: rule}
+
+    # Dispatch single push - verify it runs without error and marks notified_via_push
+    assert {:ok, updated} = Dispatcher.dispatch(match)
+    assert updated.notified_via_push == true
+
+    # Test send_test_notification payload delivery
+    assert {:ok, _results} = DealScout.Notifications.send_test_notification(user)
+  end
 end

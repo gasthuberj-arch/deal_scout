@@ -123,6 +123,7 @@ defmodule DealScout.Notifications.Dispatcher do
               "#{deal_titles}#{if deal_count > 2, do: " and #{deal_count - 2} more", else: ""}",
             url: "/matches?highlight=#{first_match.id}",
             icon: (first_match.deal && first_match.deal.image_url) || "/images/icon-192.png",
+            badge: "/images/badge-72.png",
             idealo_url: first_match.deal && first_match.deal.idealo_url,
             geizhals_url: first_match.deal && first_match.deal.geizhals_url,
             tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}"
@@ -166,6 +167,7 @@ defmodule DealScout.Notifications.Dispatcher do
       body: "You have #{count} new deal matches ready in your inbox. Tap to browse them now.",
       url: "/matches?highlight=#{top_match.id}",
       icon: (top_match.deal && top_match.deal.image_url) || "/images/icon-192.png",
+      badge: "/images/badge-72.png",
       idealo_url: top_match.deal && top_match.deal.idealo_url,
       geizhals_url: top_match.deal && top_match.deal.geizhals_url,
       tag: "digest-#{user.id}-#{System.system_time(:second)}"
@@ -214,6 +216,7 @@ defmodule DealScout.Notifications.Dispatcher do
       body: "#{(deal && deal.title) || "Deal"}#{price_str}#{merchant_str}",
       url: "/matches?highlight=#{match.id}",
       icon: (deal && deal.image_url) || "/images/icon-192.png",
+      badge: "/images/badge-72.png",
       idealo_url: deal && deal.idealo_url,
       geizhals_url: deal && deal.geizhals_url,
       actions: actions,

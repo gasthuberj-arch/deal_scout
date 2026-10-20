@@ -105,6 +105,8 @@ defmodule DealScout.Notifications do
       title: "DealScout Test Alarm",
       body: "Push alarms are working on your device! You're ready to catch hot deals.",
       url: "/alerts",
+      icon: "/images/icon-192.png",
+      badge: "/images/badge-72.png",
       tag: "test-alarm-#{System.system_time(:second)}"
     }
 
