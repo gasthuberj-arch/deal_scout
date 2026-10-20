@@ -141,4 +141,191 @@ defmodule DealScout.Alerts.AlertsTest do
     reloaded_rule = Repo.get!(AlertRule, rule.id)
     assert DateTime.diff(reloaded_rule.last_notified_at, five_min_ago, :second) == 0
   end
+
+  test "collapses multiple matching deals into a single notification batch during ingestion", %{
+    user: user,
+    feed: feed,
+    merchant: merchant
+  } do
+    _rule =
+      Repo.insert!(%AlertRule{
+        user_id: user.id,
+        name: "PlayStation 5 Hunter",
+        keywords: "PlayStation 5",
+        delivery_mode: "instant",
+        notify_push: true,
+        notify_email: false,
+        is_active: true
+      })
+
+    deal1 =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-ps5-1-#{System.unique_integer([:positive])}",
+        title: "Sony PlayStation 5 Slim Digital",
+        url: "https://example.com/ps5-1",
+        price: Decimal.new("399.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    deal2 =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-ps5-2-#{System.unique_integer([:positive])}",
+        title: "Sony PlayStation 5 Disc Edition Bundle",
+        url: "https://example.com/ps5-2",
+        price: Decimal.new("499.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    Alerts.process_new_deals([deal1, deal2])
+
+    matches = Alerts.list_user_matches(user.id)
+    assert length(matches) == 2
+    matched_deal_ids = Enum.map(matches, & &1.deal_id)
+    assert deal1.id in matched_deal_ids
+    assert deal2.id in matched_deal_ids
+  end
+
+  test "filters deals using negative keywords, price ceilings, and merchant trust levels", %{
+    user: user,
+    feed: feed,
+    merchant: verified_merchant
+  } do
+    unverified_merchant =
+      Repo.insert!(%Merchant{
+        name: "Dubious Shop",
+        slug: "dubious-shop-#{System.unique_integer([:positive])}",
+        trust_level: "unverified"
+      })
+
+    _rule =
+      Repo.insert!(%AlertRule{
+        user_id: user.id,
+        name: "Clean GPU Deals",
+        keywords: "RTX 4070",
+        negative_keywords: "defekt, zubehör",
+        max_price: Decimal.new("600.00"),
+        merchant_filter: "verified_only",
+        is_active: true
+      })
+
+    # Valid deal: matches keyword, within price, no negative keyword, verified merchant
+    valid_deal =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: verified_merchant.id,
+        guid: "deal-valid-#{System.unique_integer([:positive])}",
+        title: "Asus RTX 4070 Super 12GB",
+        url: "https://example.com/rtx-valid",
+        price: Decimal.new("589.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    # Rejected 1: contains negative keyword "defekt"
+    defekt_deal =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: verified_merchant.id,
+        guid: "deal-defekt-#{System.unique_integer([:positive])}",
+        title: "Asus RTX 4070 Super (defekt, Bastler)",
+        url: "https://example.com/rtx-defekt",
+        price: Decimal.new("199.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    # Rejected 2: price exceeds 600.00
+    expensive_deal =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: verified_merchant.id,
+        guid: "deal-expensive-#{System.unique_integer([:positive])}",
+        title: "MSI RTX 4070 Ti Super",
+        url: "https://example.com/rtx-expensive",
+        price: Decimal.new("799.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    # Rejected 3: unverified merchant
+    unverified_deal =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: unverified_merchant.id,
+        guid: "deal-unverified-#{System.unique_integer([:positive])}",
+        title: "Gigabyte RTX 4070 Super",
+        url: "https://example.com/rtx-unverified",
+        price: Decimal.new("549.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    Alerts.process_new_deals([valid_deal, defekt_deal, expensive_deal, unverified_deal])
+
+    matches = Alerts.list_user_matches(user.id)
+    assert length(matches) == 1
+    assert hd(matches).deal_id == valid_deal.id
+  end
+
+  test "filters deals based on dropshipper status and keyboard layouts", %{
+    user: user,
+    feed: feed,
+    merchant: merchant
+  } do
+    dropshipper =
+      Repo.insert!(%Merchant{
+        name: "AliExpress Store",
+        slug: "aliexpress-store-#{System.unique_integer([:positive])}",
+        trust_level: "dropshipper"
+      })
+
+    _rule =
+      Repo.insert!(%AlertRule{
+        user_id: user.id,
+        name: "Laptop Hunter",
+        keywords: "ThinkPad",
+        exclude_dropshippers: true,
+        exclude_foreign_keyboards: true,
+        is_active: true
+      })
+
+    german_laptop =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-german-#{System.unique_integer([:positive])}",
+        title: "Lenovo ThinkPad T14 Gen 4 QWERTZ DE",
+        url: "https://example.com/thinkpad-de",
+        price: Decimal.new("899.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    dropship_laptop =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: dropshipper.id,
+        guid: "deal-dropship-#{System.unique_integer([:positive])}",
+        title: "Lenovo ThinkPad T14 Dropship",
+        url: "https://aliexpress.com/item/123",
+        price: Decimal.new("699.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    foreign_keyboard_laptop =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-foreign-kb-#{System.unique_integer([:positive])}",
+        title: "Lenovo ThinkPad T14 (Clavier AZERTY France)",
+        url: "https://amazon.fr/dp/123",
+        price: Decimal.new("799.00"),
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    Alerts.process_new_deals([german_laptop, dropship_laptop, foreign_keyboard_laptop])
+
+    matches = Alerts.list_user_matches(user.id)
+    assert length(matches) == 1
+    assert hd(matches).deal_id == german_laptop.id
+  end
 end

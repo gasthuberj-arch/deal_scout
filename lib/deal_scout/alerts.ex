@@ -61,6 +61,7 @@ defmodule DealScout.Alerts do
   with canonical deduplication and polling-cycle batch collapsing.
   """
   def process_new_deals(deals) when is_list(deals) do
+    deals = Repo.preload(deals, [:merchant, :feed])
     rules = list_active_rules()
 
     # Collect matches grouped by rule for batch collapsing

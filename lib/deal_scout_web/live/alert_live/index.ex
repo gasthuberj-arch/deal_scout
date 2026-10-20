@@ -70,6 +70,24 @@ defmodule DealScoutWeb.AlertLive.Index do
   end
 
   @impl true
+  def handle_event("validate", %{"alert_rule" => rule_params}, socket) do
+    changeset =
+      case socket.assigns.rule do
+        nil ->
+          %AlertRule{user_id: socket.assigns.current_scope.user.id}
+          |> Alerts.change_alert_rule(rule_params)
+          |> Map.put(:action, :validate)
+
+        %AlertRule{} = rule ->
+          rule
+          |> Alerts.change_alert_rule(rule_params)
+          |> Map.put(:action, :validate)
+      end
+
+    {:noreply, assign(socket, :form, to_form(changeset))}
+  end
+
+  @impl true
   def handle_event("save", %{"alert_rule" => rule_params}, socket) do
     user = socket.assigns.current_scope.user
 
@@ -342,38 +360,76 @@ defmodule DealScoutWeb.AlertLive.Index do
 
         <!-- Modal Dialog for New / Edit Rule -->
         <%= if @live_action in [:new, :edit] do %>
-          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div class="card bg-base-100 w-full max-w-xl shadow-2xl border border-base-300 my-8">
-              <div class="p-6">
-                <div class="flex items-center justify-between pb-4 border-b border-base-200">
-                  <h3 class="font-bold text-lg text-base-content">
-                    {if @live_action == :new, do: "Create Alert Rule", else: "Edit Alert Rule"}
-                  </h3>
-                  <.link patch={~p"/alerts"} class="btn btn-ghost btn-circle btn-sm">✕</.link>
-                </div>
+          <div
+            id="alert-rule-modal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div class="card bg-base-100 w-full max-w-xl max-h-[90vh] shadow-2xl border border-base-300 flex flex-col overflow-hidden my-auto">
+              <!-- Modal Header (fixed/sticky) -->
+              <div class="flex items-center justify-between px-6 py-4 border-b border-base-200 shrink-0 bg-base-100">
+                <h3 class="font-bold text-lg text-base-content flex items-center gap-2">
+                  <.icon name="hero-bell" class="size-5 text-primary" />
+                  <span>{if @live_action == :new, do: "Create Alert Rule", else: "Edit Alert Rule"}</span>
+                </h3>
+                <.link
+                  patch={~p"/alerts"}
+                  id="close-rule-modal-btn"
+                  class="btn btn-ghost btn-circle btn-sm"
+                  aria-label="Close"
+                >
+                  ✕
+                </.link>
+              </div>
 
-                <.form for={@form} phx-submit="save" class="space-y-4 pt-4">
+              <!-- Form with phx-change, phx-submit, explicit ID, autofill disabled -->
+              <.form
+                for={@form}
+                id="alert-rule-form"
+                phx-change="validate"
+                phx-submit="save"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                class="flex flex-col flex-1 min-h-0"
+              >
+                <!-- Scrollable Body for all inputs -->
+                <div class="overflow-y-auto px-6 py-4 space-y-4 flex-1">
                   <.input
                     field={@form[:name]}
+                    id="alert-rule-name-input"
                     type="text"
                     label="Alert Rule Name"
                     placeholder="e.g. RTX 4080 GPU, OLED Monitor, Espresso Machine"
+                    autocomplete="off"
+                    data-1p-ignore="true"
+                    data-lpignore="true"
                     required
                   />
 
                   <.input
                     field={@form[:keywords]}
+                    id="alert-rule-keywords-input"
                     type="text"
                     label="Search Keywords (use quotes for exact phrases: &quot;Apple Watch&quot;)"
                     placeholder="e.g. &quot;RTX 4080&quot; or OLED, 4K"
+                    autocomplete="off"
+                    data-1p-ignore="true"
+                    data-lpignore="true"
                     required
                   />
 
                   <.input
                     field={@form[:negative_keywords]}
+                    id="alert-rule-negative-keywords-input"
                     type="text"
                     label="Negative/Exclusion Keywords (optional, comma-separated)"
                     placeholder="e.g. defekt, kühler, zubehör, suche"
+                    autocomplete="off"
+                    data-1p-ignore="true"
+                    data-lpignore="true"
                   />
 
                   <!-- Channels and Delivery Mode -->
@@ -385,6 +441,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <.input
                         field={@form[:delivery_mode]}
+                        id="alert-rule-delivery-mode-select"
                         type="select"
                         label="Delivery Mode"
                         options={[
@@ -396,6 +453,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                       <.input
                         field={@form[:cooldown_minutes]}
+                        id="alert-rule-cooldown-select"
                         type="select"
                         label="Alert Cooldown (prevent bursts)"
                         options={[
@@ -411,11 +469,13 @@ defmodule DealScoutWeb.AlertLive.Index do
                     <div class="flex items-center gap-6 pt-1">
                       <.input
                         field={@form[:notify_push]}
+                        id="alert-rule-notify-push-check"
                         type="checkbox"
                         label="📱 Mobile Push Notification"
                       />
                       <.input
                         field={@form[:notify_email]}
+                        id="alert-rule-notify-email-check"
                         type="checkbox"
                         label="✉️ Email Notification"
                       />
@@ -431,6 +491,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <.input
                         field={@form[:country_filter]}
+                        id="alert-rule-country-filter-select"
                         type="select"
                         label="Origin Region"
                         options={[
@@ -442,6 +503,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                       <.input
                         field={@form[:merchant_filter]}
+                        id="alert-rule-merchant-filter-select"
                         type="select"
                         label="Merchant Trust Filter"
                         options={[
@@ -454,6 +516,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     <div class="pt-1">
                       <.input
                         field={@form[:exclude_foreign_keyboards]}
+                        id="alert-rule-exclude-keyboards-check"
                         type="checkbox"
                         label="⌨️ Exclude foreign keyboard layouts (AZERTY, QWERTY-ES)"
                       />
@@ -464,14 +527,19 @@ defmodule DealScoutWeb.AlertLive.Index do
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <.input
                       field={@form[:max_price]}
+                      id="alert-rule-max-price-input"
                       type="number"
                       step="0.01"
                       label="Max Price in € (optional)"
                       placeholder="e.g. 799.00"
+                      autocomplete="off"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
                     />
 
                     <.input
                       field={@form[:source_filter]}
+                      id="alert-rule-source-filter-select"
                       type="select"
                       label="Source Portal"
                       options={[{"All Portals", "all"} | Enum.map(@feeds, &{&1.name, &1.slug})]}
@@ -481,14 +549,19 @@ defmodule DealScoutWeb.AlertLive.Index do
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <.input
                       field={@form[:min_temperature]}
+                      id="alert-rule-min-temperature-input"
                       type="number"
                       label="Min. Community Temp (optional)"
                       placeholder="e.g. 100 (ignores unrated deals)"
+                      autocomplete="off"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
                     />
 
                     <div class="flex items-center pt-6">
                       <.input
                         field={@form[:exclude_dropshippers]}
+                        id="alert-rule-exclude-dropshippers-check"
                         type="checkbox"
                         label="Exclude dropshippers (Temu, AliExpress)"
                       />
@@ -497,16 +570,27 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                   <.input
                     field={@form[:is_active]}
+                    id="alert-rule-is-active-check"
                     type="checkbox"
                     label="Active immediately"
                   />
+                </div>
 
-                  <div class="flex items-center justify-end gap-2 pt-4 border-t border-base-200">
-                    <.link patch={~p"/alerts"} class="btn btn-ghost btn-sm">Cancel</.link>
-                    <.button class="btn btn-primary btn-sm">Save Rule</.button>
-                  </div>
-                </.form>
-              </div>
+                <!-- Sticky Footer with Save button always visible -->
+                <div class="sticky bottom-0 bg-base-100 px-6 py-3.5 border-t border-base-200 z-10 flex items-center justify-end gap-2 shrink-0">
+                  <.link patch={~p"/alerts"} id="cancel-rule-btn" class="btn btn-ghost btn-sm">
+                    Cancel
+                  </.link>
+                  <.button
+                    type="submit"
+                    id="save-rule-btn"
+                    class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
+                  >
+                    <.icon name="hero-check" class="size-4" />
+                    <span>Save Rule</span>
+                  </.button>
+                </div>
+              </.form>
             </div>
           </div>
         <% end %>
