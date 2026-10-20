@@ -40,10 +40,15 @@ defmodule DealScout.Alerts.Backtest do
     fallback_limit = Keyword.get(opts, :fallback_limit, @default_fallback_limit)
 
     keywords =
-      case rule.keywords do
-        nil -> ""
-        k when is_binary(k) -> String.trim(k)
-        _ -> ""
+      cond do
+        is_binary(rule.keywords) and String.trim(rule.keywords) != "" ->
+          String.trim(rule.keywords)
+
+        is_binary(rule.name) and String.trim(rule.name) != "" ->
+          String.trim(rule.name)
+
+        true ->
+          ""
       end
 
     if keywords == "" do
@@ -54,6 +59,7 @@ defmodule DealScout.Alerts.Backtest do
         status: :no_matches
       }
     else
+      rule = %{rule | keywords: keywords}
       candidates = fetch_candidate_deals(keywords, limit, fallback_limit)
 
       matching_deals =

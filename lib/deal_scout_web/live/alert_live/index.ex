@@ -98,38 +98,31 @@ defmodule DealScoutWeb.AlertLive.Index do
           |> Map.put(:action, :validate)
       end
 
+    # Only clear backtest_result if the search query actually changed
+    new_query = rule_params["keywords"] || rule_params["name"] || ""
+
+    backtest_result =
+      if socket.assigns[:backtested_query] && socket.assigns.backtested_query != new_query do
+        nil
+      else
+        socket.assigns[:backtest_result]
+      end
+
     {:noreply,
      socket
      |> assign(:form, to_form(changeset))
-     |> assign(:backtest_result, nil)}
+     |> assign(:backtest_result, backtest_result)}
   end
 
   @impl true
-  def handle_event("backtest_rule", params, socket) do
-    rule_data =
-      cond do
-        is_map(params["alert_rule"]) and map_size(params["alert_rule"]) > 0 ->
-          params["alert_rule"]
+  def handle_event("save", %{"action" => "backtest", "alert_rule" => rule_params}, socket) do
+    do_backtest(rule_params, socket)
+  end
 
-        is_map(params["rule"]) and map_size(params["rule"]) > 0 ->
-          params["rule"]
-
-        socket.assigns[:form] && socket.assigns.form.source ->
-          Ecto.Changeset.apply_changes(socket.assigns.form.source)
-
-        socket.assigns[:rule] ->
-          socket.assigns.rule
-
-        true ->
-          %{}
-      end
-
-    result = Backtest.test_rule(rule_data)
-
-    {:noreply,
-     socket
-     |> assign(:backtest_result, result)
-     |> assign(:backtesting?, false)}
+  @impl true
+  def handle_event("save", %{"action" => "backtest"} = params, socket) do
+    rule_params = params["alert_rule"] || %{}
+    do_backtest(rule_params, socket)
   end
 
   @impl true
@@ -161,6 +154,29 @@ defmodule DealScoutWeb.AlertLive.Index do
             {:noreply, assign(socket, :form, to_form(changeset))}
         end
     end
+  end
+
+  @impl true
+  def handle_event("backtest_rule", params, socket) do
+    rule_data =
+      cond do
+        is_map(params["alert_rule"]) and map_size(params["alert_rule"]) > 0 ->
+          params["alert_rule"]
+
+        is_map(params["rule"]) and map_size(params["rule"]) > 0 ->
+          params["rule"]
+
+        socket.assigns[:form] && socket.assigns.form.source ->
+          Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+        socket.assigns[:rule] ->
+          socket.assigns.rule
+
+        true ->
+          %{}
+      end
+
+    do_backtest(rule_data, socket)
   end
 
   @impl true
@@ -206,6 +222,25 @@ defmodule DealScoutWeb.AlertLive.Index do
       {:handled, updated_socket} -> {:noreply, updated_socket}
       :unhandled -> {:noreply, socket}
     end
+  end
+
+  defp do_backtest(rule_data, socket) do
+    result = Backtest.test_rule(rule_data)
+
+    effective_query =
+      case rule_data do
+        %AlertRule{keywords: k, name: n} -> (k && String.trim(k) != "" && k) || n || ""
+        %{"keywords" => k, "name" => n} -> (k && String.trim(k) != "" && k) || n || ""
+        %{"keywords" => k} -> k || ""
+        %{"name" => n} -> n || ""
+        _ -> ""
+      end
+
+    {:noreply,
+     socket
+     |> assign(:backtest_result, result)
+     |> assign(:backtested_query, effective_query)
+     |> assign(:backtesting?, false)}
   end
 
   @impl true
@@ -698,7 +733,9 @@ defmodule DealScoutWeb.AlertLive.Index do
                         </p>
                       </div>
                       <button
-                        type="button"
+                        type="submit"
+                        name="action"
+                        value="backtest"
                         id="backtest-rule-btn"
                         phx-click="backtest_rule"
                         phx-disable-with="Testing..."
@@ -794,10 +831,20 @@ defmodule DealScoutWeb.AlertLive.Index do
                               <span class="text-base select-none shrink-0">ℹ️</span>
                               <div class="text-xs space-y-1">
                                 <div class="font-semibold text-amber-700 dark:text-amber-300">
-                                  No past deals matched this rule in the database.
+                                  <%= if (@backtest_result.total_matches == 0 and (@form[:keywords].value in [nil, ""] and @form[:name].value in [nil, ""])) do %>
+                                    Please enter keywords or an alert rule name first.
+                                  <% else %>
+                                    No past deals matched this rule in the database.
+                                  <% end %>
                                 </div>
                                 <p class="text-base-content/70">
-                                  (May be a rare item or check spelling/operators).
+                                  <%= if (@form[:keywords].value in [nil, ""] and @form[:name].value in [nil, ""]) do %>
+                                    Type terms like <span class="font-semibold">OLED</span>, <span class="font-semibold">RTX 4080</span>, or
+                                    <span class="font-semibold">Apple Watch</span>
+                                    above to scan past deals.
+                                  <% else %>
+                                    (May be a rare item or check spelling/operators).
+                                  <% end %>
                                 </p>
                               </div>
                             </div>
@@ -814,6 +861,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                   </.link>
                   <.button
                     type="submit"
+                    name="action"
+                    value="save"
                     id="save-rule-btn"
                     class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
                   >

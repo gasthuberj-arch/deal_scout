@@ -101,6 +101,30 @@ defmodule DealScout.Alerts.BacktestTest do
       assert result.last_match == nil
     end
 
+    test "falls back to rule name when keywords is empty", %{
+      merchant: merchant,
+      feed: feed
+    } do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      deal =
+        Repo.insert!(%Deal{
+          feed_id: feed.id,
+          merchant_id: merchant.id,
+          guid: "deal-oled-1",
+          title: "LG OLED 55 Inch 4K Smart TV",
+          url: "https://example.com/oled",
+          price: Decimal.new("899.00"),
+          published_at: now
+        })
+
+      # User only entered OLED in the Name field and left keywords blank
+      result = Backtest.test_rule(%{"name" => "OLED", "keywords" => ""})
+      assert result.status == :match_found
+      assert result.total_matches == 1
+      assert result.last_match.id == deal.id
+    end
+
     test "matches historical deal via FTS lookup and returns :match_found", %{
       merchant: merchant,
       feed: feed

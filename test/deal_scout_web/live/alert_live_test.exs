@@ -247,7 +247,7 @@ defmodule DealScoutWeb.AlertLiveTest do
     assert has_element?(index_live, "#backtest-result", "Mindfactory")
     assert has_element?(index_live, "#backtest-result a", "View deal")
 
-    # Changing form resets backtest result
+    # Changing form with DIFFERENT keywords resets backtest result
     index_live
     |> form("#alert-rule-form", %{
       "alert_rule" => %{
@@ -257,6 +257,219 @@ defmodule DealScoutWeb.AlertLiveTest do
     |> render_change()
 
     refute has_element?(index_live, "#backtest-result")
+  end
+
+  test "backtests rule without getting wiped out by blur validate event", %{conn: conn} do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    feed =
+      Repo.insert!(%Feed{
+        name: "Test Feed",
+        slug: "test-feed-#{System.unique_integer([:positive])}",
+        url: "https://testfeed.example.com/rss"
+      })
+
+    merchant =
+      Repo.insert!(%Merchant{
+        name: "MediaMarkt",
+        slug: "mediamarkt-#{System.unique_integer([:positive])}",
+        trust_level: "verified"
+      })
+
+    Repo.insert!(%Deal{
+      feed_id: feed.id,
+      merchant_id: merchant.id,
+      guid: "deal-oled-c3-#{System.unique_integer()}",
+      title: "LG OLED C3 55 Inch TV 4K",
+      url: "https://example.com/oled",
+      price: Decimal.new("999.00"),
+      published_at: now
+    })
+
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "keywords" => "OLED"
+      }
+    })
+    |> render_change()
+
+    # Click backtest
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+
+    # Simulate blur change with unchanged keywords
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "keywords" => "OLED"
+      }
+    })
+    |> render_change()
+
+    # Must NOT be wiped out!
+    assert has_element?(index_live, "#backtest-result")
+  end
+
+  test "backtests rule when submitted via action=backtest submit", %{conn: conn} do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    feed =
+      Repo.insert!(%Feed{
+        name: "Test Feed 2",
+        slug: "test-feed-2-#{System.unique_integer([:positive])}",
+        url: "https://testfeed2.example.com/rss"
+      })
+
+    merchant =
+      Repo.insert!(%Merchant{
+        name: "MediaMarkt",
+        slug: "mediamarkt-2-#{System.unique_integer([:positive])}",
+        trust_level: "verified"
+      })
+
+    Repo.insert!(%Deal{
+      feed_id: feed.id,
+      merchant_id: merchant.id,
+      guid: "deal-oled-sub-#{System.unique_integer()}",
+      title: "Sony OLED Bravia 65 Inch 4K",
+      url: "https://example.com/oled-sony",
+      price: Decimal.new("1499.00"),
+      published_at: now
+    })
+
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "keywords" => "OLED"
+      }
+    })
+    |> render_submit(%{"action" => "backtest"})
+
+    assert has_element?(index_live, "#backtest-result")
+    assert has_element?(index_live, "#backtest-result", "Sony OLED Bravia 65 Inch 4K")
+  end
+
+  test "E2E: fills out form with 'ei' and finds matching past deals", %{conn: conn} do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    feed =
+      Repo.insert!(%Feed{
+        name: "Test Feed EI",
+        slug: "test-feed-ei-#{System.unique_integer([:positive])}",
+        url: "https://testfeed-ei.example.com/rss"
+      })
+
+    merchant =
+      Repo.insert!(%Merchant{
+        name: "Amazon DE",
+        slug: "amazon-de-ei-#{System.unique_integer([:positive])}",
+        trust_level: "verified"
+      })
+
+    Repo.insert!(%Deal{
+      feed_id: feed.id,
+      merchant_id: merchant.id,
+      guid: "deal-ei-1-#{System.unique_integer()}",
+      title: "PlayStation 5 Pro Konsole mit 2TB Speicher",
+      url: "https://example.com/ps5-pro",
+      price: Decimal.new("799.00"),
+      published_at: now
+    })
+
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    # User fills in "ei" as keywords in the form
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "name" => "EI Alert",
+        "keywords" => "ei"
+      }
+    })
+    |> render_change()
+
+    # User clicks the backtest button
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+
+    assert has_element?(
+             index_live,
+             "#backtest-result",
+             "PlayStation 5 Pro Konsole mit 2TB Speicher"
+           )
+
+    assert has_element?(index_live, "#backtest-result", "Amazon DE")
+  end
+
+  test "E2E: fills out form with rule name 'OLED' only and finds matching deals via fallback", %{
+    conn: conn
+  } do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    feed =
+      Repo.insert!(%Feed{
+        name: "Test Feed OLED Name",
+        slug: "test-feed-oled-name-#{System.unique_integer([:positive])}",
+        url: "https://testfeed-oled-name.example.com/rss"
+      })
+
+    merchant =
+      Repo.insert!(%Merchant{
+        name: "Coolblue",
+        slug: "coolblue-oled-name-#{System.unique_integer([:positive])}",
+        trust_level: "verified"
+      })
+
+    Repo.insert!(%Deal{
+      feed_id: feed.id,
+      merchant_id: merchant.id,
+      guid: "deal-oled-name-#{System.unique_integer()}",
+      title: "LG OLED 65 Inch evo 4K Smart TV",
+      url: "https://example.com/lg-oled-name",
+      price: Decimal.new("1299.00"),
+      published_at: now
+    })
+
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    # User fills in Name: OLED and leaves keywords blank
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "name" => "OLED",
+        "keywords" => ""
+      }
+    })
+    |> render_change()
+
+    # User clicks the backtest button
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+    assert has_element?(index_live, "#backtest-result", "LG OLED 65 Inch evo 4K Smart TV")
+    assert has_element?(index_live, "#backtest-result", "Coolblue")
+  end
+
+  test "E2E: empty form displays prompt to enter keywords or name", %{conn: conn} do
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    # Click backtest without entering anything
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+
+    assert has_element?(
+             index_live,
+             "#backtest-result",
+             "Please enter keywords or an alert rule name first."
+           )
   end
 
   test "backtests rule with no matches and displays amber alert", %{conn: conn} do
