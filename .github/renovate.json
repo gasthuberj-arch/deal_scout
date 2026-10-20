@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "every day before 06:00"
+  ],
+  "packageRules": [
+    {
+      "description": "Group all non-major Elixir Mix dependency updates into a single daily PR",
+      "matchManagers": ["mix"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "elixir non-major updates"
+    },
+    {
+      "description": "Group all GitHub Actions workflow updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions updates"
+    },
+    {
+      "description": "Label and keep major updates isolated for safe manual review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "major-update"]
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 06:00 on monday"]
+  },
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"]
+}
