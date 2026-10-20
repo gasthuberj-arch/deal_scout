@@ -185,4 +185,65 @@ defmodule DealScoutWeb.AlertLiveTest do
 
     assert has_element?(index_live, "#pwa-push-container")
   end
+
+  test "displays circuit breaker auto-pause warning and clears reason on resume", %{
+    conn: conn,
+    user: user
+  } do
+    rule =
+      DealScout.Repo.insert!(%DealScout.Alerts.AlertRule{
+        user_id: user.id,
+        name: "Slow Query Alert",
+        keywords: "too broad terms",
+        is_active: false,
+        pause_reason:
+          "Auto-paused: Query evaluation took 48.0ms (exceeded 30ms compute budget). Simplify keywords or remove broad terms.",
+        last_eval_duration_us: 48_000
+      })
+
+    {:ok, view, html} = live(conn, ~p"/alerts")
+
+    assert html =~ "Slow Query Alert"
+    assert html =~ "Circuit Breaker Auto-Paused"
+    assert html =~ "exceeded 30ms compute budget"
+
+    # Clicking Resume clears pause_reason and re-activates
+    view
+    |> element("#rule-#{rule.id} button[phx-click='toggle_active']", "Resume")
+    |> render_click()
+
+    reloaded = DealScout.Repo.get!(DealScout.Alerts.AlertRule, rule.id)
+    assert reloaded.is_active == true
+    assert is_nil(reloaded.pause_reason)
+
+    refute render(view) =~ "Circuit Breaker Auto-Paused"
+  end
+
+  test "informs user in real-time when rule is auto-paused via PubSub", %{
+    conn: conn,
+    user: user
+  } do
+    rule =
+      DealScout.Repo.insert!(%DealScout.Alerts.AlertRule{
+        user_id: user.id,
+        name: "Live Alert Rule",
+        keywords: "laptop",
+        is_active: true
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/alerts")
+
+    reason =
+      "Auto-paused: Query evaluation took 34.2ms (exceeded 30ms compute budget). Simplify keywords or remove broad terms."
+
+    # Broadcast {:rule_auto_paused, rule, reason}
+    Phoenix.PubSub.broadcast(
+      DealScout.PubSub,
+      DealScout.Notifications.Dispatcher.user_topic(user.id),
+      {:rule_auto_paused, rule, reason}
+    )
+
+    rendered = render(view)
+    assert rendered =~ "exceeded 30ms compute budget"
+  end
 end

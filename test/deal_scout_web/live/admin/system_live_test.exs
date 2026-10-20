@@ -38,9 +38,90 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     assert html =~ "BEAM VM Memory"
     assert html =~ "RSS &amp; Atom Feed Poller Health" or html =~ "RSS & Atom Feed Poller Health"
 
+    assert html =~ "Compute Budget &amp; Alert Query Performance" or
+             html =~ "Compute Budget & Alert Query Performance"
+
     # Trigger immediate poll
     assert view
            |> element("button[phx-click='trigger_poll']")
            |> render_click() =~ "Triggered immediate background poll for all feeds."
+  end
+
+  test "displays auto-paused rules and allows admin to resume them", %{
+    conn: conn,
+    admin: admin,
+    regular_user: user
+  } do
+    rule =
+      DealScout.Repo.insert!(%DealScout.Alerts.AlertRule{
+        user_id: user.id,
+        name: "Super Slow Regex Rule",
+        keywords: "broad query term",
+        is_active: false,
+        pause_reason:
+          "Auto-paused: Query evaluation took 42.5ms (exceeded 30ms compute budget). Simplify keywords or remove broad terms.",
+        last_eval_duration_us: 42_500
+      })
+
+    conn = log_in_user(conn, admin)
+    {:ok, view, html} = live(conn, ~p"/admin/system")
+
+    assert html =~ "1 Auto-Paused"
+    assert html =~ "Super Slow Regex Rule"
+    assert html =~ user.email
+    assert html =~ "42.5 ms"
+    assert has_element?(view, "#resume-auto-paused-rule-btn-#{rule.id}")
+
+    # Resume the rule from admin console
+    rendered =
+      view
+      |> element("#resume-auto-paused-rule-btn-#{rule.id}")
+      |> render_click()
+
+    assert rendered =~ "Alert rule &quot;Super Slow Regex Rule&quot; resumed successfully." or
+             rendered =~ "Alert rule \"Super Slow Regex Rule\" resumed successfully."
+
+    # Check rule was resumed in DB
+    reloaded = DealScout.Repo.get!(DealScout.Alerts.AlertRule, rule.id)
+    assert reloaded.is_active == true
+    assert is_nil(reloaded.pause_reason)
+
+    assert has_element?(view, "#no-auto-paused-rules")
+  end
+
+  test "allows admin to manually pause a problematic slow rule", %{
+    conn: conn,
+    admin: admin,
+    regular_user: user
+  } do
+    rule =
+      DealScout.Repo.insert!(%DealScout.Alerts.AlertRule{
+        user_id: user.id,
+        name: "Heavy Mining Alert",
+        keywords: "crypto gpu",
+        is_active: true,
+        last_eval_duration_us: 25_000
+      })
+
+    conn = log_in_user(conn, admin)
+    {:ok, view, html} = live(conn, ~p"/admin/system")
+
+    assert html =~ "Heavy Mining Alert"
+    assert html =~ "25.0 ms"
+    assert has_element?(view, "#pause-slowest-rule-btn-#{rule.id}")
+
+    # Pause rule from console
+    rendered =
+      view
+      |> element("#pause-slowest-rule-btn-#{rule.id}")
+      |> render_click()
+
+    assert rendered =~ "Alert rule &quot;Heavy Mining Alert&quot; paused." or
+             rendered =~ "Alert rule \"Heavy Mining Alert\" paused."
+
+    # Check rule is paused in DB
+    reloaded = DealScout.Repo.get!(DealScout.Alerts.AlertRule, rule.id)
+    assert reloaded.is_active == false
+    assert reloaded.pause_reason == "Manually paused by administrator"
   end
 end

@@ -24,6 +24,8 @@ defmodule DealScout.Alerts.AlertRule do
     field :merchant_filter, :string, default: "all"
     field :cooldown_minutes, :integer, default: 0
     field :last_notified_at, :utc_datetime
+    field :pause_reason, :string
+    field :last_eval_duration_us, :integer
 
     belongs_to :user, DealScout.Accounts.User
     has_many :user_matches, DealScout.Alerts.UserMatch
@@ -66,7 +68,9 @@ defmodule DealScout.Alerts.AlertRule do
       :exclude_foreign_keyboards,
       :merchant_filter,
       :cooldown_minutes,
-      :last_notified_at
+      :last_notified_at,
+      :pause_reason,
+      :last_eval_duration_us
     ])
     |> validate_required([:user_id, :name, :keywords])
     |> validate_length(:name, min: 2, max: 100)

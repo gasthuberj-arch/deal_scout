@@ -10,6 +10,11 @@ defmodule DealScoutWeb.AlertLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_scope.user
+
+    if connected?(socket) do
+      Alerts.subscribe_to_user_matches(user.id)
+    end
+
     feeds = Feeds.list_active_feeds()
     rules = Alerts.list_alert_rules_for_user(user.id)
 
@@ -134,7 +139,12 @@ defmodule DealScoutWeb.AlertLive.Index do
   @impl true
   def handle_event("toggle_active", %{"id" => id}, socket) do
     rule = Alerts.get_user_alert_rule!(socket.assigns.current_scope.user.id, id)
-    {:ok, _} = Alerts.update_alert_rule(rule, %{is_active: !rule.is_active})
+
+    if rule.is_active do
+      Alerts.pause_rule(rule, "Paused by user")
+    else
+      Alerts.resume_rule(rule)
+    end
 
     rules = Alerts.list_alert_rules_for_user(socket.assigns.current_scope.user.id)
     {:noreply, assign(socket, :rules, rules)}
@@ -157,6 +167,18 @@ defmodule DealScoutWeb.AlertLive.Index do
       :unhandled -> {:noreply, socket}
     end
   end
+
+  @impl true
+  def handle_info({:rule_auto_paused, _rule, reason}, socket) do
+    rules = Alerts.list_alert_rules_for_user(socket.assigns.current_scope.user.id)
+
+    {:noreply,
+     socket
+     |> put_flash(:error, reason)
+     |> assign(:rules, rules)}
+  end
+
+  def handle_info(_other, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -250,6 +272,20 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                   <div>
                     <h2 class="font-bold text-base text-base-content">{rule.name}</h2>
+
+                    <%= if rule.pause_reason do %>
+                      <div class="mt-2 p-2.5 rounded-xl bg-error/10 border border-error/20 text-error text-xs flex items-start gap-2">
+                        <.icon
+                          name="hero-exclamation-triangle"
+                          class="size-4 shrink-0 mt-0.5 text-error"
+                        />
+                        <div>
+                          <span class="font-bold block">Circuit Breaker Auto-Paused</span>
+                          <span class="text-[11px] text-error/90 mt-0.5 block leading-relaxed">{rule.pause_reason}</span>
+                        </div>
+                      </div>
+                    <% end %>
+
                     <div class="mt-2 space-y-1.5 text-xs">
                       <div>
                         <span class="font-semibold text-base-content/60">Keywords:</span>
