@@ -120,4 +120,26 @@ defmodule DealScoutWeb.BackupControllerTest do
     new_files = after_files -- before_files
     assert new_files == []
   end
+
+  test "GET /api/admin/backup/status returns 401 without valid token", %{conn: conn} do
+    conn = get(conn, ~p"/api/admin/backup/status")
+    assert response(conn, 401)
+  end
+
+  test "GET /api/admin/backup/status returns real-time status JSON with valid token", %{
+    conn: conn
+  } do
+    conn =
+      conn
+      |> put_req_header("authorization", "Bearer #{@test_token}")
+      |> get(~p"/api/admin/backup/status")
+
+    assert response(conn, 200)
+    data = json_response(conn, 200)
+    assert data["status"] == "ok"
+    assert is_map(data["backup"])
+    assert Map.has_key?(data["backup"], "client_connected")
+    assert Map.has_key?(data["backup"], "files_synced_count")
+    assert Map.has_key?(data["backup"], "replica_summary")
+  end
 end

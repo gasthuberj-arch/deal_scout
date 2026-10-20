@@ -3,6 +3,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
   alias DealScout.Alerts
   alias DealScout.Alerts.AlertRule
+  alias DealScout.Alerts.Backtest
   alias DealScout.Feeds
   alias DealScoutWeb.PWAComponents
   alias DealScoutWeb.PushNotificationHandler
@@ -20,6 +21,8 @@ defmodule DealScoutWeb.AlertLive.Index do
       |> assign(:feeds, feeds)
       |> assign(:rule, nil)
       |> assign(:form, nil)
+      |> assign(:backtest_result, nil)
+      |> assign(:backtesting?, false)
       |> PushNotificationHandler.init_push_assigns()
 
     {:ok, socket}
@@ -50,6 +53,8 @@ defmodule DealScoutWeb.AlertLive.Index do
     |> assign(:page_title, "New Alert Rule")
     |> assign(:rule, rule)
     |> assign(:form, to_form(changeset))
+    |> assign(:backtest_result, nil)
+    |> assign(:backtesting?, false)
   end
 
   defp apply_action(socket, :edit, %{"id" => id}) do
@@ -60,6 +65,8 @@ defmodule DealScoutWeb.AlertLive.Index do
     |> assign(:page_title, "Edit Alert Rule")
     |> assign(:rule, rule)
     |> assign(:form, to_form(changeset))
+    |> assign(:backtest_result, nil)
+    |> assign(:backtesting?, false)
   end
 
   defp apply_action(socket, :index, _params) do
@@ -67,6 +74,8 @@ defmodule DealScoutWeb.AlertLive.Index do
     |> assign(:page_title, "My Alert Keywords")
     |> assign(:rule, nil)
     |> assign(:form, nil)
+    |> assign(:backtest_result, nil)
+    |> assign(:backtesting?, false)
   end
 
   @impl true
@@ -84,7 +93,38 @@ defmodule DealScoutWeb.AlertLive.Index do
           |> Map.put(:action, :validate)
       end
 
-    {:noreply, assign(socket, :form, to_form(changeset))}
+    {:noreply,
+     socket
+     |> assign(:form, to_form(changeset))
+     |> assign(:backtest_result, nil)}
+  end
+
+  @impl true
+  def handle_event("backtest_rule", params, socket) do
+    rule_data =
+      cond do
+        is_map(params["alert_rule"]) and map_size(params["alert_rule"]) > 0 ->
+          params["alert_rule"]
+
+        is_map(params["rule"]) and map_size(params["rule"]) > 0 ->
+          params["rule"]
+
+        socket.assigns[:form] && socket.assigns.form.source ->
+          Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+        socket.assigns[:rule] ->
+          socket.assigns.rule
+
+        true ->
+          %{}
+      end
+
+    result = Backtest.test_rule(rule_data)
+
+    {:noreply,
+     socket
+     |> assign(:backtest_result, result)
+     |> assign(:backtesting?, false)}
   end
 
   @impl true
@@ -178,7 +218,7 @@ defmodule DealScoutWeb.AlertLive.Index do
           <div>
             <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Keyword Alert Rules</h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Configure search terms, exact phrases ("quoted"), region filters, and notifications. When hot deals match, you'll be alerted immediately on your phone.
+              Configure search terms, exact phrases ("quoted"), AND / OR operators, parentheses grouping (e.g. (A OR B) C), and notifications. When hot deals match, you'll be alerted immediately on your phone.
             </p>
           </div>
 
@@ -409,17 +449,48 @@ defmodule DealScoutWeb.AlertLive.Index do
                     required
                   />
 
-                  <.input
-                    field={@form[:keywords]}
-                    id="alert-rule-keywords-input"
-                    type="text"
-                    label="Search Keywords (use quotes for exact phrases: &quot;Apple Watch&quot;)"
-                    placeholder="e.g. &quot;RTX 4080&quot; or OLED, 4K"
-                    autocomplete="off"
-                    data-1p-ignore="true"
-                    data-lpignore="true"
-                    required
-                  />
+                  <div>
+                    <.input
+                      field={@form[:keywords]}
+                      id="alert-rule-keywords-input"
+                      type="text"
+                      label="Search Keywords"
+                      placeholder={~s[e.g. (RTX 4080 OR RX 7900) 16GB, "Apple Watch", OLED]}
+                      autocomplete="off"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      required
+                    />
+
+                    <!-- Syntax & Operator Help -->
+                    <div class="mt-1.5 p-3 rounded-xl bg-base-200/60 border border-base-300 text-xs text-base-content/80 space-y-2">
+                      <div class="flex items-center justify-between font-semibold text-base-content">
+                        <span class="flex items-center gap-1.5">
+                          <.icon name="hero-information-circle" class="size-4 text-primary" />
+                          <span>Search Operators & Grouping Syntax</span>
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] leading-relaxed">
+                        <div class="flex items-start gap-1.5">
+                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">AND</span>
+                          <span>Space or <code class="font-mono font-bold text-base-content">AND</code>: all terms must match (e.g. <span class="font-mono font-semibold text-primary">RTX 4080</span>)</span>
+                        </div>
+                        <div class="flex items-start gap-1.5">
+                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">OR</span>
+                          <span>Comma <code class="font-mono font-bold text-base-content">,</code>
+                          or <code class="font-mono font-bold text-base-content">OR</code>: either term matches (e.g. <span class="font-mono font-semibold text-primary">RTX 4080, RX 7900</span>)</span>
+                        </div>
+                        <div class="flex items-start gap-1.5">
+                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">"..."</span>
+                          <span>Quotes: exact phrase in order (e.g. <span class="font-mono font-semibold text-primary">"Apple Watch Ultra"</span>)</span>
+                        </div>
+                        <div class="flex items-start gap-1.5">
+                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">( )</span>
+                          <span>Parentheses: combine & group logic (e.g. <span class="font-mono font-semibold text-primary">(RTX 4080 OR RX 7900) 16GB</span>)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <.input
                     field={@form[:negative_keywords]}
@@ -574,6 +645,130 @@ defmodule DealScoutWeb.AlertLive.Index do
                     type="checkbox"
                     label="Active immediately"
                   />
+
+                  <!-- Historical Backtesting Engine Section -->
+                  <div
+                    id="backtest-section"
+                    class="p-4 bg-base-200/50 rounded-xl border border-base-300 space-y-3"
+                  >
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
+                          <.icon name="hero-beaker" class="size-4 text-primary" />
+                          <span>Historical Backtesting Engine</span>
+                        </h4>
+                        <p class="text-xs text-base-content/60 mt-0.5">
+                          Scan past indexed deals using fast FTS5 candidate jump to verify matches before saving.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        id="backtest-rule-btn"
+                        phx-click="backtest_rule"
+                        phx-disable-with="Testing..."
+                        class="btn btn-sm btn-outline btn-primary shrink-0 flex items-center gap-1.5 shadow-sm"
+                      >
+                        <.icon name="hero-beaker" class="size-4" />
+                        <span>Test Rule on Past Deals</span>
+                      </button>
+                    </div>
+
+                    <%= if @backtest_result do %>
+                      <div id="backtest-result" class="pt-1">
+                        <%= case @backtest_result.status do %>
+                          <% :match_found -> %>
+                            <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-100 space-y-2">
+                              <div class="flex items-start gap-2.5">
+                                <span class="text-base select-none shrink-0">✅</span>
+                                <div class="space-y-1 text-xs">
+                                  <div class="font-medium text-base-content leading-relaxed">
+                                    <span class="font-semibold text-emerald-700 dark:text-emerald-300">
+                                      Last matched on {format_deal_date(
+                                        @backtest_result.last_match.published_at ||
+                                          @backtest_result.last_match.inserted_at
+                                      )}:
+                                    </span>
+                                    {@backtest_result.last_match.title}
+                                    <span class="text-base-content/80">
+                                      ({format_deal_price(@backtest_result.last_match.price)} at {merchant_name(
+                                        @backtest_result.last_match
+                                      )})
+                                    </span>
+                                  </div>
+                                  <div class="text-[11px] text-base-content/60">
+                                    {@backtest_result.total_matches} {if @backtest_result.total_matches ==
+                                                                           1,
+                                                                         do: "match",
+                                                                         else: "matches"} found in database sample.
+                                  </div>
+                                </div>
+                              </div>
+                              <%= if @backtest_result.last_match.url do %>
+                                <div class="pt-1 pl-6">
+                                  <a
+                                    href={@backtest_result.last_match.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="btn btn-xs btn-ghost text-primary hover:bg-primary/10 gap-1 inline-flex items-center"
+                                  >
+                                    <span>View deal</span>
+                                    <.icon name="hero-arrow-top-right-on-square" class="size-3" />
+                                  </a>
+                                </div>
+                              <% end %>
+                            </div>
+                          <% :broad_match -> %>
+                            <div class="space-y-2">
+                              <div class="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-100 flex items-start gap-2.5">
+                                <span class="text-base select-none shrink-0">⚡</span>
+                                <div class="text-xs space-y-1">
+                                  <div class="font-semibold text-blue-700 dark:text-blue-300">
+                                    High volume rule: matched multiple recent deals.
+                                  </div>
+                                  <p class="text-base-content/80">
+                                    Consider adding a maximum price or specific model. ({@backtest_result.total_matches} matches found in sample).
+                                  </p>
+                                </div>
+                              </div>
+
+                              <%= if @backtest_result.last_match do %>
+                                <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-100 space-y-1 text-xs">
+                                  <div class="flex items-start gap-2">
+                                    <span class="text-sm select-none shrink-0">✅</span>
+                                    <div>
+                                      <span class="font-semibold text-emerald-700 dark:text-emerald-300">
+                                        Last matched on {format_deal_date(
+                                          @backtest_result.last_match.published_at ||
+                                            @backtest_result.last_match.inserted_at
+                                        )}:
+                                      </span>
+                                      {@backtest_result.last_match.title}
+                                      <span class="text-base-content/80">
+                                        ({format_deal_price(@backtest_result.last_match.price)} at {merchant_name(
+                                          @backtest_result.last_match
+                                        )})
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              <% end %>
+                            </div>
+                          <% :no_matches -> %>
+                            <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-100 flex items-start gap-2.5">
+                              <span class="text-base select-none shrink-0">ℹ️</span>
+                              <div class="text-xs space-y-1">
+                                <div class="font-semibold text-amber-700 dark:text-amber-300">
+                                  No past deals matched this rule in the database.
+                                </div>
+                                <p class="text-base-content/70">
+                                  (May be a rare item or check spelling/operators).
+                                </p>
+                              </div>
+                            </div>
+                        <% end %>
+                      </div>
+                    <% end %>
+                  </div>
                 </div>
 
                 <!-- Sticky Footer with Save button always visible -->
@@ -597,5 +792,24 @@ defmodule DealScoutWeb.AlertLive.Index do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp format_deal_date(datetime) do
+    case datetime do
+      %DateTime{} -> Calendar.strftime(datetime, "%d.%m.%Y")
+      %NaiveDateTime{} -> Calendar.strftime(datetime, "%d.%m.%Y")
+      _ -> "recently"
+    end
+  end
+
+  defp format_deal_price(nil), do: "N/A"
+  defp format_deal_price(%Decimal{} = price), do: "#{price} €"
+  defp format_deal_price(price), do: "#{price} €"
+
+  defp merchant_name(deal) do
+    case deal.merchant do
+      %{name: name} when is_binary(name) and name != "" -> name
+      _ -> deal.raw_merchant || "Unknown Store"
+    end
   end
 end

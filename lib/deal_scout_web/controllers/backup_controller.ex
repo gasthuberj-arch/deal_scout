@@ -18,6 +18,20 @@ defmodule DealScoutWeb.BackupController do
     end
   end
 
+  @doc """
+  Returns real-time health and replication status of the backup system and connected NAS client.
+  """
+  def status(conn, _params) do
+    if authorized?(conn) do
+      data = DealScout.Backup.Status.get_status()
+      json(conn, %{status: "ok", backup: data})
+    else
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized. Valid Bearer token required in Authorization header."})
+    end
+  end
+
   defp authorized?(conn) do
     with configured_token when is_binary(configured_token) <- configured_token(),
          ["Bearer " <> token] <- get_req_header(conn, "authorization"),

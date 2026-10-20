@@ -56,8 +56,15 @@ RUN mix release
 FROM ${RUNNER_IMAGE}
 
 RUN apt-get update -y && \
-  apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates \
+  apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates curl \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
+
+# Install Litestream for SQLite continuous replication
+RUN ARCH=$(dpkg --print-architecture) && \
+  curl -fsSL "https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-${ARCH}.tar.gz" -o /tmp/litestream.tar.gz && \
+  tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && \
+  rm -f /tmp/litestream.tar.gz && \
+  chmod +x /usr/local/bin/litestream
 
 # Set the locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
@@ -74,12 +81,15 @@ ENV MIX_ENV="prod"
 
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/deal_scout ./
+COPY config/litestream.yml /etc/litestream.yml
+COPY scripts/server-entrypoint.sh /app/bin/entrypoint
+RUN chmod +x /app/bin/entrypoint
 
-# Prepare data directory for SQLite volume
-RUN mkdir -p /data && chown nobody:root /data
+# Prepare data directory for SQLite volume and Litestream replica
+RUN mkdir -p /data/litestream && chown -R nobody:root /data
 
 USER nobody
 
 EXPOSE 8080
 
-CMD ["/app/bin/server"]
+CMD ["/app/bin/entrypoint"]

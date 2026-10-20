@@ -3,6 +3,9 @@ defmodule DealScoutWeb.AlertLiveTest do
   import Phoenix.LiveViewTest
 
   alias DealScout.Alerts
+  alias DealScout.Deals.{Deal, Merchant}
+  alias DealScout.Feeds.Feed
+  alias DealScout.Repo
 
   setup :register_and_log_in_user
 
@@ -89,15 +92,20 @@ defmodule DealScoutWeb.AlertLiveTest do
   test "renders modal with autofill protection, explicit IDs, and sticky footer button", %{
     conn: conn
   } do
-    {:ok, index_live, _} = live(conn, ~p"/alerts/new")
+    {:ok, index_live, html} = live(conn, ~p"/alerts/new")
 
     assert has_element?(index_live, "#alert-rule-modal")
     assert has_element?(index_live, "#alert-rule-form[autocomplete='off']")
     assert has_element?(index_live, "#alert-rule-name-input[data-1p-ignore='true']")
     assert has_element?(index_live, "#alert-rule-keywords-input[data-1p-ignore='true']")
+    assert has_element?(index_live, "#backtest-rule-btn[phx-click='backtest_rule']")
     assert has_element?(index_live, "#save-rule-btn[type='submit']")
     assert has_element?(index_live, "#cancel-rule-btn")
     assert has_element?(index_live, "#close-rule-modal-btn")
+
+    # Verifies syntax help and proper quotes rendering (no raw unescaped &quot; displayed)
+    assert html =~ "Search Operators &amp; Grouping Syntax"
+    refute html =~ "&amp;quot;"
   end
 
   test "live validates form and displays real-time errors via phx-change", %{conn: conn} do
@@ -184,5 +192,158 @@ defmodule DealScoutWeb.AlertLiveTest do
     })
 
     assert has_element?(index_live, "#pwa-push-container")
+  end
+
+  test "backtests rule with past matching deal and displays green result card", %{conn: conn} do
+    feed =
+      Repo.insert!(%Feed{
+        name: "MyDealz",
+        slug: "mydealz-#{System.unique_integer([:positive])}",
+        url: "https://example.com/rss"
+      })
+
+    merchant =
+      Repo.insert!(%Merchant{
+        name: "Mindfactory",
+        slug: "mindfactory-#{System.unique_integer([:positive])}",
+        trust_level: "verified"
+      })
+
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    Repo.insert!(%Deal{
+      feed_id: feed.id,
+      merchant_id: merchant.id,
+      guid: "deal-rtx-super-#{System.unique_integer([:positive])}",
+      title: "GIGABYTE GeForce RTX 4080 SUPER 16GB",
+      clean_text: "Top Grafikkarte",
+      url: "https://mindfactory.de/rtx",
+      price: Decimal.new("989.00"),
+      published_at: now
+    })
+
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    # Initially no backtest result box is displayed
+    refute has_element?(index_live, "#backtest-result")
+
+    # Enter keywords and trigger validate
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "name" => "RTX Alert",
+        "keywords" => "RTX 4080",
+        "max_price" => "1050.00"
+      }
+    })
+    |> render_change()
+
+    # Click the backtest button
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+    assert has_element?(index_live, "#backtest-result", "Last matched on")
+    assert has_element?(index_live, "#backtest-result", "GIGABYTE GeForce RTX 4080 SUPER 16GB")
+    assert has_element?(index_live, "#backtest-result", "Mindfactory")
+    assert has_element?(index_live, "#backtest-result a", "View deal")
+
+    # Changing form resets backtest result
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "keywords" => "RTX 4090"
+      }
+    })
+    |> render_change()
+
+    refute has_element?(index_live, "#backtest-result")
+  end
+
+  test "backtests rule with no matches and displays amber alert", %{conn: conn} do
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "name" => "Rare Item Alert",
+        "keywords" => "SuperRareNonExistentItem9999"
+      }
+    })
+    |> render_change()
+
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+
+    assert has_element?(
+             index_live,
+             "#backtest-result",
+             "No past deals matched this rule in the database."
+           )
+
+    assert has_element?(
+             index_live,
+             "#backtest-result",
+             "May be a rare item or check spelling/operators"
+           )
+  end
+
+  test "backtests high volume rule and displays warning notice", %{conn: conn} do
+    feed =
+      Repo.insert!(%Feed{
+        name: "MyDealz",
+        slug: "mydealz-#{System.unique_integer([:positive])}",
+        url: "https://example.com/rss"
+      })
+
+    merchant =
+      Repo.insert!(%Merchant{
+        name: "MediaMarkt",
+        slug: "mediamarkt-#{System.unique_integer([:positive])}",
+        trust_level: "verified"
+      })
+
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    for i <- 1..12 do
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-lego-#{i}-#{System.unique_integer([:positive])}",
+        title: "Lego Star Wars Set ##{i}",
+        url: "https://example.com/lego-#{i}",
+        price: Decimal.new("49.99"),
+        published_at: DateTime.add(now, -i, :minute)
+      })
+    end
+
+    {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
+
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "name" => "Lego Alert",
+        "keywords" => "Lego Star Wars"
+      }
+    })
+    |> render_change()
+
+    index_live |> element("#backtest-rule-btn") |> render_click()
+
+    assert has_element?(index_live, "#backtest-result")
+
+    assert has_element?(
+             index_live,
+             "#backtest-result",
+             "High volume rule: matched multiple recent deals."
+           )
+
+    assert has_element?(
+             index_live,
+             "#backtest-result",
+             "Consider adding a maximum price or specific model."
+           )
+
+    assert has_element?(index_live, "#backtest-result", "Last matched on")
   end
 end

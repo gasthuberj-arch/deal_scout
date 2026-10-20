@@ -42,5 +42,20 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     assert view
            |> element("button[phx-click='trigger_poll']")
            |> render_click() =~ "Triggered immediate background poll for all feeds."
+
+    # Backup & replication section
+    assert render(view) =~ "Remote NAS Backup &amp; Litestream Replication" or
+             render(view) =~ "Remote NAS Backup & Litestream Replication"
+
+    # Simulate NAS connecting and refreshing
+    DealScout.Backup.Status.client_connected("nas-live-1", %{remote_ip: "10.0.0.99"})
+
+    refreshed_html =
+      view
+      |> element("button[phx-click='refresh_metrics']")
+      |> render_click()
+
+    assert refreshed_html =~ "NAS Client Connected"
+    assert refreshed_html =~ "10.0.0.99"
   end
 end

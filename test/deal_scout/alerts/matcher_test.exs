@@ -177,4 +177,52 @@ defmodule DealScout.Alerts.MatcherTest do
 
     assert Matcher.matches?(laptop_deal, rule_allow)
   end
+
+  test "supports explicit OR and AND boolean keywords", %{deal: deal} do
+    # deal is "GIGABYTE GeForce RTX 4080 SUPER Gaming OC 16GB"
+    rule_or = %AlertRule{keywords: "RTX 4080 OR RTX 4090", is_active: true}
+    assert Matcher.matches?(deal, rule_or)
+
+    rule_and_pass = %AlertRule{keywords: "RTX 4080 AND 16GB", is_active: true}
+    assert Matcher.matches?(deal, rule_and_pass)
+
+    rule_and_fail = %AlertRule{keywords: "RTX 4080 AND 24GB", is_active: true}
+    refute Matcher.matches?(deal, rule_and_fail)
+  end
+
+  test "supports parentheses () for grouping expressions", %{deal: deal} do
+    rule_group = %AlertRule{keywords: "(RTX 4080 OR RX 7900) AND 16GB", is_active: true}
+    assert Matcher.matches?(deal, rule_group)
+
+    rule_group_comma = %AlertRule{keywords: "(RTX 4080, RX 7900) 16GB", is_active: true}
+    assert Matcher.matches?(deal, rule_group_comma)
+
+    rule_group_fail = %AlertRule{keywords: "(RTX 4070 OR RX 7900) AND 16GB", is_active: true}
+    refute Matcher.matches?(deal, rule_group_fail)
+  end
+
+  test "supports combining exact quotes and parentheses", %{deal: deal} do
+    rule_quotes_group = %AlertRule{
+      keywords: "(\"RTX 4080 SUPER\" OR \"RX 7900 XTX\") 16GB",
+      is_active: true
+    }
+
+    assert Matcher.matches?(deal, rule_quotes_group)
+
+    rule_wrong_quotes = %AlertRule{
+      keywords: "(\"SUPER 4080 RTX\" OR \"RX 7900 XTX\") 16GB",
+      is_active: true
+    }
+
+    refute Matcher.matches?(deal, rule_wrong_quotes)
+  end
+
+  test "handles unbalanced parentheses, trailing commas, and German quotes gracefully", %{
+    deal: deal
+  } do
+    assert Matcher.matches?(deal, %AlertRule{keywords: "(RTX 4080", is_active: true})
+    assert Matcher.matches?(deal, %AlertRule{keywords: ") RTX 4080", is_active: true})
+    assert Matcher.matches?(deal, %AlertRule{keywords: "RTX 4080,", is_active: true})
+    assert Matcher.matches?(deal, %AlertRule{keywords: "„RTX 4080 SUPER“", is_active: true})
+  end
 end

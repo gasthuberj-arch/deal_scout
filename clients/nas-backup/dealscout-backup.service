@@ -1,0 +1,28 @@
+[Unit]
+Description=DealScout Real-Time Outbound NAS Backup Client
+Documentation=https://github.com/deal_scout
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dealscout-backup
+Group=dealscout-backup
+EnvironmentFile=-/etc/default/dealscout-backup
+ExecStart=/usr/bin/env python3 /var/lib/dealscout-backup/dealscout_backup_client.py \
+  --server-url ${DEALSCOUT_SERVER_URL} \
+  --token-file ${DEALSCOUT_TOKEN_FILE} \
+  --backup-dir ${DEALSCOUT_BACKUP_DIR:-/var/lib/dealscout-backup/replica}
+
+Restart=always
+RestartSec=10s
+
+# Security sandboxing
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dealscout-backup
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

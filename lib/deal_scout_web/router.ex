@@ -22,6 +22,7 @@ defmodule DealScoutWeb.Router do
     pipe_through :api
 
     get "/admin/backup", BackupController, :download
+    get "/admin/backup/status", BackupController, :status
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

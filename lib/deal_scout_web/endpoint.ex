@@ -15,6 +15,10 @@ defmodule DealScoutWeb.Endpoint do
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
 
+  socket "/socket/backup", DealScoutWeb.BackupSocket,
+    websocket: [connect_info: [:peer_data, :x_headers, :uri]],
+    longpoll: false
+
   # Serve at "/" the static files from "priv/static" directory.
   #
   # When code reloading is disabled (e.g., in production),

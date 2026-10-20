@@ -23,6 +23,10 @@ end
 config :deal_scout, DealScoutWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+config :deal_scout,
+  litestream_replica_dir: System.get_env("LITESTREAM_REPLICA_PATH", "/data/litestream"),
+  backup_token: System.get_env("ADMIN_BACKUP_TOKEN")
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :deal_scout, DealScoutWeb.Endpoint,
