@@ -68,6 +68,10 @@ in {
       description = "DealScout Backup Client daemon user";
     };
 
+    systemd.tmpfiles.rules = [
+      "d ${cfg.backupDir} 0750 ${cfg.user} ${cfg.group} -"
+    ];
+
     systemd.services.dealscout-backup = {
       description = "DealScout Real-Time Outbound NAS Backup Client";
       after = [ "network-online.target" ];
