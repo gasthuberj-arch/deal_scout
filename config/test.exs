@@ -44,6 +44,9 @@ config :phoenix,
 # Disable background feed poller in test
 config :deal_scout, start_feed_poller: false
 
+# Configure a distinct port for internal metrics listener in test
+config :deal_scout, metrics_port: 0
+
 # Use in-memory test double adapter for feed fetching
 config :deal_scout, :feed_fetcher, DealScout.Feeds.Fetcher.TestAdapter
 
