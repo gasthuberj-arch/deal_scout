@@ -166,7 +166,7 @@ defmodule DealScout.Alerts do
               "Auto-paused: Query evaluation took #{duration_ms}ms/deal (exceeded #{budget_ms}ms compute budget). Simplify keywords or remove broad terms."
 
             updated_rule =
-              case auto_pause_rule(rule, reason, duration_us) do
+              case auto_pause_rule(rule, reason, normalized_duration_us) do
                 {:ok, updated} -> updated
                 _ -> rule
               end
@@ -178,13 +178,13 @@ defmodule DealScout.Alerts do
             )
 
             Logger.warning(
-              "[Compute Guard] Auto-paused slow alert rule #{rule.id} ('#{rule.name}') for user #{rule.user_id} - took #{duration_us}µs"
+              "[Compute Guard] Auto-paused slow alert rule #{rule.id} ('#{rule.name}') for user #{rule.user_id} - took #{normalized_duration_us}µs/deal (batch #{duration_us}µs for #{deal_count} deals)"
             )
 
             acc
           else
             from(r in AlertRule, where: r.id == ^rule.id)
-            |> Repo.update_all(set: [last_eval_duration_us: duration_us])
+            |> Repo.update_all(set: [last_eval_duration_us: normalized_duration_us])
 
             matched_for_rule =
               for deal <- matched_deals,

@@ -496,7 +496,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                       <th>Rule Name</th>
                       <th>User</th>
                       <th>Status</th>
-                      <th class="text-right">Last Duration</th>
+                      <th class="text-right">Last Duration (per deal)</th>
                       <th class="text-right">Action</th>
                     </tr>
                   </thead>
