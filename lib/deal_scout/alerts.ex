@@ -129,7 +129,11 @@ defmodule DealScout.Alerts do
   compute budget circuit breaker normalized by batch size (with a 1-deal floor).
   """
   def process_new_deals(deals, opts \\ []) when is_list(deals) do
-    deals = Repo.preload(deals, [:merchant, :feed])
+    deals =
+      deals
+      |> Repo.preload([:merchant, :feed])
+      |> Enum.map(&DealScout.Deals.CrossBorderGuard.enrich/1)
+
     rules = Keyword.get(opts, :rules) || list_active_rules()
     budget_us = Keyword.get(opts, :budget_us) || get_budget_us()
     deal_count = max(length(deals), 1)
