@@ -35,8 +35,20 @@ kill_timeout = "15s"
     hard_limit = 300
     soft_limit = 200
 
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "3s"
+
+[metrics]
+  port = 9091
+  path = "/metrics"
+
 [deploy]
   strategy = "immediate"
+  release_command = "/app/bin/migrate"
 
 [[vm]]
   cpu_kind = "shared"

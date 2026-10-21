@@ -20,6 +20,12 @@ defmodule DealScout.Application do
         DealScout.Backup.Status,
         DealScout.Backup.Watcher,
         {Task.Supervisor, name: DealScout.Feeds.TaskSupervisor},
+        # Internal Prometheus metrics listener on port 9091 (Fly internal 6PN scraper)
+        {Bandit,
+         plug: DealScout.MetricsPlug,
+         scheme: :http,
+         port: metrics_port(),
+         ip: {0, 0, 0, 0, 0, 0, 0, 0}},
         # Start to serve requests, typically the last entry
         DealScoutWeb.Endpoint
       ] ++ background_workers()
@@ -36,6 +42,10 @@ defmodule DealScout.Application do
   def config_change(changed, _new, removed) do
     DealScoutWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp metrics_port do
+    Application.get_env(:deal_scout, :metrics_port, 9091)
   end
 
   defp skip_migrations?() do

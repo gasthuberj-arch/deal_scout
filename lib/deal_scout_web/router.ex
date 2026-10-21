@@ -17,6 +17,18 @@ defmodule DealScoutWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Unauthenticated Health check (liveness)
+  scope "/", DealScoutWeb do
+    get "/health", HealthController, :index
+  end
+
+  # Public HTTPS metrics endpoint (protected by Bearer token for Homelab scraper)
+  scope "/", DealScoutWeb do
+    pipe_through [DealScoutWeb.Plugs.MetricsAuth]
+
+    get "/metrics", MetricsController, :index
+  end
+
   # API Routes
   scope "/api", DealScoutWeb do
     pipe_through :api

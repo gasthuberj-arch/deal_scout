@@ -8,15 +8,67 @@ defmodule DealScoutWeb.Telemetry do
 
   @impl true
   def init(_arg) do
+    # Emit startup event with BEAM boot monotonic time
+    :telemetry.execute([:deal_scout, :vm, :startup], %{
+      boot_time_ms: System.monotonic_time(:millisecond)
+    })
+
     children = [
       # Telemetry poller will execute the given period measurements
       # every 10_000ms. Learn more here: https://telemetry-metrics.hexdocs.pm
-      {:telemetry_poller, measurements: periodic_measurements(), period: 10_000}
-      # Add reporters as children of your supervision tree.
-      # {Telemetry.Metrics.ConsoleReporter, metrics: metrics()}
+      {:telemetry_poller, measurements: periodic_measurements(), period: 10_000},
+      # Prometheus Core reporter for both internal :9091 and public /metrics scraping
+      {TelemetryMetricsPrometheus.Core,
+       [name: :prometheus_metrics, metrics: prometheus_metrics()]}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
+  end
+
+  @doc """
+  Prometheus-compatible metrics definition (counters, distributions with buckets, and gauges).
+  """
+  def prometheus_metrics do
+    [
+      # Phoenix Request Metrics
+      counter("phoenix.endpoint.stop.count"),
+      distribution("phoenix.endpoint.stop.duration",
+        unit: {:native, :millisecond},
+        reporter_options: [buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]]
+      ),
+      distribution("phoenix.router_dispatch.stop.duration",
+        tags: [:route],
+        unit: {:native, :millisecond},
+        reporter_options: [buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500]]
+      ),
+
+      # Database Metrics
+      distribution("deal_scout.repo.query.total_time",
+        unit: {:native, :millisecond},
+        reporter_options: [buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000]]
+      ),
+      distribution("deal_scout.repo.query.queue_time",
+        unit: {:native, :millisecond},
+        reporter_options: [buckets: [1, 5, 10, 25, 50, 100, 250]]
+      ),
+
+      # Alert Evaluation Duration (Compute Budget)
+      distribution("deal_scout.alerts.rule_eval.duration_us",
+        unit: {:native, :microsecond},
+        reporter_options: [buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000]]
+      ),
+
+      # VM & Resource Metrics
+      last_value("vm.memory.total", unit: {:byte, :kilobyte}),
+      last_value("vm.total_run_queue_lengths.total"),
+      last_value("vm.total_run_queue_lengths.cpu"),
+      last_value("vm.total_run_queue_lengths.io"),
+
+      # Custom Domain Gauges (RTO & RPO proxies)
+      last_value("deal_scout.vm.startup.boot_time_ms"),
+      last_value("deal_scout.backup.lag_seconds"),
+      last_value("deal_scout.backup.client_connected")
+    ]
   end
 
   def metrics do
@@ -85,9 +137,31 @@ defmodule DealScoutWeb.Telemetry do
 
   defp periodic_measurements do
     [
-      # A module, function and arguments to be invoked periodically.
-      # This function must call :telemetry.execute/3 and a metric must be added above.
-      # {DealScoutWeb, :count_users, []}
+      {__MODULE__, :measure_backup_metrics, []}
     ]
+  end
+
+  @doc false
+  def measure_backup_metrics do
+    try do
+      status = DealScout.Backup.Status.get_status()
+      connected = if status.client_connected, do: 1, else: 0
+
+      lag_seconds =
+        case status.last_sync_at do
+          %DateTime{} = dt ->
+            max(0, DateTime.diff(DateTime.utc_now(), dt, :second))
+
+          _ ->
+            -1
+        end
+
+      :telemetry.execute([:deal_scout, :backup], %{
+        lag_seconds: lag_seconds,
+        client_connected: connected
+      })
+    catch
+      _, _ -> :ok
+    end
   end
 end
