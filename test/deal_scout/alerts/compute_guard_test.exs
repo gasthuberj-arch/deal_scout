@@ -102,7 +102,7 @@ defmodule DealScout.Alerts.ComputeGuardTest do
       assert updated_rule.id == rule.id
       assert updated_rule.is_active == false
       assert reason =~ "Auto-paused: Query evaluation took"
-      assert reason =~ "exceeded 30ms compute budget"
+      assert reason =~ "compute budget"
       assert reason =~ "Simplify keywords or remove broad terms."
 
       # 2. Verify database record updated

@@ -126,12 +126,13 @@ defmodule DealScout.Alerts do
   For each match, creates a UserMatch record and dispatches notifications
   with canonical deduplication and polling-cycle batch collapsing.
   Measures query evaluation duration, emits telemetry, and enforces the
-  compute budget circuit breaker.
+  compute budget circuit breaker normalized by batch size (with a 1-deal floor).
   """
   def process_new_deals(deals, opts \\ []) when is_list(deals) do
     deals = Repo.preload(deals, [:merchant, :feed])
     rules = Keyword.get(opts, :rules) || list_active_rules()
     budget_us = Keyword.get(opts, :budget_us) || get_budget_us()
+    deal_count = max(length(deals), 1)
 
     # Collect matches grouped by rule for batch collapsing
     matches_by_rule =
@@ -145,16 +146,24 @@ defmodule DealScout.Alerts do
             end)
 
           duration_us = System.monotonic_time(:microsecond) - start_time
+          normalized_duration_us = div(duration_us, deal_count)
 
           :telemetry.execute(
             [:deal_scout, :alerts, :rule_eval],
-            %{duration_us: duration_us, deal_count: length(deals)},
+            %{
+              duration_us: duration_us,
+              normalized_duration_us: normalized_duration_us,
+              deal_count: length(deals)
+            },
             %{rule_id: rule.id, user_id: rule.user_id, rule_name: rule.name}
           )
 
-          if duration_us > budget_us do
+          if normalized_duration_us > budget_us do
+            budget_ms = Float.round(budget_us / 1000, 1)
+            duration_ms = Float.round(normalized_duration_us / 1000, 1)
+
             reason =
-              "Auto-paused: Query evaluation took #{Float.round(duration_us / 1000, 1)}ms (exceeded 30ms compute budget). Simplify keywords or remove broad terms."
+              "Auto-paused: Query evaluation took #{duration_ms}ms/deal (exceeded #{budget_ms}ms compute budget). Simplify keywords or remove broad terms."
 
             updated_rule =
               case auto_pause_rule(rule, reason, duration_us) do

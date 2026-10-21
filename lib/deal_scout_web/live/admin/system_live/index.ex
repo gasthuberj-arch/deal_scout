@@ -353,14 +353,14 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                 </h2>
               </div>
               <p class="text-xs text-base-content/70 mt-1">
-                Telemetry circuit breaker tracking slow or pathological alert queries. Rules exceeding the 30ms evaluation budget are auto-paused to protect server compute.
+                Telemetry circuit breaker tracking slow or pathological alert queries. Rules exceeding the 30ms/deal evaluation budget are auto-paused to protect server compute.
               </p>
             </div>
 
             <div class="flex items-center gap-3">
               <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-base-200 border border-base-300 text-xs">
                 <span class="text-base-content/70 font-medium">Budget Limit:</span>
-                <span class="font-mono font-bold text-primary">30.0 ms / batch</span>
+                <span class="font-mono font-bold text-primary">30.0 ms / deal</span>
               </div>
               <div class={[
                 "flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold",
@@ -405,7 +405,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                   All alert rules operating normally
                 </p>
                 <p class="text-[11px] text-base-content/60 mt-0.5">
-                  No rules have exceeded the 30ms compute budget threshold.
+                  No rules have exceeded the compute budget threshold.
                 </p>
               </div>
             <% else %>
