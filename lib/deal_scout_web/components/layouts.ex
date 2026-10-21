@@ -42,7 +42,7 @@ defmodule DealScoutWeb.Layouts do
         <header class="navbar border-b border-base-300 bg-base-100/90 backdrop-blur sticky top-0 z-50 px-4 sm:px-6 lg:px-8">
           <div class="navbar-start flex items-center gap-2">
             <.link
-              navigate={~p"/"}
+              href={~p"/"}
               class="flex items-center gap-2 font-black text-xl tracking-tight text-primary hover:opacity-80 transition-opacity"
             >
               <span class="p-1.5 rounded-lg bg-primary/10 text-primary">
@@ -69,7 +69,7 @@ defmodule DealScoutWeb.Layouts do
           <div class="navbar-center hidden md:flex">
             <ul class="menu menu-horizontal gap-1 font-medium text-sm">
               <li>
-                <.link navigate={~p"/"} class="rounded-lg">
+                <.link href={~p"/"} class="rounded-lg">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     class="size-4"
