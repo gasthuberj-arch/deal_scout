@@ -16,19 +16,44 @@ defmodule DealScout.Alerts.Matcher do
   Returns true if the deal matches the alert rule.
   """
   def matches?(%Deal{} = deal, %AlertRule{} = rule) do
-    with true <- matches_source?(deal, rule.source_filter),
-         true <- matches_price?(deal, rule.max_price),
-         true <- matches_temperature?(deal, rule.min_temperature),
-         true <- not_dropshipper?(deal, rule.exclude_dropshippers),
-         true <- matches_merchant_trust?(deal, rule.merchant_filter),
-         true <- matches_country?(deal, rule.country_filter),
-         true <- not_foreign_keyboard?(deal, rule.exclude_foreign_keyboards),
+    with true <- matches_filters?(deal, rule),
          true <- not_excluded?(deal, rule.negative_keywords),
          true <- matches_keywords?(deal, rule.keywords) do
       true
     else
       _ -> false
     end
+  end
+
+  @doc """
+  Evaluates all non-keyword filters (source, price, temp, merchant, country, keyboard, dropshipper).
+  Fast and does not perform text scanning.
+  """
+  def matches_filters?(%Deal{} = deal, %AlertRule{} = rule) do
+    with true <- matches_source?(deal, rule.source_filter),
+         true <- matches_price?(deal, rule.max_price),
+         true <- matches_temperature?(deal, rule.min_temperature),
+         true <- not_dropshipper?(deal, rule.exclude_dropshippers),
+         true <- matches_merchant_trust?(deal, rule.merchant_filter),
+         true <- matches_country?(deal, rule.country_filter),
+         true <- not_foreign_keyboard?(deal, rule.exclude_foreign_keyboards) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  @doc """
+  Returns the canonical searchable text string for a deal.
+  """
+  def searchable_text(%Deal{} = deal) do
+    merchant_name =
+      case deal.merchant do
+        %{name: name} -> name
+        _ -> deal.raw_merchant || ""
+      end
+
+    "#{deal.title} #{merchant_name} #{deal.clean_text || ""}"
   end
 
   defp matches_source?(_deal, nil), do: true
@@ -120,25 +145,26 @@ defmodule DealScout.Alerts.Matcher do
     is_nil(CrossBorderGuard.keyboard_warning(deal))
   end
 
-  defp not_excluded?(_deal, nil), do: true
-  defp not_excluded?(_deal, ""), do: true
+  def not_excluded?(deal, negative_keywords) do
+    if is_nil(negative_keywords) or negative_keywords == "" do
+      true
+    else
+      text = String.downcase(searchable_text(deal))
 
-  defp not_excluded?(deal, negative_keywords) do
-    text = searchable_text(deal)
+      negative_tokens =
+        negative_keywords
+        |> normalize_quotes()
+        |> String.split([",", ";", "\n"], trim: true)
+        |> Enum.flat_map(&extract_tokens/1)
 
-    negative_tokens =
-      negative_keywords
-      |> normalize_quotes()
-      |> String.split([",", ";", "\n"], trim: true)
-      |> Enum.flat_map(&extract_tokens/1)
-
-    Enum.all?(negative_tokens, fn token ->
-      not contains_token?(text, token)
-    end)
+      Enum.all?(negative_tokens, fn token ->
+        not contains_token?(text, token)
+      end)
+    end
   end
 
   defp matches_keywords?(deal, keywords) when is_binary(keywords) do
-    text = searchable_text(deal)
+    text = String.downcase(searchable_text(deal))
     normalized = normalize_quotes(keywords)
 
     case parse_keywords(normalized) do
@@ -376,17 +402,6 @@ defmodule DealScout.Alerts.Matcher do
     end)
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
-  end
-
-  defp searchable_text(deal) do
-    merchant_name =
-      case deal.merchant do
-        %{name: name} -> name
-        _ -> deal.raw_merchant || ""
-      end
-
-    "#{deal.title} #{merchant_name} #{deal.clean_text || ""}"
-    |> String.downcase()
   end
 
   defp contains_token?(text, token) do

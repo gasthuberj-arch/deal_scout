@@ -26,7 +26,6 @@ defmodule DealScout.Alerts.AlertRule do
     field :last_notified_at, :utc_datetime
     field :pause_reason, :string
     field :last_eval_duration_us, :integer
-    field :ast_json, :map
 
     belongs_to :user, DealScout.Accounts.User
     has_many :user_matches, DealScout.Alerts.UserMatch
@@ -71,8 +70,7 @@ defmodule DealScout.Alerts.AlertRule do
       :cooldown_minutes,
       :last_notified_at,
       :pause_reason,
-      :last_eval_duration_us,
-      :ast_json
+      :last_eval_duration_us
     ])
     |> validate_required([:user_id, :name, :keywords])
     |> validate_length(:name, min: 2, max: 100)
@@ -81,18 +79,18 @@ defmodule DealScout.Alerts.AlertRule do
     |> validate_inclusion(:country_filter, @country_filters)
     |> validate_inclusion(:merchant_filter, @merchant_filters)
     |> validate_number(:cooldown_minutes, greater_than_or_equal_to: 0)
-    |> validate_and_compile_keywords()
+    |> validate_keywords_syntax()
   end
 
-  defp validate_and_compile_keywords(changeset) do
+  defp validate_keywords_syntax(changeset) do
     case get_change(changeset, :keywords) do
       nil ->
         changeset
 
       keywords when is_binary(keywords) ->
         case DealScout.KeywordEngine.Parser.parse(keywords) do
-          {:ok, ast} ->
-            put_change(changeset, :ast_json, DealScout.KeywordEngine.Parser.to_json(ast))
+          {:ok, _ast} ->
+            changeset
 
           {:error, reason} ->
             add_error(changeset, :keywords, reason)

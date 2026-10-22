@@ -97,25 +97,11 @@ defmodule DealScout.KeywordEngine.Server do
       Enum.flat_map(rules_from_db, fn %{
                                         id: rule_id,
                                         user_id: user_id,
-                                        keywords: keywords,
-                                        ast_json: ast_json
+                                        keywords: keywords
                                       } ->
-        ast =
-          case ast_json do
-            %{} = map ->
-              Parser.from_json(map)
-
-            _ ->
-              case Parser.parse(keywords || "") do
-                {:ok, parsed} -> parsed
-                _ -> nil
-              end
-          end
-
-        if ast do
-          [{rule_id, user_id, ast}]
-        else
-          []
+        case Parser.parse(keywords || "") do
+          {:ok, parsed} -> [{rule_id, user_id, parsed}]
+          _ -> []
         end
       end)
 
@@ -133,7 +119,7 @@ defmodule DealScout.KeywordEngine.Server do
     Repo.all(
       from r in AlertRule,
         where: r.is_active == true,
-        select: %{id: r.id, user_id: r.user_id, keywords: r.keywords, ast_json: r.ast_json}
+        select: %{id: r.id, user_id: r.user_id, keywords: r.keywords}
     )
   rescue
     _ -> []

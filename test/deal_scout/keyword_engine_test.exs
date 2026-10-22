@@ -106,19 +106,26 @@ defmodule DealScout.KeywordEngineTest do
   end
 
   describe "KeywordEngine.Server & Ecto Integration" do
-    test "automatically parses AST and synchronizes dirty state on rule lifecycle" do
+    test "validates syntax and synchronizes dirty state on rule lifecycle" do
       user = AccountsFixtures.user_fixture()
 
-      # Create alert rule with keywords
+      # Reject invalid syntax at changeset level
+      {:error, changeset} =
+        Alerts.create_alert_rule(user, %{
+          name: "Invalid Rule",
+          keywords: "not valid"
+        })
+
+      assert "Query cannot be purely negative; at least one positive term is required" in errors_on(
+               changeset
+             ).keywords
+
+      # Create alert rule with valid keywords
       {:ok, rule} =
         Alerts.create_alert_rule(user, %{
           name: "TV Hunter",
           keywords: "(\"Fernseher\" or \"Smart Tv\") and (55 or 65)"
         })
-
-      # Verify AST was validated and stored at write-time
-      assert is_map(rule.ast_json)
-      assert rule.ast_json["type"] == "and"
 
       # Trigger ensure_fresh_index to sync into :persistent_term
       :ok = Server.ensure_fresh_index()
@@ -131,8 +138,6 @@ defmodule DealScout.KeywordEngineTest do
         Alerts.update_alert_rule(rule, %{
           keywords: "MacBook Air M3"
         })
-
-      assert updated_rule.ast_json["type"] == "and"
 
       # Re-fresh
       :ok = Server.ensure_fresh_index()
