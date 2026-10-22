@@ -79,10 +79,11 @@ defmodule DealScout.Alerts.ComputeGuardTest do
       assert metadata.rule_name == "MacBook Alert"
     end
 
-    test "auto-pauses rule when query evaluation exceeds compute budget", %{
-      user: user,
-      deal: deal
-    } do
+    test "auto-pauses rule when query evaluation exceeds compute budget when auto_pause is enabled",
+         %{
+           user: user,
+           deal: deal
+         } do
       rule =
         Repo.insert!(%AlertRule{
           user_id: user.id,
@@ -94,8 +95,8 @@ defmodule DealScout.Alerts.ComputeGuardTest do
       # Subscribe to user topic to verify PubSub broadcast
       Phoenix.PubSub.subscribe(DealScout.PubSub, Dispatcher.user_topic(user.id))
 
-      # Use budget_us: 0 so any evaluation triggers the circuit breaker
-      Alerts.process_new_deals([deal], budget_us: 0)
+      # Explicitly test with auto_pause: true and budget_us: 0
+      Alerts.process_new_deals([deal], budget_us: 0, auto_pause: true)
 
       # 1. Verify PubSub notification received
       assert_receive {:rule_auto_paused, updated_rule, reason}

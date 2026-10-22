@@ -6,7 +6,7 @@ defmodule DealScout.Alerts do
   import Ecto.Query, warn: false
   require Logger
   alias DealScout.Repo
-  alias DealScout.Alerts.{AlertRule, UserMatch, Matcher}
+  alias DealScout.Alerts.{AlertRule, UserMatch, Matcher, EvaluationLogger}
   alias DealScout.Notifications.Dispatcher
   alias DealScout.Deals.{Deal, CrossBorderGuard}
 
@@ -121,6 +121,10 @@ defmodule DealScout.Alerts do
     Application.get_env(:deal_scout, :alert_compute_budget_us, @default_budget_us)
   end
 
+  def auto_pause_enabled? do
+    Application.get_env(:deal_scout, :alert_auto_pause_enabled, false)
+  end
+
   @doc """
   Matches a list of newly ingested deals against all active alert rules.
   For each match, creates a UserMatch record and dispatches notifications
@@ -136,6 +140,7 @@ defmodule DealScout.Alerts do
 
     rules = Keyword.get(opts, :rules) || list_active_rules()
     budget_us = Keyword.get(opts, :budget_us) || get_budget_us()
+    auto_pause? = Keyword.get(opts, :auto_pause, auto_pause_enabled?())
     deal_count = max(length(deals), 1)
 
     # Collect matches grouped by rule for batch collapsing
@@ -162,7 +167,17 @@ defmodule DealScout.Alerts do
             %{rule_id: rule.id, user_id: rule.user_id, rule_name: rule.name}
           )
 
-          if normalized_duration_us > budget_us do
+          # Record slow evaluations to persistent log file (threshold 5ms / 5,000µs)
+          EvaluationLogger.log_evaluation(
+            rule,
+            deals,
+            duration_us,
+            normalized_duration_us,
+            length(matched_deals),
+            opts
+          )
+
+          if normalized_duration_us > budget_us and auto_pause? do
             budget_ms = Float.round(budget_us / 1000, 1)
             duration_ms = Float.round(normalized_duration_us / 1000, 1)
 
@@ -187,6 +202,12 @@ defmodule DealScout.Alerts do
 
             acc
           else
+            if normalized_duration_us > budget_us do
+              Logger.warning(
+                "[Compute Guard] Slow alert rule #{rule.id} ('#{rule.name}') took #{normalized_duration_us}µs/deal (batch #{duration_us}µs for #{deal_count} deals), auto-pause is disabled."
+              )
+            end
+
             from(r in AlertRule, where: r.id == ^rule.id)
             |> Repo.update_all(set: [last_eval_duration_us: normalized_duration_us])
 

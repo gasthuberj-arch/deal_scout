@@ -71,6 +71,13 @@ config :tailwind,
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
 
+# Configure alert evaluation performance and circuit breaker defaults
+config :deal_scout,
+  alert_auto_pause_enabled: false,
+  alert_compute_budget_us: 30_000,
+  alert_eval_log_threshold_us: 5_000,
+  alert_eval_log_path: "log/alert_evaluations.log"
+
 # Configure Elixir's Logger
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
