@@ -9,6 +9,7 @@ defmodule DealScout.Alerts do
   alias DealScout.Alerts.{AlertRule, UserMatch, Matcher, EvaluationLogger}
   alias DealScout.Notifications.Dispatcher
   alias DealScout.Deals.{Deal, CrossBorderGuard}
+  alias DealScout.KeywordEngine
 
   def subscribe_to_user_matches(user_id) do
     Phoenix.PubSub.subscribe(DealScout.PubSub, Dispatcher.user_topic(user_id))
@@ -29,19 +30,36 @@ defmodule DealScout.Alerts do
   end
 
   def create_alert_rule(user, attrs) do
-    %AlertRule{user_id: user.id}
-    |> AlertRule.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %AlertRule{user_id: user.id}
+      |> AlertRule.changeset(attrs)
+      |> Repo.insert()
+
+    with {:ok, rule} <- result do
+      KeywordEngine.Server.mark_dirty()
+      {:ok, rule}
+    end
   end
 
   def update_alert_rule(%AlertRule{} = rule, attrs) do
-    rule
-    |> AlertRule.changeset(attrs)
-    |> Repo.update()
+    result =
+      rule
+      |> AlertRule.changeset(attrs)
+      |> Repo.update()
+
+    with {:ok, updated_rule} <- result do
+      KeywordEngine.Server.mark_dirty()
+      {:ok, updated_rule}
+    end
   end
 
   def delete_alert_rule(%AlertRule{} = rule) do
-    Repo.delete(rule)
+    result = Repo.delete(rule)
+
+    with {:ok, deleted_rule} <- result do
+      KeywordEngine.Server.mark_dirty()
+      {:ok, deleted_rule}
+    end
   end
 
   def change_alert_rule(%AlertRule{} = rule, attrs \\ %{}) do
@@ -133,6 +151,8 @@ defmodule DealScout.Alerts do
   compute budget circuit breaker normalized by batch size (with a 1-deal floor).
   """
   def process_new_deals(deals, opts \\ []) when is_list(deals) do
+    KeywordEngine.Server.ensure_fresh_index()
+
     deals =
       deals
       |> Repo.preload([:merchant, :feed])

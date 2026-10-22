@@ -19,12 +19,12 @@ defmodule DealScout.Alerts.Matcher do
     with true <- matches_source?(deal, rule.source_filter),
          true <- matches_price?(deal, rule.max_price),
          true <- matches_temperature?(deal, rule.min_temperature),
-         true <- matches_merchant_trust?(deal, rule.merchant_filter),
-         true <- not_excluded?(deal, rule.negative_keywords),
-         true <- matches_keywords?(deal, rule.keywords),
          true <- not_dropshipper?(deal, rule.exclude_dropshippers),
+         true <- matches_merchant_trust?(deal, rule.merchant_filter),
          true <- matches_country?(deal, rule.country_filter),
-         true <- not_foreign_keyboard?(deal, rule.exclude_foreign_keyboards) do
+         true <- not_foreign_keyboard?(deal, rule.exclude_foreign_keyboards),
+         true <- not_excluded?(deal, rule.negative_keywords),
+         true <- matches_keywords?(deal, rule.keywords) do
       true
     else
       _ -> false
