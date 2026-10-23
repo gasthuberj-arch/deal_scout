@@ -217,10 +217,11 @@ defmodule DealScout.Alerts.MatcherTest do
     refute Matcher.matches?(deal, rule_wrong_quotes)
   end
 
-  test "handles unbalanced parentheses, trailing commas, and German quotes gracefully", %{
+  test "handles trailing commas and German quotes; invalid expressions never match", %{
     deal: deal
   } do
-    assert Matcher.matches?(deal, %AlertRule{keywords: "(RTX 4080", is_active: true})
+    # Unbalanced expressions are rejected by AlertRule validation, so they match nothing
+    refute Matcher.matches?(deal, %AlertRule{keywords: "(RTX 4080", is_active: true})
     assert Matcher.matches?(deal, %AlertRule{keywords: ") RTX 4080", is_active: true})
     assert Matcher.matches?(deal, %AlertRule{keywords: "RTX 4080,", is_active: true})
     assert Matcher.matches?(deal, %AlertRule{keywords: "„RTX 4080 SUPER“", is_active: true})

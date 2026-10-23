@@ -2,7 +2,8 @@ defmodule DealScout.Alerts.Backtest do
   @moduledoc """
   Historical backtesting engine for alert rules.
   Performs fast candidate lookup on SQLite FTS5 table `deals_fts`,
-  falls back safely to the last 100 deals if FTS returns empty or fails,
+  (query built by `DealScout.KeywordEngine.Query.fts_query/1`), falls back
+  safely to the last 100 deals if FTS returns empty or fails,
   and evaluates candidate deals through `DealScout.Alerts.Matcher.matches?/2`.
   """
 
@@ -12,6 +13,7 @@ defmodule DealScout.Alerts.Backtest do
   alias DealScout.Deals.CrossBorderGuard
   alias DealScout.Alerts.AlertRule
   alias DealScout.Alerts.Matcher
+  alias DealScout.KeywordEngine.Query
 
   @default_candidate_limit 50
   @default_broad_threshold 10
@@ -39,17 +41,7 @@ defmodule DealScout.Alerts.Backtest do
     broad_threshold = Keyword.get(opts, :broad_threshold, @default_broad_threshold)
     fallback_limit = Keyword.get(opts, :fallback_limit, @default_fallback_limit)
 
-    keywords =
-      cond do
-        is_binary(rule.keywords) and String.trim(rule.keywords) != "" ->
-          String.trim(rule.keywords)
-
-        is_binary(rule.name) and String.trim(rule.name) != "" ->
-          String.trim(rule.name)
-
-        true ->
-          ""
-      end
+    keywords = if is_binary(rule.keywords), do: String.trim(rule.keywords), else: ""
 
     if keywords == "" do
       %{
@@ -86,120 +78,8 @@ defmodule DealScout.Alerts.Backtest do
     end
   end
 
-  @doc """
-  Extracts distinct search terms from keywords string.
-  """
-  def extract_search_terms(keywords) when is_binary(keywords) do
-    normalized = Matcher.normalize_quotes(keywords)
-
-    case Matcher.parse_keywords(normalized) do
-      {:ok, ast} ->
-        ast
-        |> extract_terms_from_ast()
-        |> Enum.reject(&(&1 == ""))
-        |> Enum.uniq()
-
-      _ ->
-        normalized
-        |> String.replace(~r/[^\p{L}\p{N}\s\-]/u, " ")
-        |> String.split(~r/\s+/, trim: true)
-        |> Enum.uniq()
-    end
-  end
-
-  def extract_search_terms(_), do: []
-
-  defp extract_terms_from_ast({:term, word}), do: [word]
-  defp extract_terms_from_ast({:exact, phrase}), do: [phrase]
-
-  defp extract_terms_from_ast({:and, left, right}),
-    do: extract_terms_from_ast(left) ++ extract_terms_from_ast(right)
-
-  defp extract_terms_from_ast({:or, left, right}),
-    do: extract_terms_from_ast(left) ++ extract_terms_from_ast(right)
-
-  defp extract_terms_from_ast(_), do: []
-
-  @doc """
-  Builds a sanitized SQLite FTS5 query string from keywords input.
-  Supports exact phrases, AND / OR operators, and grouping.
-  """
-  def build_fts_query(keywords) when is_binary(keywords) do
-    normalized = Matcher.normalize_quotes(keywords)
-
-    case Matcher.parse_keywords(normalized) do
-      {:ok, ast} ->
-        case ast_to_fts(ast) do
-          nil -> fallback_fts_query(normalized)
-          "" -> fallback_fts_query(normalized)
-          query -> query
-        end
-
-      _ ->
-        fallback_fts_query(normalized)
-    end
-  end
-
-  def build_fts_query(_), do: nil
-
-  defp ast_to_fts({:term, word}) do
-    clean = sanitize_token(word)
-    if clean == "", do: nil, else: "\"#{clean}\"*"
-  end
-
-  defp ast_to_fts({:exact, phrase}) do
-    clean =
-      phrase
-      |> String.replace(~r/[^\p{L}\p{N}\s\-]/u, " ")
-      |> String.split(~r/\s+/, trim: true)
-      |> Enum.join(" ")
-
-    if clean == "", do: nil, else: "\"#{clean}\""
-  end
-
-  defp ast_to_fts({:and, left, right}) do
-    case {ast_to_fts(left), ast_to_fts(right)} do
-      {nil, right} -> right
-      {left, nil} -> left
-      {left, right} -> "(#{left} AND #{right})"
-    end
-  end
-
-  defp ast_to_fts({:or, left, right}) do
-    case {ast_to_fts(left), ast_to_fts(right)} do
-      {nil, right} -> right
-      {left, nil} -> left
-      {left, right} -> "(#{left} OR #{right})"
-    end
-  end
-
-  defp ast_to_fts(_), do: nil
-
-  defp sanitize_token(term) do
-    String.replace(term, ~r/[^\p{L}\p{N}\-]/u, "")
-  end
-
-  defp fallback_fts_query(term) do
-    tokens =
-      term
-      |> String.replace(~r/[^\p{L}\p{N}\s\-]/u, " ")
-      |> String.split(~r/\s+/, trim: true)
-      |> Enum.map(&sanitize_token/1)
-      |> Enum.reject(&(&1 == ""))
-
-    case tokens do
-      [] ->
-        nil
-
-      list ->
-        list
-        |> Enum.map(&"\"#{&1}\"*")
-        |> Enum.join(" OR ")
-    end
-  end
-
   defp fetch_candidate_deals(keywords, limit, fallback_limit) do
-    fts_query = build_fts_query(keywords)
+    fts_query = Query.fts_query(keywords)
 
     if is_nil(fts_query) or fts_query == "" do
       fetch_fallback_deals(fallback_limit)

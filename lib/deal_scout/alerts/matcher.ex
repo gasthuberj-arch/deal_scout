@@ -1,8 +1,8 @@
 defmodule DealScout.Alerts.Matcher do
   @moduledoc """
   Evaluates whether a Deal matches an AlertRule.
-  Supports required keywords (including quoted phrases, AND/OR operators, and parentheses grouping),
-  negative/exclusion keywords, price limits, source filtering, minimum temperature,
+  Keyword and negative-keyword semantics are delegated to `DealScout.KeywordEngine.Query`;
+  this module owns the non-keyword filters: price limits, source filtering, minimum temperature,
   dropshipper exclusions, merchant trust verification, origin country filtering,
   and foreign keyboard exclusion.
   """
@@ -11,6 +11,7 @@ defmodule DealScout.Alerts.Matcher do
   alias DealScout.Alerts.AlertRule
   alias DealScout.Deals.MerchantGuard
   alias DealScout.Deals.CrossBorderGuard
+  alias DealScout.KeywordEngine.Query
 
   @doc """
   Returns true if the deal matches the alert rule.
@@ -145,267 +146,17 @@ defmodule DealScout.Alerts.Matcher do
     is_nil(CrossBorderGuard.keyboard_warning(deal))
   end
 
+  @doc """
+  Returns true unless one of the rule's negative keywords occurs in the deal.
+  """
   def not_excluded?(deal, negative_keywords) do
-    if is_nil(negative_keywords) or negative_keywords == "" do
-      true
-    else
-      text = String.downcase(searchable_text(deal))
+    not Query.excluded?(negative_keywords, searchable_text(deal))
+  end
 
-      negative_tokens =
-        negative_keywords
-        |> normalize_quotes()
-        |> String.split([",", ";", "\n"], trim: true)
-        |> Enum.flat_map(&extract_tokens/1)
-
-      Enum.all?(negative_tokens, fn token ->
-        not contains_token?(text, token)
-      end)
+  defp matches_keywords?(deal, keywords) do
+    case Query.parse(keywords) do
+      {:ok, query} -> Query.matches?(query, searchable_text(deal))
+      {:error, _} -> false
     end
-  end
-
-  defp matches_keywords?(deal, keywords) when is_binary(keywords) do
-    text = String.downcase(searchable_text(deal))
-    normalized = normalize_quotes(keywords)
-
-    case parse_keywords(normalized) do
-      {:ok, :empty} ->
-        false
-
-      {:ok, ast} ->
-        eval_ast(ast, text)
-
-      {:error, _reason} ->
-        legacy_matches_keywords?(text, normalized)
-    end
-  end
-
-  defp matches_keywords?(_deal, _), do: false
-
-  @doc """
-  Normalizes typographical or language-specific quotation marks to standard ASCII quotes.
-  """
-  def normalize_quotes(str) when is_binary(str) do
-    String.replace(str, ["“", "”", "„", "«", "»"], "\"")
-  end
-
-  @doc """
-  Parses a keywords query into an AST supporting:
-  - Boolean AND (explicit AND/&/&& or implicit whitespace)
-  - Boolean OR (explicit OR/|/|| or comma/semicolon)
-  - Quoted exact phrases ("...")
-  - Parentheses grouping (...)
-  """
-  def parse_keywords(str) when is_binary(str) do
-    tokens = tokenize(str)
-
-    if tokens == [] do
-      {:ok, :empty}
-    else
-      case parse_or(tokens) do
-        {:ok, ast, []} ->
-          {:ok, ast}
-
-        {:ok, ast, remaining} ->
-          if Enum.all?(remaining, &(&1 in [:or, :and, :rparen])) do
-            {:ok, ast}
-          else
-            {:error, :unparsed_tokens}
-          end
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end
-  end
-
-  def tokenize(str) when is_binary(str) do
-    Regex.scan(~r/"[^"]*"|[(),;]|&&|\|\||[^\s(),;"]+/, str)
-    |> Enum.map(fn [token] ->
-      cond do
-        String.starts_with?(token, "\"") and String.ends_with?(token, "\"") and
-            String.length(token) >= 2 ->
-          phrase = token |> String.slice(1..-2//1) |> String.trim()
-          if phrase == "", do: nil, else: {:exact, phrase}
-
-        token == "(" ->
-          :lparen
-
-        token == ")" ->
-          :rparen
-
-        token in [",", ";", "|", "||"] ->
-          :or
-
-        token in ["&", "&&"] ->
-          :and
-
-        String.upcase(token) == "OR" ->
-          :or
-
-        String.upcase(token) == "AND" ->
-          :and
-
-        true ->
-          {:term, token}
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-    |> clean_tokens()
-    |> insert_implicit_and()
-  end
-
-  defp clean_tokens(tokens) do
-    tokens
-    |> Enum.reduce([], fn
-      :or, [:or | rest] -> [:or | rest]
-      :and, [:and | rest] -> [:and | rest]
-      tok, acc -> [tok | acc]
-    end)
-    |> Enum.reverse()
-    |> strip_leading_trailing_ops()
-  end
-
-  defp strip_leading_trailing_ops(tokens) do
-    tokens
-    |> Enum.drop_while(&(&1 in [:or, :and, :rparen]))
-    |> Enum.reverse()
-    |> Enum.drop_while(&(&1 in [:or, :and, :lparen]))
-    |> Enum.reverse()
-  end
-
-  defp insert_implicit_and([]), do: []
-  defp insert_implicit_and([single]), do: [single]
-
-  defp insert_implicit_and([first | rest]) do
-    do_insert_implicit_and(first, rest, [])
-  end
-
-  defp do_insert_implicit_and(prev, [], acc) do
-    Enum.reverse([prev | acc])
-  end
-
-  defp do_insert_implicit_and(prev, [curr | rest], acc) do
-    if value_token_end?(prev) and value_token_start?(curr) do
-      do_insert_implicit_and(curr, rest, [:and, prev | acc])
-    else
-      do_insert_implicit_and(curr, rest, [prev | acc])
-    end
-  end
-
-  defp value_token_end?({:term, _}), do: true
-  defp value_token_end?({:exact, _}), do: true
-  defp value_token_end?(:rparen), do: true
-  defp value_token_end?(_), do: false
-
-  defp value_token_start?({:term, _}), do: true
-  defp value_token_start?({:exact, _}), do: true
-  defp value_token_start?(:lparen), do: true
-  defp value_token_start?(_), do: false
-
-  defp parse_or(tokens) do
-    case parse_and(tokens) do
-      {:ok, left, [:or | rest]} ->
-        case rest do
-          [] ->
-            {:ok, left, []}
-
-          _ ->
-            case parse_or(rest) do
-              {:ok, right, rem} -> {:ok, {:or, left, right}, rem}
-              error -> error
-            end
-        end
-
-      other ->
-        other
-    end
-  end
-
-  defp parse_and(tokens) do
-    case parse_primary(tokens) do
-      {:ok, left, [:and | rest]} ->
-        case rest do
-          [] ->
-            {:ok, left, []}
-
-          _ ->
-            case parse_and(rest) do
-              {:ok, right, rem} -> {:ok, {:and, left, right}, rem}
-              error -> error
-            end
-        end
-
-      other ->
-        other
-    end
-  end
-
-  defp parse_primary([{:term, word} | rest]), do: {:ok, {:term, word}, rest}
-  defp parse_primary([{:exact, phrase} | rest]), do: {:ok, {:exact, phrase}, rest}
-
-  defp parse_primary([:lparen | rest]) do
-    case parse_or(rest) do
-      {:ok, expr, [:rparen | after_rparen]} ->
-        {:ok, expr, after_rparen}
-
-      {:ok, expr, []} ->
-        # Missing closing paren - be lenient and accept the expr
-        {:ok, expr, []}
-
-      error ->
-        error
-    end
-  end
-
-  defp parse_primary([other | rest]) when other in [:or, :and, :rparen] do
-    # Skip stray leading or duplicate operators
-    parse_primary(rest)
-  end
-
-  defp parse_primary([]), do: {:error, :unexpected_end}
-  defp parse_primary(_), do: {:error, :unexpected_token}
-
-  defp eval_ast(:empty, _text), do: false
-  defp eval_ast({:term, word}, text), do: contains_token?(text, word)
-  defp eval_ast({:exact, phrase}, text), do: contains_token?(text, phrase)
-  defp eval_ast({:and, left, right}, text), do: eval_ast(left, text) and eval_ast(right, text)
-  defp eval_ast({:or, left, right}, text), do: eval_ast(left, text) or eval_ast(right, text)
-
-  defp legacy_matches_keywords?(text, keywords) do
-    groups =
-      keywords
-      |> String.split([",", ";"], trim: true)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
-
-    case groups do
-      [] ->
-        false
-
-      _ ->
-        Enum.any?(groups, fn group ->
-          tokens = extract_tokens(group)
-
-          tokens != [] and
-            Enum.all?(tokens, fn token ->
-              contains_token?(text, token)
-            end)
-        end)
-    end
-  end
-
-  defp extract_tokens(str) when is_binary(str) do
-    Regex.scan(~r/"([^"]+)"|[^\s(),;"]+/, str)
-    |> Enum.map(fn
-      [_, quoted] -> quoted
-      [full] -> full
-    end)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-  end
-
-  defp contains_token?(text, token) do
-    token = String.downcase(token)
-    String.contains?(text, token)
   end
 end

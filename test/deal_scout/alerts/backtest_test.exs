@@ -30,58 +30,6 @@ defmodule DealScout.Alerts.BacktestTest do
     %{feed: feed, merchant: merchant, dropshipper: dropshipper}
   end
 
-  describe "extract_search_terms/1" do
-    test "extracts plain terms" do
-      terms = Backtest.extract_search_terms("RTX 4080")
-      assert terms == ["RTX", "4080"]
-    end
-
-    test "extracts exact quoted phrases" do
-      terms = Backtest.extract_search_terms(~s["Apple Watch Ultra" GPS])
-      assert terms == ["Apple Watch Ultra", "GPS"]
-    end
-
-    test "extracts terms with boolean operators and parentheses" do
-      terms = Backtest.extract_search_terms("(RTX 4080 OR RX 7900) 16GB")
-      assert Enum.sort(terms) == ["16GB", "4080", "7900", "RTX", "RX"]
-    end
-
-    test "extracts comma-separated terms" do
-      terms = Backtest.extract_search_terms("OLED, 4K, 120Hz")
-      assert Enum.sort(terms) == ["120Hz", "4K", "OLED"]
-    end
-
-    test "handles nil and empty strings" do
-      assert Backtest.extract_search_terms(nil) == []
-      assert Backtest.extract_search_terms("") == []
-      assert Backtest.extract_search_terms("   ") == []
-    end
-  end
-
-  describe "build_fts_query/1" do
-    test "builds prefix query for simple terms" do
-      query = Backtest.build_fts_query("RTX 4080")
-      assert query =~ "\"RTX\"*"
-      assert query =~ "\"4080\"*"
-      assert query =~ "AND"
-    end
-
-    test "builds exact phrase query" do
-      query = Backtest.build_fts_query("\"Apple Watch\"")
-      assert query == "\"Apple Watch\""
-    end
-
-    test "supports OR operators" do
-      query = Backtest.build_fts_query("OLED OR QLED")
-      assert query =~ "OR"
-    end
-
-    test "handles nil or empty input" do
-      assert Backtest.build_fts_query(nil) == nil
-      assert Backtest.build_fts_query("") == nil
-    end
-  end
-
   describe "test_rule/2" do
     test "returns :no_matches when keywords is empty", %{merchant: merchant, feed: feed} do
       Repo.insert!(%Deal{
@@ -101,28 +49,26 @@ defmodule DealScout.Alerts.BacktestTest do
       assert result.last_match == nil
     end
 
-    test "falls back to rule name when keywords is empty", %{
+    test "does not substitute the rule name for blank keywords", %{
       merchant: merchant,
       feed: feed
     } do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      deal =
-        Repo.insert!(%Deal{
-          feed_id: feed.id,
-          merchant_id: merchant.id,
-          guid: "deal-oled-1",
-          title: "LG OLED 55 Inch 4K Smart TV",
-          url: "https://example.com/oled",
-          price: Decimal.new("899.00"),
-          published_at: now
-        })
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-oled-1",
+        title: "LG OLED 55 Inch 4K Smart TV",
+        url: "https://example.com/oled",
+        price: Decimal.new("899.00"),
+        published_at: now
+      })
 
-      # User only entered OLED in the Name field and left keywords blank
+      # Live matching never treats the name as keywords, so neither does the Backtest
       result = Backtest.test_rule(%{"name" => "OLED", "keywords" => ""})
-      assert result.status == :match_found
-      assert result.total_matches == 1
-      assert result.last_match.id == deal.id
+      assert result.status == :no_matches
+      assert result.total_matches == 0
     end
 
     test "matches historical deal via FTS lookup and returns :match_found", %{
@@ -298,27 +244,23 @@ defmodule DealScout.Alerts.BacktestTest do
       assert result.total_matches == 0
     end
 
-    test "safely falls back to recent deals table when FTS query fails or produces syntax error",
+    test "invalid keyword expressions match nothing, like live matching",
          %{merchant: merchant, feed: feed} do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      deal =
-        Repo.insert!(%Deal{
-          feed_id: feed.id,
-          merchant_id: merchant.id,
-          guid: "deal-sinn-104",
-          title: "Sinn 104 St Sa I Fliegeruhr Automatic",
-          url: "https://example.com/sinn",
-          price: Decimal.new("1250.00"),
-          published_at: now
-        })
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-sinn-104",
+        title: "Sinn 104 St Sa I Fliegeruhr Automatic",
+        url: "https://example.com/sinn",
+        price: Decimal.new("1250.00"),
+        published_at: now
+      })
 
-      # Pass unclosed parenthesis which would trigger FTS5 syntax error
       result = Backtest.test_rule(%{"keywords" => "Sinn 104 (Fliegeruhr"})
 
-      assert result.status == :match_found
-      assert result.total_matches >= 1
-      assert result.last_match.id == deal.id
+      assert result.status == :no_matches
     end
 
     test "handles nested params under alert_rule key", %{merchant: merchant, feed: feed} do

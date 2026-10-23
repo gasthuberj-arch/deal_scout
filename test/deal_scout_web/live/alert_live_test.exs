@@ -355,7 +355,9 @@ defmodule DealScoutWeb.AlertLiveTest do
     assert has_element?(index_live, "#backtest-result", "Sony OLED Bravia 65 Inch 4K")
   end
 
-  test "E2E: fills out form with 'ei' and finds matching past deals", %{conn: conn} do
+  test "E2E: fills out form with a whole-word keyword and finds matching past deals", %{
+    conn: conn
+  } do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     feed =
@@ -384,12 +386,12 @@ defmodule DealScoutWeb.AlertLiveTest do
 
     {:ok, index_live, _html} = live(conn, ~p"/alerts/new")
 
-    # User fills in "ei" as keywords in the form
+    # Keywords match whole words only ("ei" would not match "Speicher")
     index_live
     |> form("#alert-rule-form", %{
       "alert_rule" => %{
         "name" => "EI Alert",
-        "keywords" => "ei"
+        "keywords" => "konsole"
       }
     })
     |> render_change()
@@ -408,7 +410,7 @@ defmodule DealScoutWeb.AlertLiveTest do
     assert has_element?(index_live, "#backtest-result", "Amazon DE")
   end
 
-  test "E2E: fills out form with rule name 'OLED' only and finds matching deals via fallback", %{
+  test "E2E: rule name is never used as keywords in the backtest", %{
     conn: conn
   } do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -452,9 +454,7 @@ defmodule DealScoutWeb.AlertLiveTest do
     # User clicks the backtest button
     index_live |> element("#backtest-rule-btn") |> render_click()
 
-    assert has_element?(index_live, "#backtest-result")
-    assert has_element?(index_live, "#backtest-result", "LG OLED 65 Inch evo 4K Smart TV")
-    assert has_element?(index_live, "#backtest-result", "Coolblue")
+    refute has_element?(index_live, "#backtest-result", "LG OLED 65 Inch evo 4K Smart TV")
   end
 
   test "E2E: empty form displays prompt to enter keywords or name", %{conn: conn} do
