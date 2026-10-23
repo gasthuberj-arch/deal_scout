@@ -2,7 +2,7 @@ defmodule DealScout.Alerts.AlertsTest do
   use DealScout.DataCase, async: false
 
   alias DealScout.Alerts
-  alias DealScout.Alerts.AlertRule
+  alias DealScout.Alerts.{AlertRule, Backtest}
   alias DealScout.Deals.{Deal, Merchant}
   alias DealScout.Feeds.Feed
   alias DealScout.AccountsFixtures
@@ -327,5 +327,72 @@ defmodule DealScout.Alerts.AlertsTest do
     matches = Alerts.list_user_matches(user.id)
     assert length(matches) == 1
     assert hd(matches).deal_id == german_laptop.id
+  end
+
+  test "Backtest and live process_new_deals agree across NOT, negative keywords, filters and uncompiled rules",
+       %{user: user, feed: feed, merchant: merchant} do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    deals =
+      for {guid, title, price} <- [
+            {"parity-1", "Samsung OLED TV 55 Zoll neu", "699.00"},
+            {"parity-2", "Samsung OLED TV 55 refurbished", "499.00"},
+            {"parity-3", "Samsung OLED TV 65 defekt", "199.00"},
+            {"parity-4", "Samsung OLED TV 77 Pro", "1499.00"},
+            {"parity-5", "Samsung TVOC Luftsensor", "99.00"}
+          ] do
+        Repo.insert!(%Deal{
+          feed_id: feed.id,
+          merchant_id: merchant.id,
+          guid: "#{guid}-#{System.unique_integer([:positive])}",
+          title: title,
+          url: "https://example.com/#{guid}",
+          price: Decimal.new(price),
+          published_at: now
+        })
+      end
+
+    # Rule 1 is saved through Alerts.create_alert_rule (compiled by KeywordEngine)
+    {:ok, compiled_rule} =
+      Alerts.create_alert_rule(user, %{
+        "name" => "OLED Rule",
+        "keywords" => "tv NOT refurbished",
+        "negative_keywords" => "defekt",
+        "max_price" => "900.00",
+        "is_active" => true
+      })
+
+    # Rule 2 is inserted directly into the DB without marking KeywordEngine dirty (uncompiled)
+    uncompiled_rule =
+      Repo.insert!(%AlertRule{
+        user_id: user.id,
+        name: "Uncompiled OLED Rule",
+        keywords: "oled 55 NOT refurbished",
+        negative_keywords: "defekt",
+        max_price: Decimal.new("900.00"),
+        is_active: true
+      })
+
+    Alerts.process_new_deals(deals, rules: [compiled_rule, uncompiled_rule])
+
+    live_matches = Alerts.list_user_matches(user.id)
+
+    for rule <- [compiled_rule, uncompiled_rule] do
+      live_ids =
+        live_matches
+        |> Enum.filter(&(&1.alert_rule_id == rule.id))
+        |> Enum.map(& &1.deal_id)
+        |> Enum.sort()
+
+      backtest_ids =
+        rule
+        |> Backtest.test_rule()
+        |> Map.fetch!(:matches)
+        |> Enum.map(& &1.id)
+        |> Enum.sort()
+
+      assert live_ids == [hd(deals).id]
+      assert backtest_ids == live_ids
+    end
   end
 end

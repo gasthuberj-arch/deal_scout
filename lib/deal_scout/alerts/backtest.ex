@@ -4,15 +4,13 @@ defmodule DealScout.Alerts.Backtest do
   Performs fast candidate lookup on SQLite FTS5 table `deals_fts`,
   (query built by `DealScout.KeywordEngine.Query.fts_query/1`), falls back
   safely to the last 100 deals if FTS returns empty or fails,
-  and evaluates candidate deals through `DealScout.Alerts.Matcher.matches?/2`.
+  and evaluates candidate deals through `DealScout.Alerts.Evaluation`.
   """
 
   import Ecto.Query
   alias DealScout.Repo
   alias DealScout.Deals.Deal
-  alias DealScout.Deals.CrossBorderGuard
-  alias DealScout.Alerts.AlertRule
-  alias DealScout.Alerts.Matcher
+  alias DealScout.Alerts.{AlertRule, Evaluation}
   alias DealScout.KeywordEngine.Query
 
   @default_candidate_limit 50
@@ -56,8 +54,8 @@ defmodule DealScout.Alerts.Backtest do
 
       matching_deals =
         candidates
-        |> Enum.map(&CrossBorderGuard.enrich/1)
-        |> Enum.filter(&Matcher.matches?(&1, rule))
+        |> Evaluation.prepare(prefilter: false)
+        |> Evaluation.evaluate(rule)
 
       total = length(matching_deals)
       last = List.first(matching_deals)

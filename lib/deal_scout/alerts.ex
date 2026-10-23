@@ -6,7 +6,7 @@ defmodule DealScout.Alerts do
   import Ecto.Query, warn: false
   require Logger
   alias DealScout.Repo
-  alias DealScout.Alerts.{AlertRule, UserMatch, Matcher, EvaluationLogger}
+  alias DealScout.Alerts.{AlertRule, Evaluation, EvaluationLogger, UserMatch}
   alias DealScout.Notifications.Dispatcher
   alias DealScout.Deals.{Deal, CrossBorderGuard}
   alias DealScout.KeywordEngine
@@ -153,25 +153,13 @@ defmodule DealScout.Alerts do
   def process_new_deals(deals, opts \\ []) when is_list(deals) do
     KeywordEngine.Server.ensure_fresh_index()
 
-    deals =
-      deals
-      |> Repo.preload([:merchant, :feed])
-      |> Enum.map(&DealScout.Deals.CrossBorderGuard.enrich/1)
+    batch = deals |> Repo.preload([:merchant, :feed]) |> Evaluation.prepare()
+    deals = batch.deals
 
     rules = Keyword.get(opts, :rules) || list_active_rules()
     budget_us = Keyword.get(opts, :budget_us) || get_budget_us()
     auto_pause? = Keyword.get(opts, :auto_pause, auto_pause_enabled?())
     deal_count = max(length(deals), 1)
-
-    # Fast batch scan via KeywordEngine Aho-Corasick automaton
-    deal_items = Enum.map(deals, fn d -> %{id: d.id, text: Matcher.searchable_text(d)} end)
-    batch_matches = KeywordEngine.Matcher.match_batch(deal_items)
-
-    deal_matches_by_deal_id =
-      Enum.reduce(batch_matches, %{}, fn {deal_id, rule_user_pairs}, acc ->
-        rule_ids = MapSet.new(Enum.map(rule_user_pairs, &elem(&1, 0)))
-        Map.put(acc, deal_id, rule_ids)
-      end)
 
     # Collect matches grouped by rule for batch collapsing
     matches_by_rule =
@@ -179,23 +167,7 @@ defmodule DealScout.Alerts do
         acc ->
           start_time = System.monotonic_time(:microsecond)
 
-          matched_deals =
-            Enum.filter(deals, fn deal ->
-              candidate_rule_ids = Map.get(deal_matches_by_deal_id, deal.id, MapSet.new())
-
-              # If rule is in pre-compiled state, check if Aho-Corasick triggered it;
-              # otherwise fallback to Matcher.matches?/2
-              keyword_match? =
-                if MapSet.size(candidate_rule_ids) > 0 or has_compiled_rule?(rule.id) do
-                  MapSet.member?(candidate_rule_ids, rule.id)
-                else
-                  Matcher.matches?(deal, rule)
-                end
-
-              keyword_match? and
-                Matcher.matches_filters?(deal, rule) and
-                Matcher.not_excluded?(deal, rule.negative_keywords)
-            end)
+          matched_deals = Evaluation.evaluate(batch, rule)
 
           duration_us = System.monotonic_time(:microsecond) - start_time
           normalized_duration_us = div(duration_us, deal_count)
@@ -367,13 +339,6 @@ defmodule DealScout.Alerts do
     |> Repo.update_all(
       set: [is_read: true, updated_at: DateTime.utc_now() |> DateTime.truncate(:second)]
     )
-  end
-
-  defp has_compiled_rule?(rule_id) do
-    case KeywordEngine.Matcher.get_state() do
-      %{rules: rules} when is_map(rules) -> Map.has_key?(rules, rule_id)
-      _ -> false
-    end
   end
 
   def mark_all_matches_read(user_id) do
