@@ -24,10 +24,14 @@ defmodule DealScout.Feeds.Parser do
         else
           entries = Floki.find(document, "entry")
 
-          Enum.map(entries, fn entry ->
-            parse_atom_entry(entry, feed_id)
-          end)
-          |> Enum.reject(&is_nil/1)
+          if entries != [] or Floki.find(document, "rss, channel, feed") != [] do
+            Enum.map(entries, fn entry ->
+              parse_atom_entry(entry, feed_id)
+            end)
+            |> Enum.reject(&is_nil/1)
+          else
+            {:error, :invalid_feed_xml}
+          end
         end
 
       {:error, reason} ->

@@ -89,6 +89,14 @@ A compact term already rich in pretrained model priors (e.g. *tight*, *red*, *tr
 **Deal**:
 A single ingested product offer (`DealScout.Deals.Deal`) with title, clean description text, price, temperature score, merchant, source feed, and optional `canonical_deal_id` linking duplicate offers.
 
+**Deal ingestion**:
+The atomic pipeline (`DealScout.Deals.Ingestion`) that parses feed XML or candidate deal maps, normalizes attributes once, resolves or creates the Merchant, deduplicates against canonical Deals, inserts the Deal, updates Merchant statistics only on genuine inserts, enriches cross-border metadata, triggers Alert rule evaluation, and broadcasts new Deals.
+_Avoid_: Calling merchant creation or stat increments outside ingestion
+
+**Deal stream filter**:
+The unified Deal query and live-stream predicate (`DealScout.Deals.list_deals/1` and `DealScout.Deals.matches_stream?/2`) that filters Deals by feed (ID or slug), merchant, dropshipper classification, minimum temperature, duplicate grouping, and **Keyword query** search identically across SQL/FTS5 and live PubSub events.
+_Avoid_: Separate LiveView substring filter implementations
+
 **Alert rule**:
 A user's saved monitoring query (`DealScout.Alerts.AlertRule`) combining a boolean keyword expression, negative keywords, and structured filters (price ceiling, minimum temperature, feed/merchant/country filters, dropshipper and foreign-keyboard exclusions) plus notification preferences (`cooldown_minutes`, `delivery_mode`).
 

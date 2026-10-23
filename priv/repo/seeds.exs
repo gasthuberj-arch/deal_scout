@@ -79,9 +79,7 @@ Enum.each(deals_to_backfill, fn deal ->
   {temperature, clean_title} = Parser.extract_temperature(deal.title)
 
   merchant =
-    Deals.get_or_create_merchant(deal.raw_merchant,
-      url: deal.url,
-      text: deal.clean_text,
+    DealScout.Deals.Ingestion.backfill_deal_merchant(deal,
       feed_slug: feed_slug,
       temperature: temperature
     )

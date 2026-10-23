@@ -118,36 +118,7 @@ defmodule DealScoutWeb.DealLive.Index do
   def handle_event("load_more", _params, socket) do
     if socket.assigns.has_more? do
       new_offset = socket.assigns.page_offset + @page_size
-
-      feed_id =
-        case socket.assigns.selected_feed do
-          "all" ->
-            nil
-
-          slug ->
-            case Enum.find(socket.assigns.feeds, &(&1.slug == slug)) do
-              %{id: id} -> id
-              _ -> nil
-            end
-        end
-
-      merchant_slug =
-        if socket.assigns.selected_merchant == "all",
-          do: nil,
-          else: socket.assigns.selected_merchant
-
-      more_deals =
-        Deals.list_deals(
-          search: socket.assigns.search_query,
-          feed_id: feed_id,
-          merchant: merchant_slug,
-          exclude_dropshippers: socket.assigns.hide_dropshippers,
-          min_temperature: socket.assigns.min_temperature,
-          group_deals: socket.assigns.group_deals,
-          limit: @page_size,
-          offset: new_offset
-        )
-
+      more_deals = Deals.list_deals(stream_filter_opts(socket.assigns, new_offset))
       has_more? = length(more_deals) >= @page_size
 
       {:noreply,
@@ -162,7 +133,7 @@ defmodule DealScoutWeb.DealLive.Index do
 
   @impl true
   def handle_info({:new_deal, deal}, socket) do
-    if matches_filters?(deal, socket.assigns) do
+    if Deals.matches_stream?(deal, stream_filter_opts(socket.assigns, 0)) do
       {:noreply, stream_insert(socket, :deals, deal, at: 0)}
     else
       {:noreply, socket}
@@ -213,34 +184,7 @@ defmodule DealScoutWeb.DealLive.Index do
   end
 
   defp load_deals(socket) do
-    feed_id =
-      case socket.assigns.selected_feed do
-        "all" ->
-          nil
-
-        slug ->
-          case Enum.find(socket.assigns.feeds, &(&1.slug == slug)) do
-            %{id: id} -> id
-            _ -> nil
-          end
-      end
-
-    merchant_slug =
-      if socket.assigns.selected_merchant == "all",
-        do: nil,
-        else: socket.assigns.selected_merchant
-
-    deals =
-      Deals.list_deals(
-        search: socket.assigns.search_query,
-        feed_id: feed_id,
-        merchant: merchant_slug,
-        exclude_dropshippers: socket.assigns.hide_dropshippers,
-        min_temperature: socket.assigns.min_temperature,
-        group_deals: socket.assigns.group_deals,
-        limit: @page_size,
-        offset: 0
-      )
+    deals = Deals.list_deals(stream_filter_opts(socket.assigns, 0))
 
     socket
     |> assign(:page_offset, 0)
@@ -248,42 +192,17 @@ defmodule DealScoutWeb.DealLive.Index do
     |> stream(:deals, deals, reset: true)
   end
 
-  defp matches_filters?(deal, assigns) do
-    matches_feed? =
-      assigns.selected_feed == "all" or
-        (deal.feed && deal.feed.slug == assigns.selected_feed)
-
-    matches_merchant? =
-      assigns.selected_merchant == "all" or
-        (deal.merchant && deal.merchant.slug == assigns.selected_merchant)
-
-    matches_dropshipper? =
-      not assigns.hide_dropshippers or
-        is_nil(deal.merchant) or
-        deal.merchant.trust_level != "dropshipper"
-
-    matches_temperature? =
-      is_nil(assigns.min_temperature) or
-        (not is_nil(deal.temperature) and deal.temperature >= assigns.min_temperature)
-
-    matches_grouping? =
-      not assigns.group_deals or is_nil(deal.canonical_deal_id)
-
-    matches_search? =
-      assigns.search_query == "" or
-        String.contains?(String.downcase(deal.title), String.downcase(assigns.search_query)) or
-        String.contains?(
-          String.downcase(deal.clean_text || ""),
-          String.downcase(assigns.search_query)
-        ) or
-        (deal.merchant &&
-           String.contains?(
-             String.downcase(deal.merchant.name),
-             String.downcase(assigns.search_query)
-           ))
-
-    matches_feed? and matches_merchant? and matches_dropshipper? and matches_temperature? and
-      matches_grouping? and matches_search?
+  defp stream_filter_opts(assigns, offset) do
+    [
+      search: assigns.search_query,
+      feed: assigns.selected_feed,
+      merchant: assigns.selected_merchant,
+      exclude_dropshippers: assigns.hide_dropshippers,
+      min_temperature: assigns.min_temperature,
+      group_deals: assigns.group_deals,
+      limit: @page_size,
+      offset: offset
+    ]
   end
 
   @impl true

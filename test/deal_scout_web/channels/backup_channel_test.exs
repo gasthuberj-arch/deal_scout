@@ -1,5 +1,5 @@
 defmodule DealScoutWeb.BackupChannelTest do
-  use DealScoutWeb.ChannelCase
+  use DealScoutWeb.ChannelCase, async: false
 
   alias DealScoutWeb.{BackupSocket, BackupChannel}
 

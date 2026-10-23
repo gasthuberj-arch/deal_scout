@@ -243,20 +243,19 @@ defmodule DealScout.Feeds.Poller do
           )
         end
 
+        Feeds.update_feed(feed, %{
+          last_fetched_at: now,
+          etag: etag || feed.etag,
+          last_modified: last_mod || feed.last_modified
+        })
+
       {:error, reason} ->
         Logger.error(
           "[DealScout.Poller] Failed to ingest feed '#{feed.name}': #{inspect(reason)}"
         )
+
+        {:error, reason}
     end
-
-    # Update feed metadata
-    attrs = %{
-      last_fetched_at: now,
-      etag: etag || feed.etag,
-      last_modified: last_mod || feed.last_modified
-    }
-
-    Feeds.update_feed(feed, attrs)
   end
 
   defp handle_feed_response(_feed, _non_binary_body, _headers), do: :ok

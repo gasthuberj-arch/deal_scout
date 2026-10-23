@@ -195,4 +195,37 @@ defmodule DealScoutWeb.DealLiveTest do
     updated_html = render(view)
     assert updated_html =~ "Unique Gadget Model 35"
   end
+
+  test "SQL search and live PubSub stream filter agree on non-contiguous multi-word queries", %{
+    conn: conn,
+    feed: feed
+  } do
+    {:ok, existing_deal} =
+      DealScout.Deals.insert_deal(%{
+        feed_id: feed.id,
+        guid: "deal-oled-c3-55",
+        title: "LG OLED C3 55 Zoll 4K Smart TV",
+        url: "https://example.com/oled-c3",
+        price: Decimal.new("999.00"),
+        merchant: "MediaMarkt",
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    {:ok, view, html} = live(conn, ~p"/?q=OLED+55")
+    assert html =~ existing_deal.title
+
+    # A new deal arrives over PubSub where "OLED" and "55" are separated by "G4"
+    {:ok, live_deal} =
+      DealScout.Deals.insert_deal(%{
+        feed_id: feed.id,
+        guid: "deal-oled-g4-55",
+        title: "LG OLED G4 55 Zoll Gallery Edition",
+        url: "https://example.com/oled-g4",
+        price: Decimal.new("1299.00"),
+        merchant: "MediaMarkt",
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    assert render(view) =~ live_deal.title
+  end
 end

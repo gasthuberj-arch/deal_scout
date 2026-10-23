@@ -7,9 +7,9 @@ defmodule DealScout.Alerts.Matcher do
   and foreign keyboard exclusion.
   """
 
+  alias DealScout.Deals
   alias DealScout.Deals.Deal
   alias DealScout.Alerts.AlertRule
-  alias DealScout.Deals.MerchantGuard
   alias DealScout.Deals.CrossBorderGuard
   alias DealScout.KeywordEngine.Query
 
@@ -47,15 +47,7 @@ defmodule DealScout.Alerts.Matcher do
   @doc """
   Returns the canonical searchable text string for a deal.
   """
-  def searchable_text(%Deal{} = deal) do
-    merchant_name =
-      case deal.merchant do
-        %{name: name} -> name
-        _ -> deal.raw_merchant || ""
-      end
-
-    "#{deal.title} #{merchant_name} #{deal.clean_text || ""}"
-  end
+  defdelegate searchable_text(deal), to: Deals
 
   defp matches_source?(_deal, nil), do: true
   defp matches_source?(_deal, "all"), do: true
@@ -85,26 +77,7 @@ defmodule DealScout.Alerts.Matcher do
 
   defp not_dropshipper?(_deal, false), do: true
   defp not_dropshipper?(_deal, nil), do: true
-
-  defp not_dropshipper?(deal, true) do
-    trust_level =
-      case deal.merchant do
-        %{trust_level: level} -> level
-        _ -> nil
-      end
-
-    merchant_name =
-      case deal.merchant do
-        %{name: name} -> name
-        _ -> deal.raw_merchant
-      end
-
-    if trust_level == "dropshipper" or MerchantGuard.dropshipper?(merchant_name, deal.url) do
-      false
-    else
-      true
-    end
-  end
+  defp not_dropshipper?(deal, true), do: not Deals.dropshipper_deal?(deal)
 
   defp matches_merchant_trust?(_deal, nil), do: true
   defp matches_merchant_trust?(_deal, "all"), do: true

@@ -102,6 +102,24 @@ defmodule DealScout.Feeds.PollerTest do
     TestAdapter.reset()
   end
 
+  test "poll_feed/1 does not overwrite etag when 200 OK body is not a valid feed XML", %{
+    feed1: feed
+  } do
+    {:ok, feed} = Feeds.update_feed(feed, %{etag: "previous-good-etag"})
+
+    TestAdapter.stub_url(
+      feed.url,
+      {:ok, %{status: 200, body: "<html>502 Bad Gateway</html>", headers: [{"etag", "bad-etag"}]}}
+    )
+
+    assert {:error, :invalid_feed_xml} = Poller.poll_feed(feed)
+
+    reloaded = Feeds.get_feed(feed.id)
+    assert reloaded.etag == "previous-good-etag"
+
+    TestAdapter.reset()
+  end
+
   test "poll_all_feeds/0 polls all active feeds synchronously" do
     assert :ok = Poller.poll_all_feeds()
   end
