@@ -5,12 +5,12 @@ defmodule DealScout.Alerts.EvaluationTest do
   alias DealScout.Alerts.{AlertRule, Evaluation}
   alias DealScout.Deals.{Deal, Merchant}
   alias DealScout.Feeds.Feed
-  alias DealScout.KeywordEngine.{Compiler, Matcher, Parser}
+  alias DealScout.KeywordEngine
 
   setup do
-    previous = Matcher.get_state()
-    on_exit(fn -> Matcher.put_state(previous) end)
-    Matcher.put_state(nil)
+    previous = KeywordEngine.get_state()
+    on_exit(fn -> KeywordEngine.put_state(previous) end)
+    KeywordEngine.put_state(nil)
 
     feed = %Feed{id: 1, slug: "mydealz", name: "MyDealz"}
     merchant = %Merchant{id: 1, name: "Mindfactory", slug: "mindfactory", trust_level: "verified"}
@@ -31,13 +31,7 @@ defmodule DealScout.Alerts.EvaluationTest do
   end
 
   defp compile!(rules) do
-    rules
-    |> Enum.map(fn r ->
-      {:ok, ast} = Parser.parse(r.keywords)
-      {r.id, r.user_id, ast}
-    end)
-    |> Compiler.compile()
-    |> Matcher.put_state()
+    KeywordEngine.compile_and_store(rules)
   end
 
   defp ids(deals), do: deals |> Enum.map(& &1.id) |> Enum.sort()

@@ -88,7 +88,7 @@ defmodule DealScout.Alerts.AlertRule do
         changeset
 
       keywords when is_binary(keywords) ->
-        case DealScout.KeywordEngine.Parser.parse(keywords) do
+        case DealScout.KeywordEngine.Query.parse(keywords) do
           {:ok, _ast} ->
             changeset
 

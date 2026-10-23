@@ -7,8 +7,9 @@ defmodule DealScout.Backup.Watcher do
   use GenServer
   require Logger
 
+  alias DealScout.Backup
+
   @pubsub DealScout.PubSub
-  @pubsub_topic "backup:internal"
   @default_poll_interval_ms 2_000
 
   # Client API
@@ -26,7 +27,7 @@ defmodule DealScout.Backup.Watcher do
   end
 
   @doc """
-  Scans the replica directory directly and returns a map of all files.
+  Scans the replica directory directly and returns a list of all files.
   """
   def scan_replica(replica_dir) do
     if File.dir?(replica_dir) do
@@ -60,10 +61,10 @@ defmodule DealScout.Backup.Watcher do
 
   @doc """
   Given the client's current state (a list or map of files/generations it already has),
-  returns the list of missing relative file paths that need to be sent.
+  returns the list of missing relative file metadata maps that need to be sent.
   """
   def missing_files_for_client(client_state, replica_dir \\ nil) do
-    dir = replica_dir || get_replica_dir()
+    dir = replica_dir || Backup.replica_dir()
     current_files = scan_replica(dir)
 
     have_files =
@@ -75,7 +76,6 @@ defmodule DealScout.Backup.Watcher do
           MapSet.new(files)
 
         %{"have_generations" => gens} when is_map(gens) ->
-          # Filter based on latest indices if available
           filter_by_generations(current_files, gens)
 
         _ ->
@@ -105,7 +105,7 @@ defmodule DealScout.Backup.Watcher do
 
   @impl true
   def init(opts) do
-    replica_dir = Keyword.get(opts, :replica_dir, get_replica_dir())
+    replica_dir = Keyword.get(opts, :replica_dir, Backup.replica_dir())
     poll_interval = Keyword.get(opts, :poll_interval_ms, get_poll_interval())
 
     enabled =
@@ -118,7 +118,6 @@ defmodule DealScout.Backup.Watcher do
       known_files: %{}
     }
 
-    # Initial scan
     initial_known =
       if enabled do
         scan_and_index(replica_dir)
@@ -150,7 +149,6 @@ defmodule DealScout.Backup.Watcher do
     if state.enabled do
       current_indexed = scan_and_index(state.replica_dir)
 
-      # Detect new or modified files
       Enum.each(current_indexed, fn {path, meta} ->
         case Map.get(state.known_files, path) do
           nil ->
@@ -189,15 +187,13 @@ defmodule DealScout.Backup.Watcher do
 
     Phoenix.PubSub.broadcast(
       @pubsub,
-      @pubsub_topic,
+      Backup.pubsub_topic(),
       {:new_backup_file, meta.path, meta.full_path, meta.size, meta.sha256}
     )
   end
 
   defp filter_by_generations(current_files, gens) do
-    # When client sends {"gen_id" => %{"latest_snapshot" => s, "latest_wal" => w}}
     Enum.filter(current_files, fn f ->
-      # Check if file belongs to a generation the client already fully has
       case parse_litestream_path(f.path) do
         {:snapshot, gen_id, idx} ->
           client_snapshot = get_in(gens, [gen_id, "latest_snapshot"]) || -1
@@ -214,7 +210,6 @@ defmodule DealScout.Backup.Watcher do
   end
 
   defp parse_litestream_path(path) do
-    # Format: generations/<gen_id>/snapshots/<idx>.snapshot.lz4 or generations/<gen_id>/wal/<idx>.wal.lz4
     parts = Path.split(path)
 
     case parts do
@@ -238,19 +233,7 @@ defmodule DealScout.Backup.Watcher do
     end
   end
 
-  def calculate_sha256(path) do
-    case File.read(path) do
-      {:ok, data} ->
-        :crypto.hash(:sha256, data) |> Base.encode16(case: :lower)
-
-      _ ->
-        nil
-    end
-  end
-
-  defp get_replica_dir do
-    Application.get_env(:deal_scout, :litestream_replica_dir, "/data/litestream")
-  end
+  defdelegate calculate_sha256(path), to: Backup, as: :file_sha256
 
   defp get_poll_interval do
     Application.get_env(:deal_scout, :backup_watcher_poll_interval_ms, @default_poll_interval_ms)

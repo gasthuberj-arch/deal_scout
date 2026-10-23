@@ -9,11 +9,11 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       DealScoutWeb.Endpoint.subscribe("deals:presence")
-      Phoenix.PubSub.subscribe(DealScout.PubSub, "backup:internal")
+      DealScout.Backup.subscribe()
     end
 
     ops = Analytics.get_system_ops_stats()
-    backup_status = DealScout.Backup.Status.get_status()
+    backup_status = DealScout.Backup.get_status()
     auto_paused_rules = Alerts.list_auto_paused_rules()
     slowest_rules = Alerts.list_slowest_rules(10)
 
@@ -36,14 +36,14 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_info({:new_backup_file, _path, _full, _size, _sha}, socket) do
-    backup_status = DealScout.Backup.Status.get_status()
+    backup_status = DealScout.Backup.get_status()
     {:noreply, assign(socket, :backup, backup_status)}
   end
 
   @impl true
   def handle_event("refresh_metrics", _params, socket) do
     ops = Analytics.get_system_ops_stats()
-    backup_status = DealScout.Backup.Status.get_status()
+    backup_status = DealScout.Backup.get_status()
 
     {:noreply,
      socket

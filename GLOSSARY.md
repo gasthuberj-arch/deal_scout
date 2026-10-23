@@ -112,3 +112,15 @@ A quiet window (`cooldown_minutes` on an Alert rule) after a notification during
 
 **Digest**:
 A batched notification delivery mode (`delivery_mode` on an Alert rule, e.g. `"hourly_digest"` or `"daily_digest"`) that aggregates new Matches into a single periodic summary instead of sending instant alerts.
+
+**Match delivery**:
+The notification lifecycle (`DealScout.Notifications.Dispatcher`) that broadcasts every new Match to the LiveView inbox in real time, enforces **Cooldown**, collapses instant multi-deal batches, queues and flushes **Digest** summaries, and records actual push and email delivery outcomes.
+_Avoid_: Caller-side cooldown branching, scattered dispatch helpers
+
+**Compiled keyword index**:
+The in-memory Aho-Corasick automaton and cost-pruned inverted index (`DealScout.KeywordEngine`) built from active Alert rules that prefilters candidate rules across a Deal batch in a single pass.
+_Avoid_: Exposing raw `:persistent_term` maps or rule tuples across seams
+
+**Replica sync**:
+The real-time Litestream WAL/snapshot replication and atomic SQLite snapshot subsystem (`DealScout.Backup`) that authenticates backup clients, validates and streams missing replica frames, creates hot database snapshots, and reports replication lag.
+_Avoid_: Scattering filesystem and snapshot SQL across web channels and controllers

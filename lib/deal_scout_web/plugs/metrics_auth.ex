@@ -10,6 +10,7 @@ defmodule DealScoutWeb.Plugs.MetricsAuth do
   @behaviour Plug
 
   import Plug.Conn
+  alias DealScout.Backup
 
   @impl Plug
   def init(opts), do: opts
@@ -27,28 +28,8 @@ defmodule DealScoutWeb.Plugs.MetricsAuth do
   end
 
   defp authorized?(conn) do
-    with token when is_binary(token) <- configured_token(),
-         ["Bearer " <> provided] <- get_req_header(conn, "authorization"),
-         provided = String.trim(provided),
-         true <- provided != "" do
-      Plug.Crypto.secure_compare(provided, token)
-    else
-      _ -> false
-    end
-  end
-
-  defp configured_token do
-    token =
-      Application.get_env(:deal_scout, :metrics_token) ||
-        Application.get_env(:deal_scout, :backup_token)
-
-    case token do
-      t when is_binary(t) ->
-        t = String.trim(t)
-        if t != "", do: t, else: nil
-
-      _ ->
-        nil
-    end
+    conn.req_headers
+    |> Backup.extract_bearer_token()
+    |> Backup.valid_token?(:metrics)
   end
 end

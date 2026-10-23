@@ -3,10 +3,9 @@ defmodule DealScout.Alerts.Evaluation do
   Pure **Match evaluation** module shared by live ingestion and Backtest.
 
   Given preloaded `Deal` structs and `AlertRule` structs, enriches deals with
-  cross-border metadata, optionally prefilters via the compiled Aho-Corasick
-  index (`DealScout.KeywordEngine.Matcher`) ONLY for rules known to be in the
-  compiled state, and falls back to `DealScout.Alerts.Matcher.matches?/2` for
-  uncompiled or draft rules.
+  cross-border metadata, optionally prefilters via the **Compiled keyword index**
+  (`DealScout.KeywordEngine`) ONLY for rules known to be in the compiled state,
+  and falls back to `DealScout.Alerts.Matcher.matches?/2` for uncompiled or draft rules.
   """
 
   alias DealScout.Alerts.{AlertRule, Matcher}
@@ -31,7 +30,10 @@ defmodule DealScout.Alerts.Evaluation do
 
     {compiled_rules, candidates_by_deal_id} =
       if prefilter? do
-        build_prefilter(enriched_deals)
+        deal_items =
+          Enum.map(enriched_deals, fn d -> %{id: d.id, text: Matcher.searchable_text(d)} end)
+
+        KeywordEngine.prefilter_batch(deal_items)
       else
         {%{}, %{}}
       end
@@ -92,33 +94,6 @@ defmodule DealScout.Alerts.Evaluation do
         matched = evaluate(batch, rule),
         matched != [] do
       {rule, matched}
-    end
-  end
-
-  defp build_prefilter(deals) do
-    case KeywordEngine.Matcher.get_state() do
-      %{rules: rules, ac_pattern: ac_pattern} when is_map(rules) and not is_nil(ac_pattern) ->
-        compiled_rules =
-          Map.new(rules, fn
-            {rule_id, {_user_id, _ast, keywords}} -> {rule_id, keywords}
-            {rule_id, {_user_id, _ast}} -> {rule_id, nil}
-          end)
-
-        deal_items =
-          Enum.map(deals, fn d -> %{id: d.id, text: Matcher.searchable_text(d)} end)
-
-        batch_matches = KeywordEngine.Matcher.match_batch(deal_items)
-
-        candidates_by_deal_id =
-          Enum.reduce(batch_matches, %{}, fn {deal_id, rule_user_pairs}, acc ->
-            rule_ids = MapSet.new(Enum.map(rule_user_pairs, &elem(&1, 0)))
-            Map.put(acc, deal_id, rule_ids)
-          end)
-
-        {compiled_rules, candidates_by_deal_id}
-
-      _ ->
-        {%{}, %{}}
     end
   end
 end

@@ -1,14 +1,15 @@
 defmodule DealScout.KeywordEngineTest do
   use DealScout.DataCase, async: false
 
-  alias DealScout.KeywordEngine.{Parser, Compiler, Matcher, Server}
+  alias DealScout.KeywordEngine
+  alias DealScout.KeywordEngine.{Query, Server}
   alias DealScout.Alerts
   alias DealScout.AccountsFixtures
 
-  describe "KeywordEngine.Parser" do
+  describe "KeywordEngine.Query.parse/1" do
     test "parses basic terms, boolean operators, quotes and parentheses" do
       input = ~s|("Fernseher" or "Smart Tv") and (55 or 65)|
-      assert {:ok, ast} = Parser.parse(input)
+      assert {:ok, ast} = Query.parse(input)
 
       assert {:and,
               [
@@ -18,42 +19,33 @@ defmodule DealScout.KeywordEngineTest do
     end
 
     test "handles implicit AND and comma as OR" do
-      assert {:ok, {:and, [{:lit, "macbook"}, {:lit, "air"}]}} = Parser.parse("MacBook Air")
+      assert {:ok, {:and, [{:lit, "macbook"}, {:lit, "air"}]}} = Query.parse("MacBook Air")
 
       assert {:ok, {:or, [{:lit, "rtx 4080"}, {:lit, "rx 7900"}]}} =
-               Parser.parse("\"RTX 4080\", \"RX 7900\"")
+               Query.parse("\"RTX 4080\", \"RX 7900\"")
     end
 
     test "normalizes typographical quotes and consecutive whitespaces" do
-      assert {:ok, {:lit, "smart tv"}} = Parser.parse("„Smart    Tv“")
+      assert {:ok, {:lit, "smart tv"}} = Query.parse("„Smart    Tv“")
     end
 
     test "rejects unclosed quotes and purely negative queries" do
-      assert {:error, "Unclosed quote"} = Parser.parse(~s|"open quote|)
-      assert {:error, "Missing closing parenthesis"} = Parser.parse("(apple or banana")
-      assert {:error, msg} = Parser.parse("not apple")
+      assert {:error, "Unclosed quote"} = Query.parse(~s|"open quote|)
+      assert {:error, "Missing closing parenthesis"} = Query.parse("(apple or banana")
+      assert {:error, msg} = Query.parse("not apple")
       assert msg =~ "purely negative"
-    end
-
-    test "serializes to and from json format" do
-      {:ok, ast} = Parser.parse(~s|("OLED" and 65) or not 55|)
-      json = Parser.to_json(ast)
-      assert is_map(json)
-      assert Parser.from_json(json) == ast
     end
   end
 
-  describe "KeywordEngine.Compiler & Matcher" do
+  describe "KeywordEngine compilation & batch matching" do
     test "compiles Aho-Corasick state and cost-based inverted index" do
       rules = [
-        {101, 1,
-         {:and,
-          [{:or, [{:lit, "fernseher"}, {:lit, "smart tv"}]}, {:or, [{:lit, "55"}, {:lit, "65"}]}]}},
-        {102, 2, {:lit, "laptop"}},
-        {103, 3, {:and, [{:lit, "macbook"}, {:not, {:lit, "pro"}}]}}
+        %{id: 101, user_id: 1, keywords: ~s|("Fernseher" or "Smart Tv") and (55 or 65)|},
+        %{id: 102, user_id: 2, keywords: "laptop"},
+        %{id: 103, user_id: 3, keywords: "macbook not pro"}
       ]
 
-      state = Compiler.compile(rules)
+      state = KeywordEngine.compile(rules)
       assert state.ac_pattern != nil
       assert Map.has_key?(state.rules, 101)
       assert Map.has_key?(state.rules, 102)
@@ -61,47 +53,48 @@ defmodule DealScout.KeywordEngineTest do
 
       # Test boundary matching
       text1 = "LG OLED 65 Zoll Fernseher für 999€"
-      matches1 = Matcher.match_single(text1, state)
+      matches1 = KeywordEngine.match_single(text1, state)
       assert {101, 1} in matches1
 
       # Word boundary: "fernsehern" or substrings
       text_substr = "Superlaptop"
-      matches_substr = Matcher.match_single(text_substr, state)
+      matches_substr = KeywordEngine.match_single(text_substr, state)
       refute {102, 2} in matches_substr
 
       text_exact = "Ein neuer Laptop im Angebot"
-      matches_exact = Matcher.match_single(text_exact, state)
+      matches_exact = KeywordEngine.match_single(text_exact, state)
       assert {102, 2} in matches_exact
 
       # Test NOT branch
       text_mbp = "Apple MacBook Pro M3"
-      refute {103, 3} in Matcher.match_single(text_mbp, state)
+      refute {103, 3} in KeywordEngine.match_single(text_mbp, state)
 
       text_mba = "Apple MacBook Air M3"
-      assert {103, 3} in Matcher.match_single(text_mba, state)
+      assert {103, 3} in KeywordEngine.match_single(text_mba, state)
     end
 
     test "respects German UTF-8 multi-byte characters in boundaries" do
-      rules = [{201, 1, {:lit, "kühler"}}]
-      state = Compiler.compile(rules)
+      rules = [%{id: 201, user_id: 1, keywords: "kühler"}]
+      state = KeywordEngine.compile(rules)
 
       # In text with umlauts
-      assert [{201, 1}] == Matcher.match_single("Ein leiser Kühler für CPU", state)
+      assert [{201, 1}] == KeywordEngine.match_single("Ein leiser Kühler für CPU", state)
       # Word boundary attached to another umlaut/letter
-      assert [] == Matcher.match_single("Wasserkühler", state)
+      assert [] == KeywordEngine.match_single("Wasserkühler", state)
     end
 
-    test "batch matching returns item IDs with matched rules" do
-      rules = [{301, 1, {:lit, "oled"}}]
-      state = Compiler.compile(rules)
-      Matcher.put_state(state)
+    test "prefilter_batch/1 returns compiled rule keywords and candidate rule IDs per item" do
+      rules = [%{id: 301, user_id: 1, keywords: "oled"}]
+      KeywordEngine.compile_and_store(rules)
 
       items = [
         %{id: 1, text: "Toller OLED Bildschirm"},
         %{id: 2, text: "Normales IPS Panel"}
       ]
 
-      assert [{1, [{301, 1}]}, {2, []}] == Matcher.match_batch(items)
+      assert {%{301 => "oled"}, candidates} = KeywordEngine.prefilter_batch(items)
+      assert MapSet.member?(candidates[1], 301)
+      assert MapSet.size(candidates[2]) == 0
     end
   end
 
@@ -130,8 +123,8 @@ defmodule DealScout.KeywordEngineTest do
       # Trigger ensure_fresh_index to sync into :persistent_term
       :ok = Server.ensure_fresh_index()
 
-      state = Matcher.get_state()
-      assert Map.has_key?(state.rules, rule.id)
+      {compiled_rules, _} = KeywordEngine.prefilter_batch([%{id: 1, text: "55 Fernseher"}])
+      assert Map.has_key?(compiled_rules, rule.id)
 
       # Update alert rule
       {:ok, updated_rule} =
@@ -141,15 +134,21 @@ defmodule DealScout.KeywordEngineTest do
 
       # Re-fresh
       :ok = Server.ensure_fresh_index()
-      state2 = Matcher.get_state()
-      {_user_id, ast, _keywords} = Map.fetch!(state2.rules, updated_rule.id)
-      assert match?({:and, _}, ast)
+
+      {compiled_rules2, candidates2} =
+        KeywordEngine.prefilter_batch([%{id: 1, text: "Apple MacBook Air M3"}])
+
+      assert compiled_rules2[updated_rule.id] == "MacBook Air M3"
+      assert MapSet.member?(candidates2[1], updated_rule.id)
 
       # Delete alert rule
       {:ok, _deleted} = Alerts.delete_alert_rule(updated_rule)
       :ok = Server.ensure_fresh_index()
-      state3 = Matcher.get_state()
-      refute Map.has_key?(state3.rules, rule.id)
+
+      {compiled_rules3, _} =
+        KeywordEngine.prefilter_batch([%{id: 1, text: "Apple MacBook Air M3"}])
+
+      refute Map.has_key?(compiled_rules3, rule.id)
     end
   end
 end

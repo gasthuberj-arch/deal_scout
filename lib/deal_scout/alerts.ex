@@ -179,20 +179,9 @@ defmodule DealScout.Alerts do
           end
       end
 
-    # Dispatch notifications per rule
+    # Dispatch notifications per rule (Dispatcher enforces Cooldown, LiveView broadcast, and Digest queueing)
     for {rule, matches} <- matches_by_rule do
-      if AlertRule.in_cooldown?(rule) do
-        # Broadcast to LiveView inbox for real-time UI, but suppress push/email
-        Enum.each(matches, fn m ->
-          Phoenix.PubSub.broadcast(
-            DealScout.PubSub,
-            Dispatcher.user_topic(m.user_id),
-            {:new_match, m}
-          )
-        end)
-      else
-        Dispatcher.dispatch_batch(rule, matches)
-      end
+      Dispatcher.dispatch_batch(rule, matches)
     end
   end
 

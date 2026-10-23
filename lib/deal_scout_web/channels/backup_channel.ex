@@ -1,11 +1,7 @@
 defmodule DealScoutWeb.BackupChannel do
   use DealScoutWeb, :channel
 
-  alias DealScout.Backup.Status, as: BackupStatus
-  alias DealScout.Backup.Watcher, as: BackupWatcher
-
-  @pubsub DealScout.PubSub
-  @pubsub_topic "backup:internal"
+  alias DealScout.Backup
 
   @impl true
   def join("backup:sync", params, socket) do
@@ -18,8 +14,8 @@ defmodule DealScoutWeb.BackupChannel do
       hostname: params["hostname"] || "nas"
     }
 
-    BackupStatus.client_connected(client_id, meta)
-    Phoenix.PubSub.subscribe(@pubsub, @pubsub_topic)
+    Backup.client_connected(client_id, meta)
+    Backup.subscribe()
 
     {:ok,
      %{
@@ -32,7 +28,7 @@ defmodule DealScoutWeb.BackupChannel do
   @impl true
   def handle_in("handshake", payload, socket) do
     client_state = payload || %{}
-    missing_files = BackupWatcher.missing_files_for_client(client_state)
+    missing_files = Backup.missing_files_for_client(client_state)
 
     {:reply,
      {:ok,
@@ -45,44 +41,26 @@ defmodule DealScoutWeb.BackupChannel do
 
   @impl true
   def handle_in("request_file", %{"path" => requested_path}, socket) do
-    replica_dir = Application.get_env(:deal_scout, :litestream_replica_dir, "/data/litestream")
-
-    with :ok <- validate_relative_path(requested_path),
-         full_path = Path.expand(Path.join(replica_dir, requested_path)),
-         true <- String.starts_with?(full_path, Path.expand(replica_dir)),
-         {:ok, binary} <- File.read(full_path) do
-      sha256 = :crypto.hash(:sha256, binary) |> Base.encode16(case: :lower)
-      size = byte_size(binary)
-
-      BackupStatus.record_file_sent(requested_path, size)
-
-      {:reply,
-       {:ok,
-        %{
-          path: requested_path,
-          size: size,
-          sha256: sha256,
-          data: Base.encode64(binary)
-        }}, socket}
-    else
-      false ->
-        {:reply, {:error, %{reason: "Path traversal forbidden"}}, socket}
-
-      {:error, :enoent} ->
-        {:reply, {:error, %{reason: "File not found"}}, socket}
-
-      {:error, reason} when is_binary(reason) ->
-        {:reply, {:error, %{reason: reason}}, socket}
+    case Backup.read_replica_file(requested_path) do
+      {:ok, %{path: path, size: size, sha256: sha256, data: data}} ->
+        {:reply,
+         {:ok,
+          %{
+            path: path,
+            size: size,
+            sha256: sha256,
+            data: data
+          }}, socket}
 
       {:error, reason} ->
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        {:reply, {:error, %{reason: reason}}, socket}
     end
   end
 
   @impl true
   def handle_in("ping", _params, socket) do
     client_id = socket.assigns[:client_id]
-    BackupStatus.record_ping(client_id)
+    Backup.record_ping(client_id)
     {:reply, {:ok, %{pong: System.system_time(:millisecond)}}, socket}
   end
 
@@ -100,26 +78,7 @@ defmodule DealScoutWeb.BackupChannel do
   @impl true
   def terminate(_reason, socket) do
     client_id = socket.assigns[:client_id]
-    if client_id, do: BackupStatus.client_disconnected(client_id)
+    if client_id, do: Backup.client_disconnected(client_id)
     :ok
-  end
-
-  defp validate_relative_path(path) do
-    cond do
-      not is_binary(path) ->
-        {:error, "Invalid path type"}
-
-      String.starts_with?(path, "/") or String.starts_with?(path, "\\") ->
-        {:error, "Absolute paths not allowed"}
-
-      String.contains?(path, "..") ->
-        {:error, "Path traversal with '..' not allowed"}
-
-      String.contains?(path, <<0>>) ->
-        {:error, "Null bytes not allowed"}
-
-      true ->
-        :ok
-    end
   end
 end

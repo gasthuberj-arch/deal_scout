@@ -2,6 +2,8 @@ defmodule DealScoutWeb.BackupSocket do
   use Phoenix.Socket
   require Logger
 
+  alias DealScout.Backup
+
   channel "backup:sync", DealScoutWeb.BackupChannel
 
   @impl true
@@ -26,55 +28,14 @@ defmodule DealScoutWeb.BackupSocket do
   def id(socket), do: "backup_socket:#{socket.assigns.client_id}"
 
   defp authorized?(params, connect_info) do
-    configured = configured_token()
+    token =
+      if is_binary(params["token"]) and String.trim(params["token"]) != "" do
+        params["token"]
+      else
+        Backup.extract_bearer_token(connect_info[:x_headers])
+      end
 
-    cond do
-      is_nil(configured) or configured == "" ->
-        false
-
-      token = extract_token(params, connect_info) ->
-        Plug.Crypto.secure_compare(token, configured)
-
-      true ->
-        false
-    end
-  end
-
-  defp extract_token(params, connect_info) do
-    cond do
-      is_binary(params["token"]) and String.trim(params["token"]) != "" ->
-        String.trim(params["token"])
-
-      # Header authorization if present in connect_info
-      headers = connect_info[:x_headers] ->
-        find_bearer_token(headers)
-
-      true ->
-        nil
-    end
-  end
-
-  defp find_bearer_token(headers) when is_list(headers) do
-    Enum.find_value(headers, fn
-      {key, "Bearer " <> token} ->
-        if String.downcase(key) == "authorization", do: String.trim(token)
-
-      _ ->
-        nil
-    end)
-  end
-
-  defp find_bearer_token(_), do: nil
-
-  defp configured_token do
-    case Application.get_env(:deal_scout, :backup_token, System.get_env("ADMIN_BACKUP_TOKEN")) do
-      token when is_binary(token) ->
-        trimmed = String.trim(token)
-        if trimmed != "", do: trimmed, else: nil
-
-      _ ->
-        nil
-    end
+    Backup.valid_token?(token, :backup)
   end
 
   defp format_remote_ip(%{address: address}) when is_tuple(address) do

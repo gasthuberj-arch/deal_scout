@@ -144,20 +144,11 @@ defmodule DealScoutWeb.Telemetry do
   @doc false
   def measure_backup_metrics do
     try do
-      status = DealScout.Backup.Status.get_status()
+      status = DealScout.Backup.get_status()
       connected = if status.client_connected, do: 1, else: 0
 
-      lag_seconds =
-        case status.last_sync_at do
-          %DateTime{} = dt ->
-            max(0, DateTime.diff(DateTime.utc_now(), dt, :second))
-
-          _ ->
-            -1
-        end
-
       :telemetry.execute([:deal_scout, :backup], %{
-        lag_seconds: lag_seconds,
+        lag_seconds: status.lag_seconds,
         client_connected: connected
       })
     catch

@@ -1,6 +1,6 @@
 defmodule DealScout.KeywordEngine.Server do
   @moduledoc """
-  State lifecycle and dirty-rebuild manager for `KeywordEngine`.
+  State lifecycle and dirty-rebuild manager for `DealScout.KeywordEngine`.
   Synchronizes active alert rules from the database into compiled in-memory
   `:persistent_term` state.
 
@@ -14,7 +14,7 @@ defmodule DealScout.KeywordEngine.Server do
 
   alias DealScout.Repo
   alias DealScout.Alerts.AlertRule
-  alias DealScout.KeywordEngine.{Parser, Compiler, Matcher}
+  alias DealScout.KeywordEngine
   import Ecto.Query, warn: false
 
   @timeout 30_000
@@ -92,26 +92,12 @@ defmodule DealScout.KeywordEngine.Server do
   defp rebuild_from_db do
     start_time = System.monotonic_time(:microsecond)
     rules_from_db = fetch_active_rules_from_db()
-
-    parsed_rules =
-      Enum.flat_map(rules_from_db, fn %{
-                                        id: rule_id,
-                                        user_id: user_id,
-                                        keywords: keywords
-                                      } ->
-        case Parser.parse(keywords || "") do
-          {:ok, parsed} -> [{rule_id, user_id, parsed, keywords}]
-          _ -> []
-        end
-      end)
-
-    compiled_state = Compiler.compile(parsed_rules)
-    Matcher.put_state(compiled_state)
+    compiled_state = KeywordEngine.compile_and_store(rules_from_db)
 
     duration_us = System.monotonic_time(:microsecond) - start_time
 
     Logger.info(
-      "[KeywordEngine] Rebuilt index for #{length(parsed_rules)} active rules in #{Float.round(duration_us / 1000, 2)}ms"
+      "[KeywordEngine] Rebuilt index for #{map_size(compiled_state.rules)} active rules in #{Float.round(duration_us / 1000, 2)}ms"
     )
   end
 

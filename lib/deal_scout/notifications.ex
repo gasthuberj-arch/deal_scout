@@ -88,19 +88,48 @@ defmodule DealScout.Notifications do
   end
 
   @doc """
+  Delivers a Web Push payload to all active subscriptions registered for the given
+  scope, user, or user_id. Updates `last_used_at` on success and prunes expired
+  (HTTP 410 Gone) subscriptions automatically.
+  """
+  def deliver_push_to_user(%Scope{user: %User{id: user_id}}, payload) when not is_nil(user_id),
+    do: deliver_push_to_user(user_id, payload)
+
+  def deliver_push_to_user(%{id: user_id}, payload) when not is_nil(user_id),
+    do: deliver_push_to_user(user_id, payload)
+
+  def deliver_push_to_user(user_id, payload) when is_integer(user_id) and is_map(payload) do
+    subscriptions = list_push_subscriptions(user_id)
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    results =
+      Enum.map(subscriptions, fn sub ->
+        case WebPush.send_notification(sub, payload) do
+          {:ok, _} = ok ->
+            sub
+            |> Ecto.Changeset.change(last_used_at: now)
+            |> Repo.update()
+
+            ok
+
+          {:error, :subscription_expired} = expired ->
+            Repo.delete(sub)
+            expired
+
+          error ->
+            error
+        end
+      end)
+
+    {:ok, results}
+  end
+
+  def deliver_push_to_user(_target, _payload), do: {:ok, []}
+
+  @doc """
   Sends a test notification to all active devices registered under the scoped user.
   """
-  def send_test_notification(%Scope{} = scope) do
-    subscriptions = list_push_subscriptions(scope)
-    deliver_test_payload(subscriptions)
-  end
-
-  def send_test_notification(%User{} = user) do
-    subscriptions = list_push_subscriptions(user)
-    deliver_test_payload(subscriptions)
-  end
-
-  defp deliver_test_payload(subscriptions) do
+  def send_test_notification(target) do
     payload = %{
       title: "DealScout Test Alarm",
       body: "Push alarms are working on your device! You're ready to catch hot deals.",
@@ -110,27 +139,6 @@ defmodule DealScout.Notifications do
       tag: "test-alarm-#{System.system_time(:second)}"
     }
 
-    results =
-      Enum.map(subscriptions, fn sub ->
-        case WebPush.send_notification(sub, payload) do
-          {:ok, _} = ok ->
-            sub
-            |> Ecto.Changeset.change(
-              last_used_at: DateTime.utc_now() |> DateTime.truncate(:second)
-            )
-            |> Repo.update()
-
-            ok
-
-          {:error, :subscription_expired} ->
-            Repo.delete(sub)
-            {:error, :subscription_expired}
-
-          error ->
-            error
-        end
-      end)
-
-    {:ok, results}
+    deliver_push_to_user(target, payload)
   end
 end

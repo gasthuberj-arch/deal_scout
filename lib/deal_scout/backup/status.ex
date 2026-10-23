@@ -1,10 +1,12 @@
 defmodule DealScout.Backup.Status do
   @moduledoc """
   Tracks real-time backup health, connected NAS client state,
-  and replication metrics for DealScout.
+  and replication metrics for `DealScout.Backup`.
   """
   use GenServer
   require Logger
+
+  alias DealScout.Backup
 
   @name __MODULE__
 
@@ -15,7 +17,7 @@ defmodule DealScout.Backup.Status do
   end
 
   @doc """
-  Returns the current status of the backup system, connected client, and replication metrics.
+  Returns the current status of the backup system, connected client, replication lag, and metrics.
   """
   def get_status(server \\ @name) do
     GenServer.call(server, :get_status)
@@ -81,14 +83,21 @@ defmodule DealScout.Backup.Status do
 
   @impl true
   def handle_call(:get_status, _from, state) do
-    replica_dir = Application.get_env(:deal_scout, :litestream_replica_dir, "/data/litestream")
-    replica_summary = inspect_replica_dir(replica_dir)
+    replica_dir = Backup.replica_dir()
+    replica_summary = Backup.inspect_replica_dir(replica_dir)
+
+    lag_seconds =
+      case state.last_sync_at do
+        %DateTime{} = dt -> max(0, DateTime.diff(DateTime.utc_now(), dt, :second))
+        _ -> -1
+      end
 
     status = %{
       client_connected: state.connected_client != nil,
       connected_client: state.connected_client,
       last_sync_at: state.last_sync_at,
       last_ping_at: state.last_ping_at,
+      lag_seconds: lag_seconds,
       files_synced_count: state.files_synced_count,
       bytes_synced_count: state.bytes_synced_count,
       last_file_sent: state.last_file_sent,
@@ -171,29 +180,5 @@ defmodule DealScout.Backup.Status do
       last_file_sent: nil,
       started_at: System.monotonic_time(:second)
     }
-  end
-
-  defp inspect_replica_dir(replica_dir) do
-    if File.dir?(replica_dir) do
-      generations_dir = Path.join(replica_dir, "generations")
-
-      if File.dir?(generations_dir) do
-        case File.ls(generations_dir) do
-          {:ok, gens} ->
-            %{
-              exists: true,
-              generations_count: length(gens),
-              generations: Enum.sort(gens)
-            }
-
-          _ ->
-            %{exists: true, generations_count: 0, generations: []}
-        end
-      else
-        %{exists: true, generations_count: 0, generations: []}
-      end
-    else
-      %{exists: false, generations_count: 0, generations: []}
-    end
   end
 end
