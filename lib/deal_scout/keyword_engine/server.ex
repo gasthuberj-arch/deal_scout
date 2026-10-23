@@ -100,7 +100,7 @@ defmodule DealScout.KeywordEngine.Server do
                                         keywords: keywords
                                       } ->
         case Parser.parse(keywords || "") do
-          {:ok, parsed} -> [{rule_id, user_id, parsed}]
+          {:ok, parsed} -> [{rule_id, user_id, parsed, keywords}]
           _ -> []
         end
       end)

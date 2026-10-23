@@ -67,11 +67,10 @@ defmodule DealScout.KeywordEngine.Matcher do
         Enum.reduce(candidate_rule_ids, [], fn rule_id, acc ->
           case Map.get(state.rules, rule_id) do
             {user_id, ast} ->
-              if eval_ast(ast, matched_term_ids) do
-                [{rule_id, user_id} | acc]
-              else
-                acc
-              end
+              if eval_ast(ast, matched_term_ids), do: [{rule_id, user_id} | acc], else: acc
+
+            {user_id, ast, _keywords} ->
+              if eval_ast(ast, matched_term_ids), do: [{rule_id, user_id} | acc], else: acc
 
             _ ->
               acc

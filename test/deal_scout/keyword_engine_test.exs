@@ -142,7 +142,7 @@ defmodule DealScout.KeywordEngineTest do
       # Re-fresh
       :ok = Server.ensure_fresh_index()
       state2 = Matcher.get_state()
-      {_user_id, ast} = Map.fetch!(state2.rules, updated_rule.id)
+      {_user_id, ast, _keywords} = Map.fetch!(state2.rules, updated_rule.id)
       assert match?({:and, _}, ast)
 
       # Delete alert rule

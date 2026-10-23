@@ -5,14 +5,21 @@ defmodule DealScout.KeywordEngine.Compiler do
   """
 
   @doc """
-  Takes a list of `{rule_id, user_id, ast}` tuples, deduplicates all string literals
-  into integer IDs, compiles the :binary Aho-Corasick pattern, and builds the pruned inverted index.
+  Takes a list of `{rule_id, user_id, ast}` or `{rule_id, user_id, ast, keywords}` tuples,
+  deduplicates all string literals into integer IDs, compiles the :binary Aho-Corasick pattern,
+  and builds the pruned inverted index.
   """
   def compile(rules_list) do
+    normalized_rules =
+      Enum.map(rules_list, fn
+        {rule_id, user_id, ast, keywords} -> {rule_id, user_id, ast, keywords}
+        {rule_id, user_id, ast} -> {rule_id, user_id, ast, nil}
+      end)
+
     # 1. Extract all unique string literals across all rules
     unique_terms =
-      rules_list
-      |> Enum.flat_map(fn {_rule_id, _user_id, ast} -> extract_literals(ast) end)
+      normalized_rules
+      |> Enum.flat_map(fn {_rule_id, _user_id, ast, _keywords} -> extract_literals(ast) end)
       |> Enum.uniq()
 
     # 2. Assign integer IDs (0..K)
@@ -31,11 +38,12 @@ defmodule DealScout.KeywordEngine.Compiler do
 
     # 4. Convert string ASTs to integer ID ASTs and build pruned inverted index
     {compiled_rules, inverted_index} =
-      Enum.reduce(rules_list, {%{}, %{}}, fn {rule_id, user_id, ast}, {rules_acc, idx_acc} ->
+      Enum.reduce(normalized_rules, {%{}, %{}}, fn {rule_id, user_id, ast, keywords},
+                                                   {rules_acc, idx_acc} ->
         int_ast = map_ast_to_ids(ast, term_to_id)
         trigger_ids = select_triggers(int_ast, term_to_id)
 
-        new_rules_acc = Map.put(rules_acc, rule_id, {user_id, int_ast})
+        new_rules_acc = Map.put(rules_acc, rule_id, {user_id, int_ast, keywords})
 
         new_idx_acc =
           Enum.reduce(trigger_ids, idx_acc, fn term_id, acc ->

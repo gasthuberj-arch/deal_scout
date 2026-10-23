@@ -16,7 +16,7 @@ defmodule DealScout.Alerts.Evaluation do
   @type prepared_batch :: %{
           deals: [Deal.t()],
           prefilter?: boolean(),
-          compiled_rule_ids: MapSet.t(),
+          compiled_rules: %{optional(any()) => String.t() | nil},
           candidates_by_deal_id: %{optional(any()) => MapSet.t()}
         }
 
@@ -29,17 +29,17 @@ defmodule DealScout.Alerts.Evaluation do
     prefilter? = Keyword.get(opts, :prefilter, true)
     enriched_deals = Enum.map(deals, &CrossBorderGuard.enrich/1)
 
-    {compiled_rule_ids, candidates_by_deal_id} =
+    {compiled_rules, candidates_by_deal_id} =
       if prefilter? do
         build_prefilter(enriched_deals)
       else
-        {MapSet.new(), %{}}
+        {%{}, %{}}
       end
 
     %{
       deals: enriched_deals,
       prefilter?: prefilter?,
-      compiled_rule_ids: compiled_rule_ids,
+      compiled_rules: compiled_rules,
       candidates_by_deal_id: candidates_by_deal_id
     }
   end
@@ -53,13 +53,19 @@ defmodule DealScout.Alerts.Evaluation do
         %{
           deals: deals,
           prefilter?: prefilter?,
-          compiled_rule_ids: compiled_rule_ids,
+          compiled_rules: compiled_rules,
           candidates_by_deal_id: candidates_by_deal_id
         },
         %AlertRule{} = rule
       ) do
     compiled? =
-      prefilter? and not is_nil(rule.id) and MapSet.member?(compiled_rule_ids, rule.id)
+      case Map.fetch(compiled_rules, rule.id) do
+        {:ok, compiled_keywords} when prefilter? and not is_nil(rule.id) ->
+          is_nil(compiled_keywords) or compiled_keywords == rule.keywords
+
+        _ ->
+          false
+      end
 
     Enum.filter(deals, fn deal ->
       if compiled? do
@@ -92,7 +98,11 @@ defmodule DealScout.Alerts.Evaluation do
   defp build_prefilter(deals) do
     case KeywordEngine.Matcher.get_state() do
       %{rules: rules, ac_pattern: ac_pattern} when is_map(rules) and not is_nil(ac_pattern) ->
-        compiled_rule_ids = rules |> Map.keys() |> MapSet.new()
+        compiled_rules =
+          Map.new(rules, fn
+            {rule_id, {_user_id, _ast, keywords}} -> {rule_id, keywords}
+            {rule_id, {_user_id, _ast}} -> {rule_id, nil}
+          end)
 
         deal_items =
           Enum.map(deals, fn d -> %{id: d.id, text: Matcher.searchable_text(d)} end)
@@ -105,10 +115,10 @@ defmodule DealScout.Alerts.Evaluation do
             Map.put(acc, deal_id, rule_ids)
           end)
 
-        {compiled_rule_ids, candidates_by_deal_id}
+        {compiled_rules, candidates_by_deal_id}
 
       _ ->
-        {MapSet.new(), %{}}
+        {%{}, %{}}
     end
   end
 end

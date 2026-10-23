@@ -2,7 +2,7 @@ defmodule DealScout.Alerts.EvaluationLoggerTest do
   use DealScout.DataCase, async: false
 
   alias DealScout.Alerts
-  alias DealScout.Alerts.{AlertRule, EvaluationLogger}
+  alias DealScout.Alerts.{AlertRule, ComputeGuard}
   alias DealScout.Deals.{Deal, Merchant}
   alias DealScout.Feeds.Feed
   alias DealScout.AccountsFixtures
@@ -69,17 +69,20 @@ defmodule DealScout.Alerts.EvaluationLoggerTest do
     }
   end
 
-  describe "log_evaluation/6" do
+  describe "ComputeGuard slow evaluation logging" do
     test "writes NDJSON entry when duration is at or above threshold", %{
       rule: rule,
       deals: deals,
       log_file: log_file
     } do
       # 6000 us >= 5000 us default threshold
-      EvaluationLogger.log_evaluation(rule, deals, 6_000, 3_000, 2,
-        log_path: log_file,
-        threshold_us: 5_000
-      )
+      assert {:ok, ^deals} =
+               ComputeGuard.run(
+                 rule,
+                 deals,
+                 [duration_us: 6_000, log_path: log_file, threshold_us: 5_000],
+                 fn -> deals end
+               )
 
       assert File.exists?(log_file)
       content = File.read!(log_file)
@@ -108,10 +111,13 @@ defmodule DealScout.Alerts.EvaluationLoggerTest do
     end
 
     test "ignores runs below the threshold", %{rule: rule, deals: deals, log_file: log_file} do
-      EvaluationLogger.log_evaluation(rule, deals, 2_000, 1_000, 1,
-        log_path: log_file,
-        threshold_us: 5_000
-      )
+      assert {:ok, [_]} =
+               ComputeGuard.run(
+                 rule,
+                 deals,
+                 [duration_us: 2_000, log_path: log_file, threshold_us: 5_000],
+                 fn -> [hd(deals)] end
+               )
 
       refute File.exists?(log_file)
     end

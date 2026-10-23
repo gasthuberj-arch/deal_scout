@@ -353,18 +353,28 @@ defmodule DealScout.Alerts.AlertsTest do
       end
 
     # Rule 1 is saved through Alerts.create_alert_rule (compiled by KeywordEngine)
+    # Give it an id distinct from SQLite's auto-incremented id=1 inside sandbox tests
     {:ok, compiled_rule} =
-      Alerts.create_alert_rule(user, %{
+      %AlertRule{id: 1001, user_id: user.id}
+      |> AlertRule.changeset(%{
         "name" => "OLED Rule",
         "keywords" => "tv NOT refurbished",
         "negative_keywords" => "defekt",
         "max_price" => "900.00",
         "is_active" => true
       })
+      |> Repo.insert()
+
+    DealScout.KeywordEngine.Server.mark_dirty()
+    on_exit(fn -> DealScout.KeywordEngine.Server.mark_dirty() end)
 
     # Rule 2 is inserted directly into the DB without marking KeywordEngine dirty (uncompiled)
+    # Prepare the index before inserting uncompiled_rule so only compiled_rule is in the index
+    DealScout.KeywordEngine.Server.ensure_fresh_index()
+
     uncompiled_rule =
       Repo.insert!(%AlertRule{
+        id: 1002,
         user_id: user.id,
         name: "Uncompiled OLED Rule",
         keywords: "oled 55 NOT refurbished",

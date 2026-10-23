@@ -4,9 +4,8 @@ defmodule DealScout.Alerts do
   """
 
   import Ecto.Query, warn: false
-  require Logger
   alias DealScout.Repo
-  alias DealScout.Alerts.{AlertRule, Evaluation, EvaluationLogger, UserMatch}
+  alias DealScout.Alerts.{AlertRule, ComputeGuard, Evaluation, UserMatch}
   alias DealScout.Notifications.Dispatcher
   alias DealScout.Deals.{Deal, CrossBorderGuard}
   alias DealScout.KeywordEngine
@@ -133,15 +132,7 @@ defmodule DealScout.Alerts do
   # Matching & Ingestion Processing
   # ============================================================================
 
-  @default_budget_us 30_000
-
-  defp get_budget_us do
-    Application.get_env(:deal_scout, :alert_compute_budget_us, @default_budget_us)
-  end
-
-  def auto_pause_enabled? do
-    Application.get_env(:deal_scout, :alert_auto_pause_enabled, false)
-  end
+  defdelegate auto_pause_enabled?, to: ComputeGuard
 
   @doc """
   Matches a list of newly ingested deals against all active alert rules.
@@ -157,93 +148,34 @@ defmodule DealScout.Alerts do
     deals = batch.deals
 
     rules = Keyword.get(opts, :rules) || list_active_rules()
-    budget_us = Keyword.get(opts, :budget_us) || get_budget_us()
-    auto_pause? = Keyword.get(opts, :auto_pause, auto_pause_enabled?())
-    deal_count = max(length(deals), 1)
 
     # Collect matches grouped by rule for batch collapsing
     matches_by_rule =
       for rule <- rules, reduce: %{} do
         acc ->
-          start_time = System.monotonic_time(:microsecond)
-
-          matched_deals = Evaluation.evaluate(batch, rule)
-
-          duration_us = System.monotonic_time(:microsecond) - start_time
-          normalized_duration_us = div(duration_us, deal_count)
-
-          :telemetry.execute(
-            [:deal_scout, :alerts, :rule_eval],
-            %{
-              duration_us: duration_us,
-              normalized_duration_us: normalized_duration_us,
-              deal_count: length(deals)
-            },
-            %{rule_id: rule.id, user_id: rule.user_id, rule_name: rule.name}
-          )
-
-          # Record slow evaluations to persistent log file (threshold 5ms / 5,000µs)
-          EvaluationLogger.log_evaluation(
-            rule,
-            deals,
-            duration_us,
-            normalized_duration_us,
-            length(matched_deals),
-            opts
-          )
-
-          if normalized_duration_us > budget_us and auto_pause? do
-            budget_ms = Float.round(budget_us / 1000, 1)
-            duration_ms = Float.round(normalized_duration_us / 1000, 1)
-
-            reason =
-              "Auto-paused: Query evaluation took #{duration_ms}ms/deal (exceeded #{budget_ms}ms compute budget). Simplify keywords or remove broad terms."
-
-            updated_rule =
-              case auto_pause_rule(rule, reason, normalized_duration_us) do
-                {:ok, updated} -> updated
-                _ -> rule
-              end
-
-            Phoenix.PubSub.broadcast(
-              DealScout.PubSub,
-              Dispatcher.user_topic(rule.user_id),
-              {:rule_auto_paused, updated_rule, reason}
-            )
-
-            Logger.warning(
-              "[Compute Guard] Auto-paused slow alert rule #{rule.id} ('#{rule.name}') for user #{rule.user_id} - took #{normalized_duration_us}µs/deal (batch #{duration_us}µs for #{deal_count} deals)"
-            )
-
-            acc
-          else
-            if normalized_duration_us > budget_us do
-              Logger.warning(
-                "[Compute Guard] Slow alert rule #{rule.id} ('#{rule.name}') took #{normalized_duration_us}µs/deal (batch #{duration_us}µs for #{deal_count} deals), auto-pause is disabled."
-              )
-            end
-
-            from(r in AlertRule, where: r.id == ^rule.id)
-            |> Repo.update_all(set: [last_eval_duration_us: normalized_duration_us])
-
-            matched_for_rule =
-              for deal <- matched_deals,
-                  not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
-                case insert_match(deal, rule) do
-                  {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
-                    match
-
-                  _ ->
-                    nil
-                end
-              end
-              |> Enum.reject(&is_nil/1)
-
-            if matched_for_rule != [] do
-              Map.put(acc, rule, matched_for_rule)
-            else
+          case ComputeGuard.run(rule, deals, opts, fn -> Evaluation.evaluate(batch, rule) end) do
+            :paused ->
               acc
-            end
+
+            {:ok, matched_deals} ->
+              matched_for_rule =
+                for deal <- matched_deals,
+                    not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
+                  case insert_match(deal, rule) do
+                    {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
+                      match
+
+                    _ ->
+                      nil
+                  end
+                end
+                |> Enum.reject(&is_nil/1)
+
+              if matched_for_rule != [] do
+                Map.put(acc, rule, matched_for_rule)
+              else
+                acc
+              end
           end
       end
 

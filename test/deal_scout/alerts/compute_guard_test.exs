@@ -2,7 +2,7 @@ defmodule DealScout.Alerts.ComputeGuardTest do
   use DealScout.DataCase, async: false
 
   alias DealScout.Alerts
-  alias DealScout.Alerts.AlertRule
+  alias DealScout.Alerts.{AlertRule, ComputeGuard}
   alias DealScout.Deals.{Deal, Merchant}
   alias DealScout.Feeds.Feed
   alias DealScout.Notifications.Dispatcher
@@ -141,6 +141,47 @@ defmodule DealScout.Alerts.ComputeGuardTest do
       # Match was recorded
       matches = Alerts.list_user_matches(user.id)
       assert length(matches) == 1
+    end
+
+    test "ComputeGuard.run/4 evaluates function, logs slow NDJSON when over threshold, and returns {:ok, matched} or :paused",
+         %{user: user, deal: deal} do
+      rule =
+        Repo.insert!(%AlertRule{
+          user_id: user.id,
+          name: "Direct Guard Rule",
+          keywords: "MacBook",
+          is_active: true
+        })
+
+      log_file =
+        Path.join(System.tmp_dir!(), "compute_guard_#{System.unique_integer([:positive])}.log")
+
+      on_exit(fn -> File.rm(log_file) end)
+
+      assert {:ok, [^deal]} =
+               ComputeGuard.run(
+                 rule,
+                 [deal],
+                 [duration_us: 6_000, threshold_us: 5_000, log_path: log_file, budget_us: 10_000],
+                 fn -> [deal] end
+               )
+
+      assert File.exists?(log_file)
+      [line] = log_file |> File.read!() |> String.split("\n", trim: true)
+      assert {:ok, entry} = Jason.decode(line)
+      assert entry["rule_id"] == rule.id
+      assert entry["duration_us"] == 6_000
+      assert entry["matches_count"] == 1
+
+      assert :paused ==
+               ComputeGuard.run(
+                 rule,
+                 [deal],
+                 [duration_us: 20_000, budget_us: 10_000, auto_pause: true],
+                 fn -> [deal] end
+               )
+
+      refute Repo.get!(AlertRule, rule.id).is_active
     end
   end
 
