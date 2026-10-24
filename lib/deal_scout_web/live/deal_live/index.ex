@@ -41,7 +41,6 @@ defmodule DealScoutWeb.DealLive.Index do
     search_query = params["q"] || ""
     hide_dropshippers = params["no_dropship"] == "true"
     group_deals = params["group"] != "false"
-    variant = params["variant"] || "A"
 
     min_temperature =
       case Integer.parse(params["temp"] || "") do
@@ -57,7 +56,6 @@ defmodule DealScoutWeb.DealLive.Index do
       |> assign(:hide_dropshippers, hide_dropshippers)
       |> assign(:group_deals, group_deals)
       |> assign(:min_temperature, min_temperature)
-      |> assign(:variant, variant)
       |> load_deals()
 
     {:noreply, socket}
@@ -177,8 +175,7 @@ defmodule DealScoutWeb.DealLive.Index do
         {"q", query != "" && query},
         {"no_dropship", no_dropship == "true" && "true"},
         {"group", group == "false" && "false"},
-        {"temp", temp},
-        {"variant", assigns[:variant] && assigns.variant != "A" && assigns.variant}
+        {"temp", temp}
       ]
       |> Enum.reject(fn {_k, v} -> !v end)
       |> URI.encode_query()
@@ -213,54 +210,20 @@ defmodule DealScoutWeb.DealLive.Index do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-6">
-        <!-- Hero & Controls Bar (Variant-dependent) -->
-        <%= cond do %>
-          <% @variant == "B" -> %>
-            <%!-- Variant B: Compact Slim Banner --%>
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-base-200/40 px-4 py-3 rounded-xl border border-base-300">
-              <div class="flex items-center gap-2.5">
-                <h1 class="text-lg font-bold tracking-tight text-base-content flex items-center gap-2">
-                  <span>Deal Scout</span>
-                </h1>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                  <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live Stream
-                </span>
-                <span class="text-xs text-base-content/60 hidden md:inline">
-                  — Real-time feed aggregation with Geizhals, Idealo & community trust shield
-                </span>
-              </div>
-            </div>
-          <% @variant == "C" -> %>
-            <%!-- Variant C: Minimal Headline (No container box) --%>
-            <div class="pt-1 pb-1">
-              <div class="flex items-center gap-2">
-                <h1 class="text-xl font-bold tracking-tight text-base-content">
-                  Live Deals
-                </h1>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-500">
-                  <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Real-Time
-                </span>
-              </div>
-              <p class="text-xs text-base-content/60 mt-1 max-w-2xl leading-relaxed">
-                Live stream from MyDealz, DealDoktor, Schnäppchenfuchs and Mein-Deal with verified price tracking and seller security.
-              </p>
-            </div>
-          <% true -> %>
-            <%!-- Variant A (Optimized Balanced Hero): Scaled down from text-3xl to text-2xl with refined text-xs subtext --%>
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-base-200/50 p-4 sm:p-5 rounded-2xl border border-base-300">
-              <div>
-                <h1 class="text-2xl font-bold tracking-tight flex items-center gap-2">
-                  <span>Deal Scout</span>
-                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                    <span class="size-2 rounded-full bg-emerald-500 animate-pulse"></span> Real-Time
-                  </span>
-                </h1>
-                <p class="text-xs sm:text-sm text-base-content/70 mt-1 leading-relaxed">
-                  Aggregated real-time deal streams with Geizhals & Idealo price comparisons, community temperatures, and merchant fakeshop shield.
-                </p>
-              </div>
-            </div>
-        <% end %>
+        <!-- Hero & Controls Bar: Balanced Box -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-base-200/50 p-4 sm:p-5 rounded-2xl border border-base-300">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <span>Deal Scout</span>
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                <span class="size-2 rounded-full bg-emerald-500 animate-pulse"></span> Real-Time
+              </span>
+            </h1>
+            <p class="text-xs sm:text-sm text-base-content/70 mt-1 leading-relaxed">
+              Aggregated real-time deal streams with Geizhals & Idealo price comparisons, community temperatures, and merchant fakeshop shield.
+            </p>
+          </div>
+        </div>
 
         <!-- Filter & Search Toolbar -->
         <div class="space-y-3">
@@ -712,19 +675,6 @@ defmodule DealScoutWeb.DealLive.Index do
             </div>
           </div>
         <% end %>
-
-        <!-- Floating Prototype Switcher Bar -->
-        <.prototype_switcher
-          current={@variant}
-          base_params={[
-            {"feed", @selected_feed != "all" && @selected_feed},
-            {"merchant", @selected_merchant != "all" && @selected_merchant},
-            {"q", @search_query != "" && @search_query},
-            {"no_dropship", @hide_dropshippers && "true"},
-            {"group", !@group_deals && "false"},
-            {"temp", @min_temperature && to_string(@min_temperature)}
-          ]}
-        />
       </div>
     </Layouts.app>
     """
@@ -803,97 +753,5 @@ defmodule DealScoutWeb.DealLive.Index do
       diff_sec < 86400 -> "#{div(diff_sec, 3600)}h ago"
       true -> "#{div(diff_sec, 86400)}d ago"
     end
-  end
-
-  defp prototype_switcher(assigns) do
-    variants = [
-      {"A", "A (Balanced Box)"},
-      {"B", "B (Slim Compact Bar)"},
-      {"C", "C (Minimal Line)"}
-    ]
-
-    current_idx = Enum.find_index(variants, fn {key, _} -> key == assigns.current end) || 0
-    prev_idx = rem(current_idx - 1 + length(variants), length(variants))
-    next_idx = rem(current_idx + 1, length(variants))
-
-    {prev_key, _} = Enum.at(variants, prev_idx)
-    {next_key, _} = Enum.at(variants, next_idx)
-    {_curr_key, current_name} = Enum.at(variants, current_idx)
-
-    assigns =
-      assigns
-      |> assign(:current_name, current_name)
-      |> assign(:prev_href, build_variant_url(assigns.base_params, prev_key))
-      |> assign(:next_href, build_variant_url(assigns.base_params, next_key))
-
-    ~H"""
-    <div
-      id="prototype-switcher"
-      phx-hook=".PrototypeSwitcher"
-      class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/90 text-white shadow-2xl backdrop-blur-md border border-neutral-700/80 text-xs font-medium select-none"
-    >
-      <span class="text-[10px] font-mono tracking-wider uppercase text-neutral-400 font-bold pr-1 border-r border-neutral-700">
-        Header Variant
-      </span>
-
-      <.link
-        patch={@prev_href}
-        class="p-1 rounded-full hover:bg-neutral-800 active:scale-95 transition-all text-neutral-300 hover:text-white"
-        title="Previous variant (Left Arrow)"
-      >
-        <.icon name="hero-chevron-left" class="size-3.5" />
-      </.link>
-
-      <span class="px-2 font-semibold text-emerald-400">
-        {@current_name}
-      </span>
-
-      <.link
-        patch={@next_href}
-        class="p-1 rounded-full hover:bg-neutral-800 active:scale-95 transition-all text-neutral-300 hover:text-white"
-        title="Next variant (Right Arrow)"
-      >
-        <.icon name="hero-chevron-right" class="size-3.5" />
-      </.link>
-    </div>
-
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".PrototypeSwitcher">
-      export default {
-        mounted() {
-          this.handleKeyDown = (e) => {
-            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) ||
-                document.activeElement?.isContentEditable) {
-              return;
-            }
-            if (e.key === 'ArrowLeft') {
-              const prev = this.el.querySelector('a[title*="Previous"]');
-              if (prev) prev.click();
-            } else if (e.key === 'ArrowRight') {
-              const next = this.el.querySelector('a[title*="Next"]');
-              if (next) next.click();
-            }
-          };
-          window.addEventListener('keydown', this.handleKeyDown);
-        },
-        destroyed() {
-          if (this.handleKeyDown) {
-            window.removeEventListener('keydown', this.handleKeyDown);
-          }
-        }
-      }
-    </script>
-    """
-  end
-
-  defp build_variant_url(base_params, variant_key) do
-    filtered = Enum.reject(base_params, fn {_k, v} -> !v end)
-
-    query =
-      filtered
-      |> Enum.reject(fn {k, _} -> k == "variant" end)
-      |> Kernel.++([{"variant", variant_key}])
-      |> URI.encode_query()
-
-    "/?#{query}"
   end
 end
