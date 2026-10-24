@@ -300,6 +300,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                 <tr class="text-xs text-base-content/60 border-b border-base-200">
                   <th>Feed Name</th>
                   <th>Status</th>
+                  <th>Interval</th>
                   <th>URL</th>
                   <th class="text-right">Ingested Deals</th>
                   <th class="text-right">Last Fetched</th>
@@ -310,11 +311,22 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                   <tr class="hover:bg-base-200/40">
                     <td class="font-bold">{feed.name}</td>
                     <td>
-                      <%= if feed.is_active do %>
-                        <span class="badge badge-success badge-xs text-white">Active</span>
-                      <% else %>
-                        <span class="badge badge-ghost badge-xs">Disabled</span>
+                      <%= cond do %>
+                        <% not feed.is_active -> %>
+                          <span class="badge badge-ghost badge-xs">Disabled</span>
+                        <% feed.backoff_until && DateTime.compare(feed.backoff_until, DateTime.utc_now()) == :gt -> %>
+                          <span
+                            class="badge badge-warning badge-xs"
+                            title={"Blocked with #{feed.last_error_status || "error"}. Backed off until #{feed.backoff_until}"}
+                          >
+                            Backoff ({feed.last_error_status || "429"})
+                          </span>
+                        <% true -> %>
+                          <span class="badge badge-success badge-xs text-white">Active</span>
                       <% end %>
+                    </td>
+                    <td class="text-xs text-base-content/70">
+                      {div(feed.poll_interval_seconds || 120, 60)}m
                     </td>
                     <td
                       class="text-xs text-base-content/70 font-mono truncate max-w-xs"

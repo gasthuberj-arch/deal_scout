@@ -9,59 +9,75 @@ feeds = [
   %{
     name: "MyDealz",
     slug: "mydealz",
-    url: "https://www.mydealz.de/rss"
+    url: "https://www.mydealz.de/rss",
+    poll_interval_seconds: 120
   },
   %{
     name: "MyDealz (Hot)",
     slug: "mydealz-hot",
-    url: "https://www.mydealz.de/rss/trending"
+    url: "https://www.mydealz.de/rss/trending",
+    poll_interval_seconds: 180
   },
   %{
     name: "DealDoktor",
     slug: "dealdoktor",
-    url: "https://www.dealdoktor.de/feed/"
+    url: "https://www.dealdoktor.de/feed/",
+    poll_interval_seconds: 300
   },
   %{
     name: "MonsterDealz",
     slug: "monsterdealz",
-    url: "https://www.monsterdealz.de/feed/"
+    url: "https://www.monsterdealz.de/feed/",
+    poll_interval_seconds: 300
   },
   %{
     name: "Schnäppchenfuchs",
     slug: "schnaeppchenfuchs",
-    url: "https://schnaeppchenfuchs.com/rss"
+    url: "https://schnaeppchenfuchs.com/rss",
+    poll_interval_seconds: 600
   },
   %{
     name: "Mein-Deal",
     slug: "mein-deal",
-    url: "https://www.mein-deal.com/feed/"
+    url: "https://www.mein-deal.com/feed/",
+    poll_interval_seconds: 300
   },
   %{
     name: "Preisjäger",
     slug: "preisjaeger",
-    url: "https://www.preisjaeger.at/rss"
+    url: "https://www.preisjaeger.at/rss",
+    poll_interval_seconds: 180
   },
   %{
     name: "Dealabs",
     slug: "dealabs",
-    url: "https://www.dealabs.com/rss"
+    url: "https://www.dealabs.com/rss",
+    poll_interval_seconds: 120
   },
   %{
     name: "Reddit Deals",
     slug: "reddit-deals",
-    url: "https://www.reddit.com/r/dealdoktor/.rss"
+    url: "https://www.reddit.com/r/dealdoktor/.rss",
+    poll_interval_seconds: 900
   },
   %{
     name: "Reddit BAPC",
     slug: "reddit-bapcsales",
-    url: "https://www.reddit.com/r/bapcsales/.rss"
+    url: "https://www.reddit.com/r/bapcsales/.rss",
+    poll_interval_seconds: 900
   }
 ]
 
 for feed_attrs <- feeds do
   Repo.insert!(
     struct(Feed, feed_attrs),
-    on_conflict: [set: [name: feed_attrs.name, url: feed_attrs.url]],
+    on_conflict: [
+      set: [
+        name: feed_attrs.name,
+        url: feed_attrs.url,
+        poll_interval_seconds: feed_attrs.poll_interval_seconds
+      ]
+    ],
     conflict_target: :slug
   )
 end

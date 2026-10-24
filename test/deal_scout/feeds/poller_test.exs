@@ -38,6 +38,54 @@ defmodule DealScout.Feeds.PollerTest do
     %{feed1: feed1, feed2: feed2}
   end
 
+  test "list_due_feeds/1 respects individual intervals and backoff" do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {:ok, feed_fast} =
+      %Feed{}
+      |> Feed.changeset(%{
+        name: "Fast Feed",
+        slug: "fast-feed",
+        url: "https://example.com/fast.xml",
+        poll_interval_seconds: 60,
+        last_fetched_at: DateTime.add(now, -70, :second)
+      })
+      |> Repo.insert()
+
+    {:ok, _feed_slow} =
+      %Feed{}
+      |> Feed.changeset(%{
+        name: "Slow Feed",
+        slug: "slow-feed",
+        url: "https://example.com/slow.xml",
+        poll_interval_seconds: 600,
+        last_fetched_at: DateTime.add(now, -100, :second)
+      })
+      |> Repo.insert()
+
+    {:ok, _feed_backed_off} =
+      %Feed{}
+      |> Feed.changeset(%{
+        name: "Backed Off Feed",
+        slug: "backed-off-feed",
+        url: "https://example.com/blocked.xml",
+        poll_interval_seconds: 60,
+        last_fetched_at: DateTime.add(now, -100, :second),
+        backoff_until: DateTime.add(now, 300, :second)
+      })
+      |> Repo.insert()
+
+    due = Feeds.list_due_feeds(now)
+    due_ids = Enum.map(due, & &1.id)
+
+    # Fast Feed (due since 70s > 60s) and feeds with nil last_fetched_at are due
+    assert feed_fast.id in due_ids
+    # Slow Feed is NOT due (100s < 600s)
+    refute Enum.any?(due, &(&1.slug == "slow-feed"))
+    # Backed Off Feed is NOT due (backoff_until in future)
+    refute Enum.any?(due, &(&1.slug == "backed-off-feed"))
+  end
+
   test "starts with staggered interval and processes poll_now without crashing" do
     pid = Process.whereis(Poller)
 
@@ -94,10 +142,47 @@ defmodule DealScout.Feeds.PollerTest do
 
   test "poll_feed/1 handles fetcher error status and network failure gracefully", %{feed1: feed} do
     TestAdapter.stub_url(feed.url, {:ok, %{status: 500, body: "Server Error", headers: []}})
-    assert :ok = Poller.poll_feed(feed)
+    assert {:error, %{status: 500}} = Poller.poll_feed(feed)
+
+    updated_feed = Feeds.get_feed(feed.id)
+    assert updated_feed.consecutive_errors == 1
+    assert updated_feed.last_error_status == 500
 
     TestAdapter.stub_url(feed.url, {:error, :nxdomain})
-    assert :ok = Poller.poll_feed(feed)
+    assert {:error, :nxdomain} = Poller.poll_feed(updated_feed)
+
+    updated_feed_2 = Feeds.get_feed(feed.id)
+    assert updated_feed_2.consecutive_errors == 2
+
+    TestAdapter.reset()
+  end
+
+  test "poll_feed/1 handles 429 and 403 with exponential backoff and retry-after", %{feed1: feed} do
+    TestAdapter.stub_url(
+      feed.url,
+      {:ok, %{status: 429, body: "Rate limited", headers: [{"retry-after", "60"}]}}
+    )
+
+    assert {:error, %{status: 429}} = Poller.poll_feed(feed)
+
+    updated_feed = Feeds.get_feed(feed.id)
+    assert updated_feed.last_error_status == 429
+    assert updated_feed.consecutive_errors == 1
+    assert updated_feed.backoff_until != nil
+
+    # Verify backoff_until is roughly ~60 seconds in the future
+    diff = DateTime.diff(updated_feed.backoff_until, DateTime.utc_now(), :second)
+    assert diff >= 55 and diff <= 65
+
+    # 403 backoff without retry-after
+    TestAdapter.stub_url(feed.url, {:ok, %{status: 403, body: "Forbidden", headers: []}})
+    assert {:error, %{status: 403}} = Poller.poll_feed(updated_feed)
+
+    updated_feed_403 = Feeds.get_feed(feed.id)
+    assert updated_feed_403.last_error_status == 403
+    assert updated_feed_403.consecutive_errors == 2
+    diff_403 = DateTime.diff(updated_feed_403.backoff_until, DateTime.utc_now(), :second)
+    assert diff_403 >= 1700
 
     TestAdapter.reset()
   end

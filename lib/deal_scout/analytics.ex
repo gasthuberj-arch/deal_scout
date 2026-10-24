@@ -163,7 +163,17 @@ defmodule DealScout.Analytics do
     feeds_status =
       from(f in Feed,
         left_join: d in assoc(f, :deals),
-        group_by: [f.id, f.name, f.slug, f.url, f.last_fetched_at, f.is_active],
+        group_by: [
+          f.id,
+          f.name,
+          f.slug,
+          f.url,
+          f.last_fetched_at,
+          f.is_active,
+          f.poll_interval_seconds,
+          f.backoff_until,
+          f.last_error_status
+        ],
         select: %{
           id: f.id,
           name: f.name,
@@ -171,6 +181,9 @@ defmodule DealScout.Analytics do
           url: f.url,
           last_fetched_at: f.last_fetched_at,
           is_active: f.is_active,
+          poll_interval_seconds: f.poll_interval_seconds,
+          backoff_until: f.backoff_until,
+          last_error_status: f.last_error_status,
           deal_count: count(d.id)
         },
         order_by: [asc: f.name]

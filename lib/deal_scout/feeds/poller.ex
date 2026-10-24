@@ -13,12 +13,16 @@ defmodule DealScout.Feeds.Poller do
   alias DealScout.Feeds.Fetcher
   alias DealScout.Deals.Ingestion
 
-  # 2 minutes total cycle
-  @default_interval_ms 120_000
+  # Evaluation loop interval: how frequently the poller looks for due feeds
+  @default_interval_ms 5_000
   # Minimum stagger between feeds (ms)
-  @min_stagger_ms 5_000
+  @min_stagger_ms 2_000
   # Fast stagger when manually triggered (ms)
-  @fast_stagger_ms 1_000
+  @fast_stagger_ms 500
+  # Max backoff time: 2 hours (in seconds)
+  @max_backoff_seconds 7_200
+  # Default base backoff: 5 minutes (in seconds)
+  @default_backoff_seconds 300
   @user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 DealScout/1.0"
 
   def start_link(opts \\ []) do
@@ -120,8 +124,8 @@ defmodule DealScout.Feeds.Poller do
     {queue, next_feed_id, mode} =
       case state.queue do
         [] ->
-          feeds = Feeds.list_active_feeds()
-          feed_ids = Enum.map(feeds, & &1.id)
+          due_feeds = Feeds.list_due_feeds()
+          feed_ids = Enum.map(due_feeds, & &1.id)
 
           case feed_ids do
             [] -> {[], nil, :normal}
@@ -133,7 +137,7 @@ defmodule DealScout.Feeds.Poller do
       end
 
     if is_nil(next_feed_id) do
-      # All feeds in cycle polled; schedule next tick after full interval
+      # No feeds are currently due; check again after interval_ms (e.g. 5s)
       timer_ref = Process.send_after(self(), :tick, state.interval_ms)
       {:noreply, %{state | queue: [], active_task: nil, timer_ref: timer_ref, mode: :normal}}
     else
@@ -143,14 +147,13 @@ defmodule DealScout.Feeds.Poller do
         task = spawn_poll_task(feed)
 
         # Stagger calculation:
-        # In fast mode: short 1-second interval between feeds.
-        # In normal mode: spread across interval_ms (e.g. 120s / 10 feeds = 12s).
+        # In fast mode: short fast_stagger_ms interval between feeds.
+        # In normal mode: stagger between due feeds to avoid bursting requests.
         stagger_ms =
           if mode == :fast do
             @fast_stagger_ms
           else
-            total_active = max(1, length(queue) + 1)
-            max(@min_stagger_ms, div(state.interval_ms, total_active))
+            @min_stagger_ms
           end
 
         timer_ref = Process.send_after(self(), :tick, stagger_ms)
@@ -201,7 +204,7 @@ defmodule DealScout.Feeds.Poller do
   end
 
   @doc """
-  Polls a single feed using HTTP conditional headers.
+  Polls a single feed using HTTP conditional headers and handles backoff.
   """
   def poll_feed(feed) do
     headers = build_headers(feed)
@@ -211,23 +214,36 @@ defmodule DealScout.Feeds.Poller do
         Logger.debug("[DealScout.Poller] Feed '#{feed.name}' unchanged (304 Not Modified).")
 
         Feeds.update_feed(feed, %{
-          last_fetched_at: DateTime.utc_now() |> DateTime.truncate(:second)
+          last_fetched_at: DateTime.utc_now() |> DateTime.truncate(:second),
+          consecutive_errors: 0,
+          backoff_until: nil,
+          last_error_status: nil
         })
 
       {:ok, %{status: 200, body: body, headers: resp_headers}} ->
         handle_feed_response(feed, body, resp_headers)
 
+      {:ok, %{status: status, headers: resp_headers}} when status in [403, 429] ->
+        handle_rate_limit_or_blocked(feed, status, resp_headers)
+        {:error, %{status: status}}
+
       {:ok, %{status: status}} ->
         Logger.warning("[DealScout.Poller] Feed '#{feed.name}' returned HTTP status #{status}.")
+        handle_error_status(feed, status)
+        {:error, %{status: status}}
 
       {:error, reason} ->
         Logger.error("[DealScout.Poller] Failed to fetch feed '#{feed.name}': #{inspect(reason)}")
+        handle_error_status(feed, nil)
+        {:error, reason}
     end
   rescue
     e ->
       Logger.error(
         "[DealScout.Poller] Exception polling feed '#{feed.name}': #{Exception.message(e)}"
       )
+
+      {:error, e}
   end
 
   defp handle_feed_response(feed, body, resp_headers) when is_binary(body) do
@@ -246,7 +262,10 @@ defmodule DealScout.Feeds.Poller do
         Feeds.update_feed(feed, %{
           last_fetched_at: now,
           etag: etag || feed.etag,
-          last_modified: last_mod || feed.last_modified
+          last_modified: last_mod || feed.last_modified,
+          consecutive_errors: 0,
+          backoff_until: nil,
+          last_error_status: nil
         })
 
       {:error, reason} ->
@@ -259,6 +278,85 @@ defmodule DealScout.Feeds.Poller do
   end
 
   defp handle_feed_response(_feed, _non_binary_body, _headers), do: :ok
+
+  defp handle_rate_limit_or_blocked(feed, status, resp_headers) do
+    retry_after = parse_retry_after(get_header(resp_headers, "retry-after"))
+    errors = (feed.consecutive_errors || 0) + 1
+
+    # Base backoff: if Retry-After is specified, use that; otherwise calculate exponential backoff
+    backoff_secs =
+      cond do
+        retry_after && retry_after > 0 ->
+          retry_after
+
+        status == 403 ->
+          # 403 often indicates Cloudflare/WAF block - back off more aggressively (at least 30m)
+          min(
+            @max_backoff_seconds,
+            max(1_800, @default_backoff_seconds * round(:math.pow(2, min(errors - 1, 4))))
+          )
+
+        true ->
+          # 429 exponential backoff: 5m, 10m, 20m, 40m, up to 2h
+          min(
+            @max_backoff_seconds,
+            @default_backoff_seconds * round(:math.pow(2, min(errors - 1, 4)))
+          )
+      end
+
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    backoff_until = DateTime.add(now, backoff_secs, :second)
+
+    Logger.warning(
+      "[DealScout.Poller] Feed '#{feed.name}' hit status #{status}. Consecutive errors: #{errors}. Backing off until #{backoff_until} (#{backoff_secs}s)."
+    )
+
+    Feeds.update_feed(feed, %{
+      consecutive_errors: errors,
+      last_error_status: status,
+      backoff_until: backoff_until
+    })
+  end
+
+  defp handle_error_status(feed, status) do
+    errors = (feed.consecutive_errors || 0) + 1
+    # For general errors, apply mild backoff starting after 2 consecutive errors
+    backoff_until =
+      if errors >= 2 do
+        backoff_secs = min(@max_backoff_seconds, 60 * round(:math.pow(2, min(errors - 2, 4))))
+        DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(backoff_secs, :second)
+      else
+        nil
+      end
+
+    Feeds.update_feed(feed, %{
+      consecutive_errors: errors,
+      last_error_status: status,
+      backoff_until: backoff_until
+    })
+  end
+
+  defp parse_retry_after(nil), do: nil
+
+  defp parse_retry_after(val) when is_binary(val) do
+    case Integer.parse(String.trim(val)) do
+      {seconds, ""} when seconds >= 0 ->
+        seconds
+
+      _ ->
+        case DateTime.from_iso8601(val) do
+          {:ok, dt, _} ->
+            diff = DateTime.diff(dt, DateTime.utc_now(), :second)
+            if diff > 0, do: diff, else: nil
+
+          _ ->
+            nil
+        end
+    end
+  end
+
+  defp parse_retry_after(val) when is_integer(val) and val >= 0, do: val
+  defp parse_retry_after(_), do: nil
 
   defp build_headers(feed) do
     headers = [
