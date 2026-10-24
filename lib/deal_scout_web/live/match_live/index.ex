@@ -251,7 +251,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                         </span>
                       </div>
 
-                      <h2 class="font-bold text-sm sm:text-base leading-snug line-clamp-2">
+                      <h2 class="font-bold text-xs sm:text-sm leading-snug line-clamp-2">
                         <a
                           href={match.deal.url}
                           target="_blank"

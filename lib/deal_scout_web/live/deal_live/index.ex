@@ -443,8 +443,8 @@ defmodule DealScoutWeb.DealLive.Index do
                     class="size-20 shrink-0"
                     img_class="group-hover:scale-105 transition-transform"
                   />
-                  <div class="space-y-1.5 flex-1 min-w-0">
-                    <h2 class="font-bold text-sm sm:text-base leading-snug line-clamp-2 text-base-content group-hover:text-primary transition-colors">
+                  <div class="space-y-1 flex-1 min-w-0">
+                    <h2 class="font-bold text-xs sm:text-sm leading-snug line-clamp-2 text-base-content group-hover:text-primary transition-colors">
                       <a href={deal.url} target="_blank" rel="noopener noreferrer">
                         {deal.title}
                       </a>
