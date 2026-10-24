@@ -59,7 +59,8 @@ defmodule DealScout.Application do
       [
         {DealScout.Feeds.Poller, []},
         {DealScout.Maintenance.Pruner, []},
-        {DealScout.Notifications.DigestWorker, []}
+        {DealScout.Notifications.DigestWorker, []},
+        {DealScout.Analytics.Warmer, []}
       ]
     else
       []

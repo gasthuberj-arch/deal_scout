@@ -79,6 +79,21 @@ defmodule DealScout.AnalyticsTest do
     assert stats3.total_deals == stats1.total_deals + 1
   end
 
+  test "Analytics.Warmer refreshes cache in background" do
+    alias DealScout.Analytics.Warmer
+
+    Cache.invalidate_analytics()
+    # Before warming or manual call, warmer can be started
+    start_supervised!({Warmer, interval_ms: 60_000})
+
+    # Wait for GenServer to handle initial :refresh
+    _ = :sys.get_state(Warmer)
+
+    stats = Analytics.get_deal_intelligence_stats()
+    assert is_map(stats)
+    assert stats.total_deals >= 2
+  end
+
   test "get_system_ops_stats returns presence count, users, and feed health" do
     ops = Analytics.get_system_ops_stats()
 

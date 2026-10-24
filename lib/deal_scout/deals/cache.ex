@@ -40,6 +40,8 @@ defmodule DealScout.Deals.Cache do
 
   @doc """
   Fetches deal intelligence analytics stats from cache or executes fallback query.
+  When cache warming is active, the cache is periodically refreshed in the background.
+  If a cache miss occurs before the warmer completes, fallback_fn is invoked.
   """
   def fetch_deal_intelligence_stats(fallback_fn) when is_function(fallback_fn, 0) do
     now = System.monotonic_time(:millisecond)
@@ -53,6 +55,15 @@ defmodule DealScout.Deals.Cache do
         insert(:deal_intelligence_stats, stats, now + @default_analytics_ttl_ms)
         stats
     end
+  end
+
+  @doc """
+  Explicitly stores computed deal intelligence stats in ETS with standard TTL.
+  Used by `DealScout.Analytics.Warmer` to push warm cache snapshots.
+  """
+  def put_deal_intelligence_stats(stats) do
+    now = System.monotonic_time(:millisecond)
+    insert(:deal_intelligence_stats, stats, now + @default_analytics_ttl_ms)
   end
 
   @doc """
