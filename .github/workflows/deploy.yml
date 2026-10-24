@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Elixir and Erlang
         uses: erlef/setup-beam@v1
@@ -29,7 +29,7 @@ jobs:
           otp-version: '27.3'
 
       - name: Restore dependencies and build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             deps
@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
