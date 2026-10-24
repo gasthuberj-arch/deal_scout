@@ -215,15 +215,11 @@ defmodule DealScoutWeb.MatchLive.Index do
               >
                 <div class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div class="flex items-start gap-4 flex-1 min-w-0">
-                    <%= if match.deal.image_url do %>
-                      <img
-                        src={match.deal.image_url}
-                        alt={match.deal.title}
-                        class="size-16 object-cover rounded-xl border border-base-200 shrink-0"
-                        loading="lazy"
-                        onerror="this.style.display='none'"
-                      />
-                    <% end %>
+                    <.deal_image
+                      src={match.deal.image_url}
+                      alt={match.deal.title}
+                      class="size-16 shrink-0"
+                    />
 
                     <div class="space-y-1.5 flex-1 min-w-0">
                       <div class="flex flex-wrap items-center gap-2 text-xs">

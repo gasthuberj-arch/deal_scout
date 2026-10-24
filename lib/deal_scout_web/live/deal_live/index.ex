@@ -437,17 +437,12 @@ defmodule DealScoutWeb.DealLive.Index do
 
                 <!-- Deal Image & Title Row -->
                 <div class="flex gap-4">
-                  <%= if deal.image_url do %>
-                    <div class="shrink-0">
-                      <img
-                        src={deal.image_url}
-                        alt={deal.title}
-                        class="size-20 object-cover rounded-xl border border-base-200 bg-base-200 group-hover:scale-105 transition-transform"
-                        loading="lazy"
-                        onerror="this.style.display='none'"
-                      />
-                    </div>
-                  <% end %>
+                  <.deal_image
+                    src={deal.image_url}
+                    alt={deal.title}
+                    class="size-20 shrink-0"
+                    img_class="group-hover:scale-105 transition-transform"
+                  />
                   <div class="space-y-1.5 flex-1 min-w-0">
                     <h2 class="font-bold text-sm sm:text-base leading-snug line-clamp-2 text-base-content group-hover:text-primary transition-colors">
                       <a href={deal.url} target="_blank" rel="noopener noreferrer">

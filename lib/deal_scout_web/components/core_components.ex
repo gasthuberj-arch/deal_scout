@@ -476,6 +476,43 @@ defmodule DealScoutWeb.CoreComponents do
   end
 
   @doc """
+  Renders a deal or product image with graceful fallback placeholder when
+  loading fails or no image is provided.
+  """
+  attr :src, :string, default: nil
+  attr :alt, :string, default: ""
+  attr :class, :string, default: "size-20"
+  attr :img_class, :string, default: "size-20 object-cover"
+
+  def deal_image(assigns) do
+    ~H"""
+    <div class={[
+      "relative shrink-0 overflow-hidden rounded-xl border border-base-200 bg-base-200/50 flex items-center justify-center select-none",
+      @class
+    ]}>
+      <!-- Fallback Placeholder: soft shopping bag / tag glyph -->
+      <div class="deal-image-placeholder absolute inset-0 flex items-center justify-center text-base-content/25">
+        <.icon name="hero-shopping-bag" class="size-1/2 stroke-1" />
+      </div>
+
+      <%= if @src && @src != "" do %>
+        <img
+          src={@src}
+          alt={@alt}
+          class={[
+            "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
+            @img_class
+          ]}
+          loading="lazy"
+          onload="this.classList.remove('opacity-0')"
+          onerror="this.remove()"
+        />
+      <% end %>
+    </div>
+    """
+  end
+
+  @doc """
   Translates an error message using gettext.
   """
   def translate_error({msg, opts}) do
