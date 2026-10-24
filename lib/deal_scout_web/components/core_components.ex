@@ -487,12 +487,14 @@ defmodule DealScoutWeb.CoreComponents do
   def deal_image(assigns) do
     ~H"""
     <div class={[
-      "relative shrink-0 overflow-hidden rounded-xl border border-base-200 bg-base-200/50 flex items-center justify-center select-none",
+      "relative shrink-0 overflow-hidden rounded-xl border border-base-200/80 bg-base-200/50 dark:bg-base-200/30 flex items-center justify-center select-none",
       @class
     ]}>
       <!-- Fallback Placeholder: soft shopping bag / tag glyph -->
-      <div class="deal-image-placeholder absolute inset-0 flex items-center justify-center text-base-content/25">
-        <.icon name="hero-shopping-bag" class="size-1/2 stroke-1" />
+      <div class="deal-image-placeholder absolute inset-0 flex items-center justify-center text-base-content/40 dark:text-base-content/60">
+        <div class="p-2.5 rounded-xl bg-base-300/40 dark:bg-base-100/50 flex items-center justify-center">
+          <.icon name="hero-shopping-bag" class="size-6 stroke-[1.5]" />
+        </div>
       </div>
 
       <%= if @src && @src != "" do %>
