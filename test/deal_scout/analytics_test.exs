@@ -4,9 +4,12 @@ defmodule DealScout.AnalyticsTest do
   alias DealScout.Analytics
   alias DealScout.Repo
   alias DealScout.Deals
+  alias DealScout.Deals.Cache
   alias DealScout.Feeds.Feed
 
   setup do
+    Cache.invalidate_analytics()
+
     feed =
       Repo.insert!(%Feed{name: "MyDealz", slug: "mydealz", url: "https://www.mydealz.de/rss"})
 
@@ -47,6 +50,33 @@ defmodule DealScout.AnalyticsTest do
     assert stats.avg_temperature > 0.0
     assert length(stats.deals_by_feed) >= 1
     assert length(stats.top_merchants) >= 1
+  end
+
+  test "get_deal_intelligence_stats caches result across calls until invalidated" do
+    stats1 = Analytics.get_deal_intelligence_stats()
+
+    # Inserting another deal won't immediately alter the cached stats
+    feed = Repo.get_by!(Feed, slug: "mydealz")
+
+    {:ok, _deal3} =
+      Deals.insert_deal(%{
+        feed_id: feed.id,
+        guid: "analytics-deal-cached-test",
+        title: "Apple iPad Air",
+        url: "https://www.amazon.de/dp/B0CHX1TTEST",
+        price: Decimal.new("599.00"),
+        merchant: "Amazon",
+        temperature: 300,
+        published_at: DateTime.utc_now()
+      })
+
+    stats2 = Analytics.get_deal_intelligence_stats()
+    assert stats2.total_deals == stats1.total_deals
+
+    # When invalidated, fresh stats are computed
+    Cache.invalidate_analytics()
+    stats3 = Analytics.get_deal_intelligence_stats()
+    assert stats3.total_deals == stats1.total_deals + 1
   end
 
   test "get_system_ops_stats returns presence count, users, and feed health" do

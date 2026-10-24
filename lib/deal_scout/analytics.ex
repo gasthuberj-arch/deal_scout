@@ -5,14 +5,24 @@ defmodule DealScout.Analytics do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Deals.{Deal, Merchant, CrossBorderGuard}
+  alias DealScout.Deals.{Cache, Deal, Merchant, CrossBorderGuard}
   alias DealScout.Feeds.Feed
   alias DealScout.Accounts.User
 
   @doc """
   Computes aggregated deal intelligence metrics for the `/analytics` dashboard.
+  Uses an in-memory ETS cache with a 60-second TTL to avoid heavy recalculations.
   """
   def get_deal_intelligence_stats do
+    Cache.fetch_deal_intelligence_stats(fn ->
+      compute_deal_intelligence_stats()
+    end)
+  end
+
+  @doc """
+  Directly computes aggregated deal intelligence metrics without consulting cache.
+  """
+  def compute_deal_intelligence_stats do
     total_deals = Repo.aggregate(Deal, :count, :id) || 0
 
     total_duplicates =
