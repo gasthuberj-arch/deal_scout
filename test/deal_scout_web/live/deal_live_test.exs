@@ -30,8 +30,6 @@ defmodule DealScoutWeb.DealLiveTest do
   test "disconnected and connected mount of deals stream", %{conn: conn, deal: deal} do
     {:ok, view, html} = live(conn, ~p"/")
 
-    assert html =~ "Deal Scout"
-    assert html =~ "Real-Time"
     assert html =~ deal.title
     assert html =~ "1099"
 

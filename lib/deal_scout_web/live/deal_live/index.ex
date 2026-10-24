@@ -210,21 +210,6 @@ defmodule DealScoutWeb.DealLive.Index do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-6">
-        <!-- Hero & Controls Bar: Balanced Box -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-base-200/50 p-4 sm:p-5 rounded-2xl border border-base-300">
-          <div>
-            <h1 class="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <span>Deal Scout</span>
-              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                <span class="size-2 rounded-full bg-emerald-500 animate-pulse"></span> Real-Time
-              </span>
-            </h1>
-            <p class="text-xs sm:text-sm text-base-content/70 mt-1 leading-relaxed">
-              Aggregated real-time deal streams with Geizhals & Idealo price comparisons, community temperatures, and merchant fakeshop shield.
-            </p>
-          </div>
-        </div>
-
         <!-- Filter & Search Toolbar -->
         <div class="space-y-3">
           <!-- Feed Filter Pills -->
