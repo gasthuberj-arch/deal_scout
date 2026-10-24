@@ -1,5 +1,5 @@
 defmodule DealScout.Alerts.MatcherTest do
-  use ExUnit.Case, async: true
+  use DealScout.DataCase, async: true
   alias DealScout.Alerts.Matcher
   alias DealScout.Alerts.AlertRule
   alias DealScout.Deals.{Deal, Merchant}
@@ -225,5 +225,56 @@ defmodule DealScout.Alerts.MatcherTest do
     assert Matcher.matches?(deal, %AlertRule{keywords: ") RTX 4080", is_active: true})
     assert Matcher.matches?(deal, %AlertRule{keywords: "RTX 4080,", is_active: true})
     assert Matcher.matches?(deal, %AlertRule{keywords: "„RTX 4080 SUPER“", is_active: true})
+  end
+
+  describe "match_batch/3 and test_rule/2 deep module interface" do
+    alias DealScout.KeywordEngine
+
+    defp ids(deals), do: deals |> Enum.map(& &1.id) |> Enum.sort()
+
+    test "match_batch/3 evaluates rules, keywords, filters and negative keywords together", %{
+      deal: deal
+    } do
+      d1 = %{deal | id: 1, title: "Samsung TV 55"}
+      d2 = %{deal | id: 2, title: "Samsung TV 55 refurbished"}
+      d3 = %{deal | id: 3, title: "Samsung TVOC sensor"}
+
+      rule = %AlertRule{id: 10, user_id: 1, keywords: "tv", negative_keywords: "refurbished"}
+
+      {:ok, %{matches_by_rule: matches}} =
+        Matcher.match_batch([d1, d2, d3], [rule], ensure_fresh_index: false)
+
+      assert Map.has_key?(matches, rule)
+      assert ids(Map.get(matches, rule)) == [1]
+    end
+
+    test "test_rule/2 tests a single rule against candidate deals" do
+      d1 = %Deal{id: 1, title: "LG OLED 65", price: Decimal.new("1200")}
+      d2 = %Deal{id: 2, title: "LG Refrigerator", price: Decimal.new("800")}
+      rule = %AlertRule{id: 20, keywords: "oled"}
+
+      matched = Matcher.test_rule(rule, [d1, d2])
+      assert ids(matched) == [1]
+    end
+
+    test "match_batch/3 handles prefilter with compiled index and uncompiled fallback", %{
+      deal: deal
+    } do
+      previous = KeywordEngine.get_state()
+      on_exit(fn -> KeywordEngine.put_state(previous) end)
+      KeywordEngine.put_state(nil)
+
+      d1 = %{deal | id: 1, title: "Samsung TV 55"}
+      compiled_rule = %AlertRule{id: 10, user_id: 1, keywords: "samsung"}
+      new_rule = %AlertRule{id: 11, user_id: 1, keywords: "tv"}
+
+      KeywordEngine.compile_and_store([compiled_rule])
+
+      {:ok, %{matches_by_rule: matches}} =
+        Matcher.match_batch([d1], [compiled_rule, new_rule], ensure_fresh_index: false)
+
+      assert ids(Map.get(matches, compiled_rule)) == [1]
+      assert ids(Map.get(matches, new_rule)) == [1]
+    end
   end
 end

@@ -9,9 +9,99 @@ defmodule DealScout.Alerts.Matcher do
 
   alias DealScout.Deals
   alias DealScout.Deals.Deal
-  alias DealScout.Alerts.AlertRule
+  alias DealScout.Alerts.{AlertRule, ComputeGuard}
   alias DealScout.Deals.CrossBorderGuard
+  alias DealScout.KeywordEngine
   alias DealScout.KeywordEngine.Query
+
+  @type match_batch_result :: %{
+          matches_by_rule: %{AlertRule.t() => [Deal.t()]},
+          paused_rules: [AlertRule.t()]
+        }
+
+  @doc """
+  Evaluates a batch of deals against alert rules.
+  Handles index freshness check, single-pass Aho-Corasick prefiltering,
+  rule filter matching, and compute budget enforcement internally.
+
+  Returns `{:ok, %{matches_by_rule: matches_map, paused_rules: paused_list}}`.
+  """
+  @spec match_batch([Deal.t()], [AlertRule.t()], keyword()) :: {:ok, match_batch_result()}
+  def match_batch(deals, rules, opts \\ []) when is_list(deals) and is_list(rules) do
+    if Keyword.get(opts, :ensure_fresh_index, true) do
+      KeywordEngine.Server.ensure_fresh_index()
+    end
+
+    prefilter? = Keyword.get(opts, :prefilter, true)
+    enriched_deals = Enum.map(deals, &CrossBorderGuard.enrich/1)
+
+    {compiled_rules, candidates_by_deal_id} =
+      if prefilter? do
+        deal_items =
+          Enum.map(enriched_deals, fn d -> %{id: d.id, text: searchable_text(d)} end)
+
+        KeywordEngine.prefilter_batch(deal_items)
+      else
+        {%{}, %{}}
+      end
+
+    {matches_by_rule, paused_rules} =
+      Enum.reduce(rules, {%{}, []}, fn rule, {acc_matches, acc_paused} ->
+        eval_fn = fn ->
+          compiled? =
+            case Map.fetch(compiled_rules, rule.id) do
+              {:ok, compiled_keywords} when prefilter? and not is_nil(rule.id) ->
+                is_nil(compiled_keywords) or compiled_keywords == rule.keywords
+
+              _ ->
+                false
+            end
+
+          Enum.filter(enriched_deals, fn deal ->
+            if compiled? do
+              candidate_ids = Map.get(candidates_by_deal_id, deal.id, MapSet.new())
+
+              MapSet.member?(candidate_ids, rule.id) and
+                matches_filters?(deal, rule) and
+                not_excluded?(deal, rule.negative_keywords)
+            else
+              matches?(deal, rule)
+            end
+          end)
+        end
+
+        case ComputeGuard.run(rule, deals, opts, eval_fn) do
+          :paused ->
+            {acc_matches, [rule | acc_paused]}
+
+          {:ok, matched_deals} ->
+            new_matches =
+              if matched_deals != [] do
+                Map.put(acc_matches, rule, matched_deals)
+              else
+                acc_matches
+              end
+
+            {new_matches, acc_paused}
+        end
+      end)
+
+    {:ok,
+     %{
+       matches_by_rule: matches_by_rule,
+       paused_rules: Enum.reverse(paused_rules)
+     }}
+  end
+
+  @doc """
+  Tests a single alert rule against a list of candidate deals (e.g. for backtesting).
+  Bypasses prefiltering and compute budget pauses to evaluate the rule directly.
+  """
+  @spec test_rule(AlertRule.t(), [Deal.t()]) :: [Deal.t()]
+  def test_rule(%AlertRule{} = rule, deals) when is_list(deals) do
+    enriched_deals = Enum.map(deals, &CrossBorderGuard.enrich/1)
+    Enum.filter(enriched_deals, &matches?(&1, rule))
+  end
 
   @doc """
   Returns true if the deal matches the alert rule.

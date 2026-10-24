@@ -5,7 +5,7 @@ defmodule DealScout.Alerts do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Alerts.{AlertRule, ComputeGuard, Evaluation, UserMatch}
+  alias DealScout.Alerts.{AlertRule, ComputeGuard, Matcher, UserMatch}
   alias DealScout.Notifications.Dispatcher
   alias DealScout.Deals.{Deal, CrossBorderGuard}
   alias DealScout.KeywordEngine
@@ -138,49 +138,41 @@ defmodule DealScout.Alerts do
   Matches a list of newly ingested deals against all active alert rules.
   For each match, creates a UserMatch record and dispatches notifications
   with canonical deduplication and polling-cycle batch collapsing.
-  Measures query evaluation duration, emits telemetry, and enforces the
-  compute budget circuit breaker normalized by batch size (with a 1-deal floor).
+  Evaluation, telemetry, and compute budget circuit breaker are handled
+  internally by `Matcher.match_batch/3`.
   """
   def process_new_deals(deals, opts \\ []) when is_list(deals) do
-    KeywordEngine.Server.ensure_fresh_index()
-
-    batch = deals |> Repo.preload([:merchant, :feed]) |> Evaluation.prepare()
-    deals = batch.deals
-
+    deals = Repo.preload(deals, [:merchant, :feed])
     rules = Keyword.get(opts, :rules) || list_active_rules()
 
-    # Collect matches grouped by rule for batch collapsing
-    matches_by_rule =
-      for rule <- rules, reduce: %{} do
+    {:ok, %{matches_by_rule: matches_by_rule}} = Matcher.match_batch(deals, rules, opts)
+
+    # Collect and persist non-duplicate matches grouped by rule
+    persisted_matches_by_rule =
+      for {rule, matched_deals} <- matches_by_rule, reduce: %{} do
         acc ->
-          case ComputeGuard.run(rule, deals, opts, fn -> Evaluation.evaluate(batch, rule) end) do
-            :paused ->
-              acc
+          matched_for_rule =
+            for deal <- matched_deals,
+                not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
+              case insert_match(deal, rule) do
+                {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
+                  match
 
-            {:ok, matched_deals} ->
-              matched_for_rule =
-                for deal <- matched_deals,
-                    not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
-                  case insert_match(deal, rule) do
-                    {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
-                      match
-
-                    _ ->
-                      nil
-                  end
-                end
-                |> Enum.reject(&is_nil/1)
-
-              if matched_for_rule != [] do
-                Map.put(acc, rule, matched_for_rule)
-              else
-                acc
+                _ ->
+                  nil
               end
+            end
+            |> Enum.reject(&is_nil/1)
+
+          if matched_for_rule != [] do
+            Map.put(acc, rule, matched_for_rule)
+          else
+            acc
           end
       end
 
     # Dispatch notifications per rule (Dispatcher enforces Cooldown, LiveView broadcast, and Digest queueing)
-    for {rule, matches} <- matches_by_rule do
+    for {rule, matches} <- persisted_matches_by_rule do
       Dispatcher.dispatch_batch(rule, matches)
     end
   end

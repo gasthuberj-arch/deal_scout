@@ -7,7 +7,7 @@ defmodule DealScout.KeywordEngine do
   inverted index stored in `:persistent_term`.
 
   Exposes a high-level prefilter interface (`prefilter_batch/1`) so callers
-  such as `DealScout.Alerts.Evaluation` never inspect internal tuple shapes or
+  such as `DealScout.Alerts.Matcher` never inspect internal tuple shapes or
   `:persistent_term` keys.
   """
 
