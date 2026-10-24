@@ -42,6 +42,12 @@ COPY assets assets
 # Compile the release
 RUN mix compile
 
+# Pre-download tailwind binary using curl (supports arch detection & avoids Erlang :httpc 10KB header limits on GitHub Releases)
+RUN ARCH=$(dpkg --print-architecture) && \
+    mkdir -p /app/_build && \
+    curl -fsSL "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-${ARCH}" -o /app/_build/tailwind-linux-${ARCH}-4.3.3 && \
+    chmod +x /app/_build/tailwind-linux-${ARCH}-4.3.3
+
 # compile assets
 RUN mix assets.deploy
 
