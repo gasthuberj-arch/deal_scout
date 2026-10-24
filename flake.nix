@@ -23,6 +23,26 @@
         }
       );
 
+      devShells = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          beamPkgs = pkgs.beam.packages.erlang_29;
+        in {
+          default = pkgs.mkShell {
+            packages = [
+              beamPkgs.elixir_1_20
+              beamPkgs.erlang
+              beamPkgs.rebar3
+              pkgs.git
+            ];
+
+            shellHook = ''
+              export MIX_REBAR3="${beamPkgs.rebar3}/bin/rebar3"
+            '';
+          };
+        }
+      );
+
       nixosModules = {
         default = import ./clients/nas-backup/module.nix;
         backup = import ./clients/nas-backup/module.nix;
