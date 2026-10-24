@@ -217,7 +217,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
               <div class="text-xs text-base-content/60 font-medium">Remote Client Address</div>
               <div class="text-sm font-bold font-mono mt-1 text-base-content">
                 <%= if @backup.connected_client do %>
-                  {@backup.connected_client.remote_ip}
+                  {Map.get(@backup.connected_client, :remote_ip, "Unknown")}
                 <% else %>
                   <span class="text-base-content/40">Not connected</span>
                 <% end %>
@@ -590,6 +590,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   end
 
   defp format_duration_ms(nil), do: "—"
+  defp format_duration_ms(us) when is_integer(us) and us < 1_000, do: "#{us} µs"
   defp format_duration_ms(us) when is_integer(us), do: "#{Float.round(us / 1000, 2)} ms"
 
   defp format_uptime(seconds) when seconds < 60, do: "#{seconds}s"

@@ -78,7 +78,10 @@ defmodule DealScout.Deals.MerchantGuard do
     "schnaeppchenfuchs.com",
     "mein-deal.com",
     "preisjaeger.at",
-    "dealabs.com"
+    "dealabs.com",
+    "chollometro.com",
+    "pepper.com",
+    "gg.deals"
   ]
 
   @doc """

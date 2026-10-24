@@ -1,6 +1,5 @@
 alias DealScout.Repo
 alias DealScout.Feeds.Feed
-alias DealScout.Deals
 alias DealScout.Deals.Deal
 alias DealScout.Feeds.Parser
 import Ecto.Query
@@ -47,6 +46,30 @@ feeds = [
     slug: "dealabs",
     url: "https://www.dealabs.com/rss",
     poll_interval_seconds: 120
+  },
+  %{
+    name: "Chollometro",
+    slug: "chollometro",
+    url: "https://www.chollometro.com/rss",
+    poll_interval_seconds: 180
+  },
+  %{
+    name: "nl.pepper.com",
+    slug: "pepper-nl",
+    url: "https://nl.pepper.com/rss",
+    poll_interval_seconds: 180
+  },
+  %{
+    name: "GG.deals (Freebies)",
+    slug: "ggdeals-freebies",
+    url: "https://gg.deals/news/freebies/feed/",
+    poll_interval_seconds: 300
+  },
+  %{
+    name: "GG.deals (EU Deals)",
+    slug: "ggdeals-news",
+    url: "https://gg.deals/eu/news/feed/",
+    poll_interval_seconds: 300
   }
 ]
 

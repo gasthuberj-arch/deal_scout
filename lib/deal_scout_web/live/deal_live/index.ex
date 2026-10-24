@@ -686,6 +686,18 @@ defmodule DealScoutWeb.DealLive.Index do
   defp feed_badge_classes("dealabs"),
     do: "bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-500/40"
 
+  defp feed_badge_classes("chollometro"),
+    do: "bg-red-500/20 text-red-800 dark:text-red-200 border-red-500/40"
+
+  defp feed_badge_classes("pepper-nl"),
+    do: "bg-orange-500/20 text-orange-800 dark:text-orange-200 border-orange-500/40"
+
+  defp feed_badge_classes("ggdeals-freebies"),
+    do: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40"
+
+  defp feed_badge_classes("ggdeals-news"),
+    do: "bg-indigo-500/20 text-indigo-800 dark:text-indigo-200 border-indigo-500/40"
+
   defp feed_badge_classes(_),
     do: "bg-base-200 text-base-content border-base-300"
 
