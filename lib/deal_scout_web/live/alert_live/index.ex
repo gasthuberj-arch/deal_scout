@@ -473,21 +473,21 @@ defmodule DealScoutWeb.AlertLive.Index do
         <%= if @live_action in [:new, :edit] do %>
           <div
             id="alert-rule-modal"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-hidden"
+            class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm overflow-hidden"
             role="dialog"
             aria-modal="true"
           >
-            <div class="card bg-base-100 w-full max-w-xl max-h-[90vh] shadow-2xl border border-base-300 flex flex-col overflow-hidden my-auto">
+            <div class="card bg-base-100 w-full sm:max-w-xl max-h-[92dvh] sm:max-h-[90vh] shadow-2xl border-t sm:border border-base-300 rounded-b-none sm:rounded-2xl flex flex-col overflow-hidden">
               <!-- Modal Header (fixed/sticky) -->
-              <div class="flex items-center justify-between px-6 py-4 border-b border-base-200 shrink-0 bg-base-100">
-                <h3 class="font-bold text-lg text-base-content flex items-center gap-2">
+              <div class="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 shrink-0 bg-base-100">
+                <h3 class="font-bold text-base sm:text-lg text-base-content flex items-center gap-2">
                   <.icon name="hero-bell" class="size-5 text-primary" />
                   <span>{if @live_action == :new, do: "Create Alert Rule", else: "Edit Alert Rule"}</span>
                 </h3>
                 <.link
                   patch={~p"/alerts"}
                   id="close-rule-modal-btn"
-                  class="btn btn-ghost btn-circle btn-sm"
+                  class="btn btn-ghost btn-circle btn-sm min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 flex items-center justify-center"
                   aria-label="Close"
                 >
                   ✕
@@ -504,10 +504,10 @@ defmodule DealScoutWeb.AlertLive.Index do
                 autocorrect="off"
                 autocapitalize="off"
                 spellcheck="false"
-                class="flex flex-col flex-1 min-h-0"
+                class="flex flex-col flex-1 min-h-0 overflow-hidden"
               >
                 <!-- Scrollable Body for all inputs -->
-                <div class="overflow-y-auto px-6 py-4 space-y-4 flex-1">
+                <div class="overflow-y-auto px-4 sm:px-6 py-4 space-y-4 flex-1">
                   <.input
                     field={@form[:name]}
                     id="alert-rule-name-input"
@@ -722,7 +722,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     id="backtest-section"
                     class="p-4 bg-base-200/50 rounded-xl border border-base-300 space-y-3"
                   >
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
                           <.icon name="hero-beaker" class="size-4 text-primary" />
@@ -739,7 +739,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                         id="backtest-rule-btn"
                         phx-click="backtest_rule"
                         phx-disable-with="Testing..."
-                        class="btn btn-sm btn-outline btn-primary shrink-0 flex items-center gap-1.5 shadow-sm"
+                        class="btn btn-sm btn-outline btn-primary w-full sm:w-auto min-h-11 sm:min-h-8 shrink-0 flex items-center justify-center gap-1.5 shadow-sm text-xs sm:text-xs font-semibold"
                       >
                         <.icon name="hero-beaker" class="size-4" />
                         <span>Test Rule on Past Deals</span>
@@ -855,8 +855,12 @@ defmodule DealScoutWeb.AlertLive.Index do
                 </div>
 
                 <!-- Sticky Footer with Save button always visible -->
-                <div class="sticky bottom-0 bg-base-100 px-6 py-3.5 border-t border-base-200 z-10 flex items-center justify-end gap-2 shrink-0">
-                  <.link patch={~p"/alerts"} id="cancel-rule-btn" class="btn btn-ghost btn-sm">
+                <div class="sticky bottom-0 bg-base-100 px-4 sm:px-6 py-3 sm:py-3.5 border-t border-base-200 z-10 flex items-center justify-end gap-2.5 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <.link
+                    patch={~p"/alerts"}
+                    id="cancel-rule-btn"
+                    class="btn btn-ghost btn-sm min-h-11 sm:min-h-8 px-4 flex items-center justify-center font-medium"
+                  >
                     Cancel
                   </.link>
                   <.button
@@ -864,7 +868,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     name="action"
                     value="save"
                     id="save-rule-btn"
-                    class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
+                    class="btn btn-primary btn-sm min-h-11 sm:min-h-8 px-5 flex items-center justify-center gap-1.5 shadow-sm font-semibold"
                   >
                     <.icon name="hero-check" class="size-4" />
                     <span>Save Rule</span>
