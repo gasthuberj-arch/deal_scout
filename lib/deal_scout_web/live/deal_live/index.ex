@@ -378,16 +378,16 @@ defmodule DealScoutWeb.DealLive.Index do
                 <div class="flex items-center justify-between text-xs text-base-content/60">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class={[
-                      "badge badge-sm font-medium",
-                      feed_badge_class(deal.feed && deal.feed.slug)
+                      "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md border tracking-tight shadow-xs",
+                      feed_badge_classes(deal.feed && deal.feed.slug)
                     ]}>
                       {if deal.feed, do: deal.feed.name, else: "Deal"}
                     </span>
 
                     <%= if deal.temperature do %>
                       <span class={[
-                        "badge badge-sm font-bold gap-1",
-                        temperature_badge_class(deal.temperature)
+                        "inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border shadow-xs",
+                        temperature_badge_classes(deal.temperature)
                       ]}>
                         <.icon name="hero-fire" class="size-3" />
                         {deal.temperature}°
@@ -397,7 +397,7 @@ defmodule DealScoutWeb.DealLive.Index do
                     <% country = CrossBorderGuard.detect_country(deal) %>
                     <%= if country do %>
                       <span
-                        class="badge badge-sm badge-ghost border border-base-300 gap-1 font-medium text-[11px]"
+                        class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border border-base-300 bg-base-200/60 text-base-content/80 shadow-xs"
                         title={"Dispatched / Origin: #{country.name}"}
                       >
                         <span>{country.flag}</span>
@@ -665,31 +665,47 @@ defmodule DealScoutWeb.DealLive.Index do
     """
   end
 
-  defp feed_badge_class("mydealz"), do: "badge-info badge-outline"
-  defp feed_badge_class("mydealz-hot"), do: "badge-warning badge-outline"
-  defp feed_badge_class("dealdoktor"), do: "badge-success badge-outline"
-  defp feed_badge_class("monsterdealz"), do: "badge-warning badge-outline"
-  defp feed_badge_class("schnaeppchenfuchs"), do: "badge-secondary badge-outline"
-  defp feed_badge_class("mein-deal"), do: "badge-error badge-outline"
-  defp feed_badge_class(_), do: "badge-ghost"
+  defp feed_badge_classes("mydealz"),
+    do: "bg-sky-500/20 text-sky-700 dark:text-sky-200 border-sky-500/40"
 
-  defp temperature_badge_class(temp) when is_integer(temp) do
+  defp feed_badge_classes("mydealz-hot"),
+    do: "bg-amber-500/25 text-amber-800 dark:text-amber-200 border-amber-500/50"
+
+  defp feed_badge_classes("dealdoktor"),
+    do: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40"
+
+  defp feed_badge_classes("monsterdealz"),
+    do: "bg-orange-500/20 text-orange-800 dark:text-orange-200 border-orange-500/40"
+
+  defp feed_badge_classes("schnaeppchenfuchs"),
+    do: "bg-purple-500/20 text-purple-800 dark:text-purple-200 border-purple-500/40"
+
+  defp feed_badge_classes("mein-deal"),
+    do: "bg-rose-500/20 text-rose-800 dark:text-rose-200 border-rose-500/40"
+
+  defp feed_badge_classes("dealabs"),
+    do: "bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-500/40"
+
+  defp feed_badge_classes(_),
+    do: "bg-base-200 text-base-content border-base-300"
+
+  defp temperature_badge_classes(temp) when is_integer(temp) do
     cond do
       temp >= 300 ->
-        "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30"
+        "bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40"
 
       temp >= 100 ->
-        "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+        "bg-amber-500/25 text-amber-800 dark:text-amber-200 border-amber-500/50"
 
       temp >= 0 ->
-        "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+        "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/35"
 
       true ->
-        "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30"
+        "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/35"
     end
   end
 
-  defp temperature_badge_class(_), do: "badge-ghost"
+  defp temperature_badge_classes(_), do: "bg-base-200 text-base-content/80 border-base-300"
 
   defp merchant_badge_class("verified"),
     do:
