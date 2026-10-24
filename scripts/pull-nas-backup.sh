@@ -10,9 +10,15 @@ set -euo pipefail
 
 # Configuration
 DEAL_SCOUT_URL="${DEAL_SCOUT_URL:-http://localhost:4000}"
-BACKUP_TOKEN="${ADMIN_BACKUP_TOKEN:-dealscout-homelab-backup-key-2026}"
+BACKUP_TOKEN="${ADMIN_BACKUP_TOKEN:-}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/backups/deal_scout}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
+
+if [ -z "$BACKUP_TOKEN" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: ADMIN_BACKUP_TOKEN environment variable is not set." >&2
+  echo "Please set ADMIN_BACKUP_TOKEN before running this script." >&2
+  exit 1
+fi
 
 mkdir -p "$BACKUP_DIR"
 

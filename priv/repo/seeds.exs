@@ -96,8 +96,8 @@ Enum.each(deals_to_backfill, fn deal ->
 end)
 
 # Default admin account
-admin_email = "admin@dealscout.de"
-admin_pass = "dealscout2026!"
+admin_email = System.get_env("ADMIN_EMAIL", "admin@dealscout.de")
+admin_pass = System.get_env("ADMIN_PASSWORD", "dealscout2026!")
 
 case Repo.get_by(DealScout.Accounts.User, email: admin_email) do
   nil ->

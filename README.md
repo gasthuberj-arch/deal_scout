@@ -80,7 +80,8 @@ Now visit [`http://localhost:4000`](http://localhost:4000) in your browser.
 | Variable | Default (Dev) | Description |
 | :--- | :--- | :--- |
 | `INVITE_CODE` | `dealscout2026` | Secret code required when creating a new user account |
-| `ADMIN_BACKUP_TOKEN` | `dealscout-homelab-backup-key-2026` | Bearer token for accessing `/api/admin/backup` |
+| `ADMIN_BACKUP_TOKEN` | *(required in prod)* | Bearer token for accessing `/api/admin/backup` |
+| `ADMIN_PASSWORD` | `dealscout2026!` (dev default) | Initial admin password used by `mix run priv/repo/seeds.exs` |
 | `DATABASE_PATH` | `deal_scout_dev.db` (dev) / `/data/deal_scout.db` (prod) | Path to SQLite database file |
 | `COFFEE_URL` | `https://ko-fi.com` | Optional link for the "Buy me a coffee" button (Ko-fi, BMC, etc.) |
 | `SECRET_KEY_BASE` | *(generated in dev)* | Secret key for cookies and tokens (required in prod) |
