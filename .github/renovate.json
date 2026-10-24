@@ -5,7 +5,7 @@
   ],
   "timezone": "Europe/Berlin",
   "schedule": [
-    "every day before 06:00"
+    "before 06:00"
   ],
   "packageRules": [
     {
