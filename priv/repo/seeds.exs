@@ -31,12 +31,6 @@ feeds = [
     poll_interval_seconds: 300
   },
   %{
-    name: "Schnäppchenfuchs",
-    slug: "schnaeppchenfuchs",
-    url: "https://schnaeppchenfuchs.com/rss",
-    poll_interval_seconds: 600
-  },
-  %{
     name: "Mein-Deal",
     slug: "mein-deal",
     url: "https://www.mein-deal.com/feed/",
@@ -53,20 +47,14 @@ feeds = [
     slug: "dealabs",
     url: "https://www.dealabs.com/rss",
     poll_interval_seconds: 120
-  },
-  %{
-    name: "Reddit Deals",
-    slug: "reddit-deals",
-    url: "https://www.reddit.com/r/dealdoktor/.rss",
-    poll_interval_seconds: 900
-  },
-  %{
-    name: "Reddit BAPC",
-    slug: "reddit-bapcsales",
-    url: "https://www.reddit.com/r/bapcsales/.rss",
-    poll_interval_seconds: 900
   }
 ]
+
+# Ensure defunct feeds are removed if present
+Repo.delete_all(
+  from f in Feed,
+    where: f.slug in ["reddit-deals", "reddit-bapcsales", "schnaeppchenfuchs"]
+)
 
 for feed_attrs <- feeds do
   Repo.insert!(
