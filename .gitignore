@@ -45,3 +45,6 @@ npm-debug.log
 /log/
 *.log
 
+# Direnv
+/.direnv/
+
