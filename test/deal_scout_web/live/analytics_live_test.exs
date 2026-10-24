@@ -27,14 +27,21 @@ defmodule DealScoutWeb.AnalyticsLiveTest do
     %{user: user, feed: feed, deal: deal}
   end
 
-  test "redirects unauthenticated user to log in", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/analytics")
+  test "unauthenticated user can view analytics dashboard without signing up", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/analytics")
+
+    assert html =~ "Deal Market Intelligence"
+    assert html =~ "Total Deals Ingested"
+    assert html =~ "Duplicates Consolidated"
+    assert html =~ "Ingestion Velocity"
+    assert html =~ "MyDealz"
+    assert html =~ "Snapshot as of"
+    refute has_element?(view, "button[phx-click='refresh']")
   end
 
   test "authenticated user views analytics dashboard as a snapshot", %{
     conn: conn,
-    user: user,
-    deal: deal
+    user: user
   } do
     conn = log_in_user(conn, user)
     {:ok, view, html} = live(conn, ~p"/analytics")
@@ -44,7 +51,6 @@ defmodule DealScoutWeb.AnalyticsLiveTest do
     assert html =~ "Duplicates Consolidated"
     assert html =~ "Ingestion Velocity"
     assert html =~ "MyDealz"
-    assert html =~ deal.merchant.name
     assert html =~ "Snapshot as of"
 
     # Confirm refresh button has been removed to protect against DB spam

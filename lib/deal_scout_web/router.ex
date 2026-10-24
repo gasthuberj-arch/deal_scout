@@ -65,7 +65,6 @@ defmodule DealScoutWeb.Router do
       live "/alerts/new", AlertLive.Index, :new
       live "/alerts/:id/edit", AlertLive.Index, :edit
       live "/matches", MatchLive.Index, :index
-      live "/analytics", AnalyticsLive.Index, :index
 
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
@@ -92,6 +91,7 @@ defmodule DealScoutWeb.Router do
     live_session :current_user,
       on_mount: [{DealScoutWeb.UserAuth, :mount_current_scope}] do
       live "/", DealLive.Index, :index
+      live "/analytics", AnalyticsLive.Index, :index
 
       live "/users/register", UserLive.Registration, :new
       live "/users/log-in", UserLive.Login, :new

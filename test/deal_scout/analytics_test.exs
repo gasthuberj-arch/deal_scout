@@ -49,7 +49,6 @@ defmodule DealScout.AnalyticsTest do
     assert stats.canonical_deals == stats.total_deals - stats.total_duplicates
     assert stats.avg_temperature > 0.0
     assert length(stats.deals_by_feed) >= 1
-    assert length(stats.top_merchants) >= 1
   end
 
   test "get_deal_intelligence_stats caches result across calls until invalidated" do

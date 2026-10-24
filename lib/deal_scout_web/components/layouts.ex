@@ -87,6 +87,11 @@ defmodule DealScoutWeb.Layouts do
                   Live Feed
                 </.link>
               </li>
+              <li>
+                <.link navigate={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
+                  <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
+                </.link>
+              </li>
               <%= if @current_scope && @current_scope.user do %>
                 <li>
                   <.link navigate={~p"/alerts"} class="rounded-lg">
@@ -126,11 +131,6 @@ defmodule DealScoutWeb.Layouts do
                     Matches
                   </.link>
                 </li>
-                <li>
-                  <.link navigate={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
-                    <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
-                  </.link>
-                </li>
               <% end %>
             </ul>
           </div>
@@ -164,9 +164,9 @@ defmodule DealScoutWeb.Layouts do
                     {@current_scope.user.email}
                   </li>
                   <div class="divider my-1"></div>
+                  <li><.link navigate={~p"/analytics"}>Deal Intelligence</.link></li>
                   <li><.link navigate={~p"/alerts"}>My Alert Keywords</.link></li>
                   <li><.link navigate={~p"/matches"}>Matched Deals</.link></li>
-                  <li><.link navigate={~p"/analytics"}>Deal Intelligence</.link></li>
                   <%= if @current_scope.user.is_admin do %>
                     <li>
                       <.link navigate={~p"/admin/system"} class="text-error font-medium">

@@ -101,79 +101,33 @@ defmodule DealScoutWeb.AnalyticsLive.Index do
           </div>
         </div>
 
-        <!-- 2 Column Analytics: Feed Volume Breakdown & Top Merchants -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Feed Breakdown -->
-          <div class="card bg-base-100 border border-base-300 rounded-2xl p-6 shadow-sm space-y-4">
-            <h2 class="text-lg font-bold flex items-center gap-2">
-              <.icon name="hero-rss" class="size-5 text-primary" />
-              <span>Deals by Community Source</span>
-            </h2>
+        <!-- Deal Volume Breakdown by Source -->
+        <div class="card bg-base-100 border border-base-300 rounded-2xl p-6 shadow-sm space-y-4">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <.icon name="hero-rss" class="size-5 text-primary" />
+            <span>Deals by Community Source</span>
+          </h2>
 
-            <div class="space-y-3">
-              <%= for feed_stat <- @stats.deals_by_feed do %>
-                <% pct =
-                  if @stats.total_deals > 0,
-                    do: round(feed_stat.deal_count / @stats.total_deals * 100),
-                    else: 0 %>
-                <div class="space-y-1">
-                  <div class="flex justify-between text-xs font-semibold">
-                    <span>{feed_stat.feed_name}</span>
-                    <span class="text-base-content/70">{feed_stat.deal_count} deals ({pct}%)</span>
-                  </div>
-                  <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
-                    <div
-                      class="bg-primary h-2 rounded-full transition-all duration-500"
-                      style={"width: #{pct}%;"}
-                    >
-                    </div>
+          <div class="space-y-3">
+            <%= for feed_stat <- @stats.deals_by_feed do %>
+              <% pct =
+                if @stats.total_deals > 0,
+                  do: round(feed_stat.deal_count / @stats.total_deals * 100),
+                  else: 0 %>
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs font-semibold">
+                  <span>{feed_stat.feed_name}</span>
+                  <span class="text-base-content/70">{feed_stat.deal_count} deals ({pct}%)</span>
+                </div>
+                <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    class="bg-primary h-2 rounded-full transition-all duration-500"
+                    style={"width: #{pct}%;"}
+                  >
                   </div>
                 </div>
-              <% end %>
-            </div>
-          </div>
-
-          <!-- Top Hottest Merchants -->
-          <div class="card bg-base-100 border border-base-300 rounded-2xl p-6 shadow-sm space-y-4">
-            <h2 class="text-lg font-bold flex items-center gap-2">
-              <.icon name="hero-building-storefront" class="size-5 text-primary" />
-              <span>Top Active Merchants</span>
-            </h2>
-
-            <div class="overflow-x-auto">
-              <table class="table table-sm w-full">
-                <thead>
-                  <tr class="text-xs text-base-content/60 border-b border-base-200">
-                    <th>Merchant</th>
-                    <th>Trust Level</th>
-                    <th class="text-right">Total Deals</th>
-                    <th class="text-right">Avg Temp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for m <- @stats.top_merchants do %>
-                    <tr class="hover:bg-base-200/40">
-                      <td class="font-bold">{m.name}</td>
-                      <td>
-                        <span class={[
-                          "badge badge-xs text-[10px] font-semibold",
-                          m.trust_level == "verified" && "badge-success text-white",
-                          m.trust_level == "high_risk" && "badge-error text-white",
-                          m.trust_level == "dropshipper" && "badge-warning",
-                          m.trust_level == "neutral" && "badge-ghost"
-                        ]}>
-                          {m.trust_level}
-                        </span>
-                      </td>
-                      <td class="text-right font-semibold">{m.deal_count}</td>
-                      <td class="text-right font-bold text-orange-500">
-                        {if m.avg_temp, do: "#{m.avg_temp}°", else: "—"}
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
+              </div>
+            <% end %>
           </div>
         </div>
 

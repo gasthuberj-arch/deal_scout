@@ -5,7 +5,7 @@ defmodule DealScout.Analytics do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Deals.{Cache, Deal, Merchant, CrossBorderGuard}
+  alias DealScout.Deals.{Cache, Deal, CrossBorderGuard}
   alias DealScout.Feeds.Feed
   alias DealScout.Accounts.User
 
@@ -77,33 +77,6 @@ defmodule DealScout.Analytics do
       )
       |> Repo.all()
 
-    top_merchants =
-      from(m in Merchant,
-        join: d in assoc(m, :deals),
-        group_by: [m.id, m.name, m.trust_level],
-        select: %{
-          id: m.id,
-          name: m.name,
-          trust_level: m.trust_level,
-          deal_count: count(d.id),
-          avg_temp: avg(d.temperature)
-        },
-        order_by: [desc: count(d.id)],
-        limit: 6
-      )
-      |> Repo.all()
-      |> Enum.map(fn m ->
-        formatted_temp =
-          case m.avg_temp do
-            nil -> nil
-            %Decimal{} = d -> Decimal.to_float(d) |> round()
-            f when is_float(f) -> round(f)
-            i when is_integer(i) -> i
-          end
-
-        Map.put(m, :avg_temp, formatted_temp)
-      end)
-
     recent_duplicate_clusters =
       from(d in Deal,
         where: is_nil(d.canonical_deal_id),
@@ -150,7 +123,6 @@ defmodule DealScout.Analytics do
       deals_per_hour: deals_per_hour,
       deals_per_min: deals_per_min,
       deals_by_feed: deals_by_feed,
-      top_merchants: top_merchants,
       recent_duplicate_clusters: recent_duplicate_clusters,
       cross_border_count: cross_border_count,
       foreign_kb_count: foreign_kb_count
