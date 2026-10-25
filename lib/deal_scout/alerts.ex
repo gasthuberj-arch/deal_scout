@@ -142,7 +142,7 @@ defmodule DealScout.Alerts do
   internally by `Matcher.match_batch/3`.
   """
   def process_new_deals(deals, opts \\ []) when is_list(deals) do
-    deals = Repo.preload(deals, [:merchant, :feed])
+    deals = maybe_preload_deals(deals)
     rules = Keyword.get(opts, :rules) || list_active_rules()
 
     {:ok, %{matches_by_rule: matches_by_rule}} = Matcher.match_batch(deals, rules, opts)
@@ -174,6 +174,19 @@ defmodule DealScout.Alerts do
     # Dispatch notifications per rule (Dispatcher enforces Cooldown, LiveView broadcast, and Digest queueing)
     for {rule, matches} <- persisted_matches_by_rule do
       Dispatcher.dispatch_batch(rule, matches)
+    end
+  end
+
+  defp maybe_preload_deals(deals) do
+    needs_preload? =
+      Enum.any?(deals, fn deal ->
+        not Ecto.assoc_loaded?(deal.merchant) or not Ecto.assoc_loaded?(deal.feed)
+      end)
+
+    if needs_preload? do
+      Repo.preload(deals, [:merchant, :feed])
+    else
+      deals
     end
   end
 
