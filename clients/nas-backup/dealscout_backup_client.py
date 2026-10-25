@@ -16,6 +16,7 @@ import logging
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -44,10 +45,12 @@ class DealScoutBackupClient:
         client_id: str = None,
         once: bool = False,
         verify_interval_hours: int = 24,
+        archive_db: Path = None,
     ):
         self.server_url = self._normalize_ws_url(server_url)
         self.token = token
         self.backup_dir = Path(backup_dir).resolve()
+        self.archive_db = Path(archive_db).resolve() if archive_db else (self.backup_dir / "archive.db")
         self.client_id = client_id or f"{socket.gethostname()}-nixos"
         self.once = once
         self.verify_interval_hours = verify_interval_hours
@@ -59,6 +62,7 @@ class DealScoutBackupClient:
         self.ws = None
 
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.archive_db.parent.mkdir(parents=True, exist_ok=True)
 
     def _normalize_ws_url(self, url: str) -> str:
         url = url.rstrip("/")
@@ -77,7 +81,10 @@ class DealScoutBackupClient:
     def scan_local_files(self) -> list:
         """Scan locally saved replica files to resume sync without re-downloading."""
         local_files = []
-        for p in self.backup_dir.rglob("*"):
+        gens_dir = self.backup_dir / "generations"
+        if not gens_dir.exists():
+            return local_files
+        for p in gens_dir.rglob("*"):
             if p.is_file() and not p.name.endswith(".tmp"):
                 rel = p.relative_to(self.backup_dir).as_posix()
                 local_files.append(rel)
@@ -310,8 +317,154 @@ class DealScoutBackupClient:
             if proc_check.returncode == 0 and output == "ok":
                 db_size_mb = test_db.stat().st_size / (1024 * 1024)
                 logger.info(f"[INTEGRITY OK] SQLite backup verified non-corrupted! ({db_size_mb:.2f} MB)")
+                self.sync_to_archive(test_db)
             else:
                 logger.error(f"[INTEGRITY ERROR] PRAGMA integrity_check returned: {output} / {proc_check.stderr}")
+
+    def sync_to_archive(self, source_db_path: Path):
+        """
+        Accumulates feeds, merchants, and deals from the verified snapshot into
+        a persistent append-only archive.db on the NAS.
+        - Auto-evolves schema (CREATE TABLE if missing, ALTER TABLE ADD COLUMN if new columns appear).
+        - Upserts by natural unique keys (slug for feeds/merchants, guid for deals)
+          so records pruned on the server are retained forever and primary key collisions cannot occur.
+        """
+        if not self.archive_db:
+            return
+
+        target_tables = [
+            ("feeds", "slug"),
+            ("merchants", "slug"),
+            ("deals", "guid"),
+        ]
+
+        try:
+            self.archive_db.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(self.archive_db))
+            try:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+                conn.execute("ATTACH DATABASE ? AS src;", (str(source_db_path),))
+
+                with conn:
+                    for table_name, natural_key in target_tables:
+                        # Check if table exists in source
+                        src_table_row = conn.execute(
+                            "SELECT sql FROM src.sqlite_master WHERE type='table' AND name=?;",
+                            (table_name,),
+                        ).fetchone()
+                        if not src_table_row or not src_table_row[0]:
+                            continue
+
+                        # Check if table exists in archive
+                        arch_table_row = conn.execute(
+                            "SELECT sql FROM main.sqlite_master WHERE type='table' AND name=?;",
+                            (table_name,),
+                        ).fetchone()
+
+                        if not arch_table_row:
+                            conn.execute(src_table_row[0])
+                        else:
+                            # Evolve missing columns
+                            src_cols = conn.execute(f'PRAGMA src.table_info("{table_name}");').fetchall()
+                            arch_cols = conn.execute(f'PRAGMA main.table_info("{table_name}");').fetchall()
+                            arch_col_names = {c[1] for c in arch_cols}
+
+                            for col in src_cols:
+                                col_name = col[1]
+                                col_type = col[2] or "TEXT"
+                                col_default = col[4]
+                                if col_name not in arch_col_names:
+                                    default_clause = (
+                                        f" DEFAULT {col_default}" if col_default is not None else ""
+                                    )
+                                    logger.info(
+                                        f"[ARCHIVE SCHEMA] Adding new column {table_name}.{col_name} ({col_type}{default_clause}) to archive.db"
+                                    )
+                                    conn.execute(
+                                        f'ALTER TABLE main."{table_name}" ADD COLUMN "{col_name}" {col_type}{default_clause};'
+                                    )
+
+                        # Ensure unique index on natural key exists
+                        conn.execute(
+                            f'CREATE UNIQUE INDEX IF NOT EXISTS "idx_archive_{table_name}_{natural_key}" '
+                            f'ON "{table_name}" ("{natural_key}");'
+                        )
+
+                        # Upsert rows by natural key
+                        src_cols = conn.execute(f'PRAGMA src.table_info("{table_name}");').fetchall()
+                        non_pk_cols = [c[1] for c in src_cols if c[1] != "id"]
+
+                        if table_name == "deals":
+                            # Map foreign keys (feed_id, merchant_id) via natural slugs;
+                            # omit canonical_deal_id from raw copy so server IDs or nilified references never overwrite archive links
+                            upsert_cols = [c for c in non_pk_cols if c != "canonical_deal_id"]
+                            select_exprs = []
+                            for c in upsert_cols:
+                                if c == "feed_id":
+                                    select_exprs.append(
+                                        'COALESCE((SELECT af.id FROM main.feeds af JOIN src.feeds sf ON sf.slug = af.slug WHERE sf.id = t.feed_id), t.feed_id) AS "feed_id"'
+                                    )
+                                elif c == "merchant_id":
+                                    select_exprs.append(
+                                        '(SELECT am.id FROM main.merchants am JOIN src.merchants sm ON sm.slug = am.slug WHERE sm.id = t.merchant_id) AS "merchant_id"'
+                                    )
+                                else:
+                                    select_exprs.append(f't."{c}"')
+                        else:
+                            upsert_cols = non_pk_cols
+                            select_exprs = [f't."{c}"' for c in upsert_cols]
+
+                        cols_quoted = ", ".join(f'"{c}"' for c in upsert_cols)
+                        select_clause = ", ".join(select_exprs)
+                        update_assignments = ", ".join(
+                            f'"{c}" = excluded."{c}"'
+                            for c in upsert_cols
+                            if c != natural_key
+                        )
+                        sql = (
+                            f'INSERT INTO main."{table_name}" ({cols_quoted}) '
+                            f'SELECT {select_clause} FROM src."{table_name}" t WHERE t."{natural_key}" IS NOT NULL '
+                            f'ON CONFLICT("{natural_key}") DO UPDATE SET {update_assignments};'
+                        )
+                        conn.execute(sql)
+
+                        # Resolve canonical_deal_id via canonical deal's guid (preserving existing link if canonical was pruned on server)
+                        if table_name == "deals" and "canonical_deal_id" in non_pk_cols:
+                            conn.execute(
+                                """
+                                UPDATE main.deals
+                                SET canonical_deal_id = COALESCE(
+                                    (
+                                        SELECT arch_canon.id
+                                        FROM src.deals src_self
+                                        JOIN src.deals src_canon ON src_canon.id = src_self.canonical_deal_id
+                                        JOIN main.deals arch_canon ON arch_canon.guid = src_canon.guid
+                                        WHERE src_self.guid = main.deals.guid
+                                    ),
+                                    main.deals.canonical_deal_id
+                                )
+                                WHERE guid IN (
+                                    SELECT guid FROM src.deals WHERE canonical_deal_id IS NOT NULL
+                                );
+                                """
+                            )
+
+                deals_count = conn.execute("SELECT COUNT(*) FROM main.deals;").fetchone()[0]
+                merchants_count = conn.execute("SELECT COUNT(*) FROM main.merchants;").fetchone()[0]
+                feeds_count = conn.execute("SELECT COUNT(*) FROM main.feeds;").fetchone()[0]
+                conn.execute("DETACH DATABASE src;")
+            finally:
+                conn.close()
+
+            archive_size_mb = self.archive_db.stat().st_size / (1024 * 1024)
+            logger.info(
+                f"[ARCHIVE OK] Synced to {self.archive_db.name} "
+                f"(Total archived: {deals_count} deals, {merchants_count} merchants, {feeds_count} feeds | "
+                f"{archive_size_mb:.2f} MB)"
+            )
+        except Exception as e:
+            logger.error(f"[ARCHIVE ERROR] Failed to sync to archive database {self.archive_db}: {e}", exc_info=True)
 
 
 def load_token(args) -> str:
@@ -348,6 +501,11 @@ def main():
         default=os.environ.get("DEALSCOUT_BACKUP_DIR", os.path.expanduser("~/backups/deal_scout")),
         help="Local directory to store Litestream replica files",
     )
+    parser.add_argument(
+        "--archive-db",
+        default=os.environ.get("DEALSCOUT_ARCHIVE_DB"),
+        help="Path to persistent SQLite archive database (defaults to <backup-dir>/archive.db)",
+    )
     parser.add_argument("--client-id", default=os.environ.get("DEALSCOUT_CLIENT_ID"), help="Client ID for tracking")
     parser.add_argument("--once", action="store_true", help="Sync once and exit instead of continuous streaming")
     parser.add_argument(
@@ -364,13 +522,17 @@ def main():
         logger.error("Authentication token is required via --token, --token-file, or ADMIN_BACKUP_TOKEN env var.")
         sys.exit(1)
 
+    backup_dir_path = Path(args.backup_dir)
+    archive_db_path = Path(args.archive_db) if args.archive_db else (backup_dir_path / "archive.db")
+
     client = DealScoutBackupClient(
         server_url=args.server_url,
         token=token,
-        backup_dir=Path(args.backup_dir),
+        backup_dir=backup_dir_path,
         client_id=args.client_id,
         once=args.once,
         verify_interval_hours=args.verify_interval_hours,
+        archive_db=archive_db_path,
     )
 
     try:

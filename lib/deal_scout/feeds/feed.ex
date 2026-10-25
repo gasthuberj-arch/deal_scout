@@ -14,6 +14,8 @@ defmodule DealScout.Feeds.Feed do
     field :consecutive_errors, :integer, default: 0
     field :last_error_status, :integer
     field :is_active, :boolean, default: true
+    field :total_deals_ingested, :integer, default: 0
+    field :total_duplicates_ingested, :integer, default: 0
 
     has_many :deals, DealScout.Deals.Deal
 

@@ -53,7 +53,7 @@ defmodule DealScoutWeb.AnalyticsLive.Index do
               {@stats.total_deals}
             </div>
             <p class="text-xs text-base-content/60">
-              Across all configured RSS feeds
+              {Map.get(@stats, :deals_last_30d, @stats.total_deals)} in the last 30 days
             </p>
           </div>
 
@@ -117,7 +117,13 @@ defmodule DealScoutWeb.AnalyticsLive.Index do
               <div class="space-y-1">
                 <div class="flex justify-between text-xs font-semibold">
                   <span>{feed_stat.feed_name}</span>
-                  <span class="text-base-content/70">{feed_stat.deal_count} deals ({pct}%)</span>
+                  <span class="text-base-content/70">
+                    {feed_stat.deal_count} deals ({pct}%) · {Map.get(
+                      feed_stat,
+                      :deals_last_30d,
+                      feed_stat.deal_count
+                    )} in the last 30 days
+                  </span>
                 </div>
                 <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
                   <div

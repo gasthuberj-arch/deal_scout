@@ -200,6 +200,8 @@ defmodule DealScout.Deals.Ingestion do
         {:duplicate, item.guid}
 
       {:ok, %Deal{} = deal} ->
+        record_feed_deal(feed_id, not is_nil(deal.canonical_deal_id))
+
         if merchant do
           record_merchant_deal(merchant.id, feed_slug, item.temperature)
         end
@@ -334,6 +336,17 @@ defmodule DealScout.Deals.Ingestion do
           {:error, _} -> merchant
         end
     end
+  end
+
+  defp record_feed_deal(nil, _is_duplicate), do: :ok
+
+  defp record_feed_deal(feed_id, is_duplicate) do
+    dup_inc = if is_duplicate, do: 1, else: 0
+
+    from(f in DealScout.Feeds.Feed, where: f.id == ^feed_id)
+    |> Repo.update_all(inc: [total_deals_ingested: 1, total_duplicates_ingested: dup_inc])
+
+    :ok
   end
 
   defp get_feed_slug(nil), do: nil

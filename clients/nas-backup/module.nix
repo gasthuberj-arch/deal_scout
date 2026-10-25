@@ -39,6 +39,13 @@ in {
       description = "Directory where the Litestream replica files will be stored.";
     };
 
+    archiveDb = mkOption {
+      type = types.path;
+      default = "${cfg.backupDir}/archive.db";
+      defaultText = literalExpression ''"''${config.services.dealscout-backup.backupDir}/archive.db"'';
+      description = "Path to the persistent append-only SQLite archive database on the NAS.";
+    };
+
     verifyIntervalHours = mkOption {
       type = types.int;
       default = 24;
@@ -95,7 +102,7 @@ in {
         # Security sandbox
         ProtectSystem = "strict";
         ProtectHome = true;
-        ReadWritePaths = [ cfg.backupDir ];
+        ReadWritePaths = unique [ cfg.backupDir (builtins.dirOf (toString cfg.archiveDb)) ];
         PrivateTmp = true;
         NoNewPrivileges = true;
       };
@@ -104,6 +111,7 @@ in {
         ARGS=(
           "--server-url" "${cfg.serverUrl}"
           "--backup-dir" "${cfg.backupDir}"
+          "--archive-db" "${cfg.archiveDb}"
           "--verify-interval-hours" "${toString cfg.verifyIntervalHours}"
         )
 

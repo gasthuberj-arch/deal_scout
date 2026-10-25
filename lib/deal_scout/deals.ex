@@ -347,12 +347,20 @@ defmodule DealScout.Deals do
   end
 
   @doc """
-  Deletes deals older than given number of days.
+  Deletes deals older than given number of days and invalidates caches.
   """
   def prune_old_deals(days \\ 30) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 3600, :second)
 
-    from(d in Deal, where: d.published_at < ^cutoff)
-    |> Repo.delete_all()
+    {count, _} =
+      result =
+      from(d in Deal, where: d.published_at < ^cutoff)
+      |> Repo.delete_all()
+
+    if count > 0 do
+      Cache.invalidate_deals()
+    end
+
+    result
   end
 end

@@ -334,7 +334,12 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                     >
                       {feed.url}
                     </td>
-                    <td class="text-right font-bold text-primary">{feed.deal_count}</td>
+                    <td class="text-right">
+                      <span class="font-bold text-primary">{feed.deal_count}</span>
+                      <span class="text-xs text-base-content/60 ml-1">
+                        ({Map.get(feed, :deals_last_30d, feed.deal_count)} in the last 30 days)
+                      </span>
+                    </td>
                     <td class="text-right text-xs text-base-content/70">
                       <%= if feed.last_fetched_at do %>
                         {DateTime.to_iso8601(feed.last_fetched_at) |> String.slice(11..18)} UTC

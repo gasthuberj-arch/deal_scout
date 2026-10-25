@@ -7,6 +7,7 @@ config :deal_scout, DealScout.Repo,
   busy_timeout: 10_000,
   queue_target: 500,
   queue_interval: 2000,
+  auto_vacuum: :incremental,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
 

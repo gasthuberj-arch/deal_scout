@@ -58,6 +58,7 @@ if config_env() == :prod do
     queue_target: 500,
     queue_interval: 2000,
     default_transaction_mode: :immediate,
+    auto_vacuum: :incremental,
     temp_store: :memory
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
