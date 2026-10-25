@@ -1,9 +1,9 @@
 # Find eligible builder and runner images on Docker Hub:
 # https://hub.docker.com/r/hexpm/elixir/tags
 
-ARG ELIXIR_VERSION=1.18.5
-ARG ERLANG_VERSION=27.3.4.19
-ARG DEBIAN_VERSION=bookworm-20261005-slim
+ARG ELIXIR_VERSION=1.20.4
+ARG ERLANG_VERSION=29.1.2
+ARG DEBIAN_VERSION=bookworm-20261020-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${ERLANG_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
