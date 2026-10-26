@@ -290,52 +290,92 @@ defmodule DealScout.Feeds.Parser do
     if pepper_price do
       pepper_price
     else
-      # 2. Check title or description for price pattern (e.g. "19,99€" or "19.99 €")
-      find_price_in_text(title) || find_price_in_text(description)
+      # 2. Check title or description for price pattern or explicit freebie marker
+      find_price_in_text(title) ||
+        find_price_in_text(description) ||
+        find_freebie_price(title, description)
     end
   end
 
-  defp find_price_in_text(text) when is_binary(text) do
-    case Regex.run(~r/(?:^|[^\d])(\d{1,4}[,.]\d{2})\s*€/, text) do
-      [_, price_str] ->
-        parse_price_string(price_str)
+  @price_regex ~r/(?:^|[^\d.,])(\d{1,3}(?:[.\s\x{00A0}\x{202F}]\d{3})+(?:[,.]\d{1,2}|,-|,--)?|\d{1,6}(?:[,.]\d{1,2}|,-|,--)?)\s*(?:€|EUR\b|Euro\b)/iu
+  @freebie_regex ~r/\b(?:gratis|kostenlos|kostenlose[rnms]?|kostenfrei|kostenfreie[rnms]?|gratuit|gratuite[s]?|gratuitement|free[-\s]to[-\s]play|for\s+free|umsonst|geschenkt)\b/iu
+  @shipping_free_regex ~r/\b(?:versand\s*(?:kosten)?\s*(?:frei|gratis|kostenlos)|kostenlose[rnms]?\s+(?:versand|lieferung|retoure|rückversand)|gratis\s+(?:versand|lieferung)|livraison\s+gratuite|frais\s+de\s+port\s+offerts)\b/iu
 
-      _ ->
-        case Regex.run(~r/(\d{1,4})\s*€/, text) do
-          [_, int_str] -> parse_price_string(int_str <> ",00")
-          _ -> nil
-        end
+  defp find_price_in_text(text) when is_binary(text) do
+    case Regex.run(@price_regex, text) do
+      [_, price_str] -> parse_price_string(price_str)
+      _ -> nil
     end
   end
 
   defp find_price_in_text(_), do: nil
 
-  defp parse_price_string(str) when is_binary(str) do
+  defp find_freebie_price(title, description) do
+    combined = "#{title} #{description}"
+    stripped = Regex.replace(@shipping_free_regex, combined, "")
+
+    if Regex.match?(@freebie_regex, stripped) do
+      Decimal.new("0.00")
+    else
+      nil
+    end
+  end
+
+  @doc """
+  Parses a raw price string (e.g. `"2.192,99€"`, `"2.193€"`, `"1 299€"`, `"19,99 €"`, `"999,-€"`)
+  into a normalized `%Decimal{}` or `nil`.
+  """
+  def parse_price_string(str) when is_binary(str) do
     cleaned =
       str
-      |> String.replace("€", "")
-      |> String.replace(" ", "")
+      |> String.replace(~r/(?:€|Euro|EUR)/iu, "")
+      |> String.replace(~r/[\s\x{00A0}\x{202F}]+/u, "")
+      |> String.replace(~r/,-+$/, ",00")
       |> String.trim()
 
     normalized =
       cond do
+        # Both dot and comma present: whichever comes last is the decimal separator
         String.contains?(cleaned, ".") and String.contains?(cleaned, ",") ->
-          cleaned |> String.replace(".", "") |> String.replace(",", ".")
+          last_dot = cleaned |> :binary.matches(".") |> List.last() |> elem(0)
+          last_comma = cleaned |> :binary.matches(",") |> List.last() |> elem(0)
 
+          if last_comma > last_dot do
+            cleaned |> String.replace(".", "") |> String.replace(",", ".")
+          else
+            cleaned |> String.replace(",", "")
+          end
+
+        # Comma present: German/EU decimal separator (unless 3 digits after comma like 1,000)
         String.contains?(cleaned, ",") ->
-          String.replace(cleaned, ",", ".")
+          if Regex.match?(~r/^\d{1,3}(?:,\d{3})+$/, cleaned) do
+            String.replace(cleaned, ",", "")
+          else
+            String.replace(cleaned, ",", ".")
+          end
+
+        # Dot with groups of 3 digits: German thousands separator (e.g. "2.193" or "28.999")
+        Regex.match?(~r/^\d{1,3}(?:\.\d{3})+$/, cleaned) ->
+          String.replace(cleaned, ".", "")
 
         true ->
           cleaned
       end
 
     case Decimal.parse(normalized) do
-      {dec, ""} -> dec
-      _ -> nil
+      {dec, ""} ->
+        if String.contains?(normalized, ".") do
+          dec
+        else
+          Decimal.add(dec, Decimal.new("0.00"))
+        end
+
+      _ ->
+        nil
     end
   end
 
-  defp parse_price_string(_), do: nil
+  def parse_price_string(_), do: nil
 
   defp extract_image_url(item, description) do
     # 1. media:content or media:thumbnail or enclosure

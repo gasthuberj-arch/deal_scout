@@ -14,6 +14,7 @@ defmodule DealScout.Deals.Ingestion do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias DealScout.Repo
   alias DealScout.Deals
   alias DealScout.Deals.{CrossBorderGuard, Deal, Deduplicator, Merchant, MerchantGuard}
@@ -200,6 +201,13 @@ defmodule DealScout.Deals.Ingestion do
         {:duplicate, item.guid}
 
       {:ok, %Deal{} = deal} ->
+        if is_nil(deal.price) do
+          Logger.warning(
+            "[DealScout.Ingestion] Deal ingested without price (requires investigation): " <>
+              "id=#{deal.id} feed=#{feed_slug || feed_id} title=#{inspect(deal.title)} url=#{deal.url}"
+          )
+        end
+
         record_feed_deal(feed_id, not is_nil(deal.canonical_deal_id))
 
         if merchant do

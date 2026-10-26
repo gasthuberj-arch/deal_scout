@@ -172,5 +172,32 @@ defmodule DealScout.Deals.IngestionTest do
       assert {:error, :invalid_arguments} = Ingestion.ingest_feed(nil, @sample_rss)
       assert {:error, :invalid_arguments} = Ingestion.ingest_feed(feed, 123)
     end
+
+    test "logs a warning for investigation when a deal is ingested with nil price", %{feed: feed} do
+      unpriced_rss = """
+      <?xml version="1.0" encoding="utf-8"?>
+      <rss version="2.0">
+        <channel>
+          <title>Test Deals</title>
+          <item>
+            <title>20% Rabatt auf das gesamte Sortiment</title>
+            <link>https://www.example.com/sale</link>
+            <guid>guid-unpriced-sale-1</guid>
+            <pubDate>Sun, 18 Oct 2026 16:36:18 +0200</pubDate>
+            <description>Großer Sale ohne konkreten Einzelpreis.</description>
+          </item>
+        </channel>
+      </rss>
+      """
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, [deal]} = Ingestion.ingest_feed(feed, unpriced_rss)
+          assert deal.price == nil
+        end)
+
+      assert log =~ "Deal ingested without price (requires investigation)"
+      assert log =~ "20% Rabatt auf das gesamte Sortiment"
+    end
   end
 end

@@ -95,4 +95,76 @@ defmodule DealScout.Feeds.ParserTest do
     assert Decimal.equal?(deal.price, Decimal.new("79.99"))
     assert deal.idealo_url == "https://www.idealo.de/preisvergleich/OffersOfProduct/mx3s.html"
   end
+
+  describe "price extraction edge cases and German formatting" do
+    test "parses TCL 98Q7D PRO bundle and German thousands separators accurately" do
+      tcl_rss = """
+      <?xml version="1.0" encoding="utf-8"?>
+      <rss version="2.0" xmlns:pepper="https://www.pepper.com">
+        <channel>
+          <title>TV Deals</title>
+          <item>
+            <title><![CDATA[TCL-Bundle | 98Q7D PRO SQD-Mini LED Fernseher (98", 1152 Dimming-Zonen, 2000 Nits, 144Hz) + 2x TCL Z100 Dolby Atmos FlexConnect Lautsprecher]]></title>
+            <link>https://www.mydealz.de/deals/tcl-bundle-98q7d-pro-2857999</link>
+            <guid>tcl-bundle-98q7d-pro-1</guid>
+            <pubDate>Mon, 26 Oct 2026 12:00:00 +0100</pubDate>
+            <description><![CDATA[<strong>2.199€ - Amazon</strong><br />Top Mini-LED TV Bundle]]></description>
+            <pepper:merchant name="Amazon" price="2.199€"/>
+          </item>
+          <item>
+            <title><![CDATA[Kino-Feeling! 📺 TCL 98Q7D Pro – 98 Zoll SQD-Mini LED Fernseher für 2.193€ 🍿]]></title>
+            <link>https://schnaeppchenfuchs.com/angebote/tcl-98q7d-pro-98</link>
+            <guid>tcl-bundle-98q7d-pro-2</guid>
+            <pubDate>Mon, 26 Oct 2026 12:05:00 +0100</pubDate>
+            <description><![CDATA[TCL 98Q7D Pro – 98 Zoll SQD-Mini LED Fernseher für 2.192,99€ inkl. Versand bei amazon.de (Preisvergleich: 2.539€)]]></description>
+          </item>
+        </channel>
+      </rss>
+      """
+
+      [pepper_deal, text_deal] = Parser.parse_feed(tcl_rss, 1)
+      assert Decimal.equal?(pepper_deal.price, Decimal.new("2199.00"))
+      assert Decimal.equal?(text_deal.price, Decimal.new("2193.00"))
+    end
+
+    test "parse_price_string handles common European and international price formats" do
+      assert Decimal.equal?(Parser.parse_price_string("2.199€"), Decimal.new("2199.00"))
+      assert Decimal.equal?(Parser.parse_price_string("2.192,99€"), Decimal.new("2192.99"))
+      assert Decimal.equal?(Parser.parse_price_string("28.999 €"), Decimal.new("28999.00"))
+      assert Decimal.equal?(Parser.parse_price_string("1 299€"), Decimal.new("1299.00"))
+      assert Decimal.equal?(Parser.parse_price_string("1 531,42€"), Decimal.new("1531.42"))
+      assert Decimal.equal?(Parser.parse_price_string("999,-€"), Decimal.new("999.00"))
+      assert Decimal.equal?(Parser.parse_price_string("4.500,-- €"), Decimal.new("4500.00"))
+      assert Decimal.equal?(Parser.parse_price_string("79.99€"), Decimal.new("79.99"))
+      assert Decimal.equal?(Parser.parse_price_string("100 Euro"), Decimal.new("100.00"))
+      assert Decimal.equal?(Parser.parse_price_string("19,99 EUR"), Decimal.new("19.99"))
+    end
+
+    test "extracts 0.00 price for explicit freebies without confusing free shipping" do
+      freebie_rss = """
+      <?xml version="1.0" encoding="utf-8"?>
+      <rss version="2.0">
+        <channel>
+          <title>Freebies</title>
+          <item>
+            <title>[Gratis statt 99,99 $] Muze Savage – 432 Synth- &amp; Bass-Presets</title>
+            <link>https://www.mydealz.de/deals/gratis-muze-savage</link>
+            <guid>freebie-1</guid>
+            <description>Aktuell kostenlos sichern.</description>
+          </item>
+          <item>
+            <title>BVB Shop - Versandkostenfrei!</title>
+            <link>https://www.mydealz.de/gutscheine/bvb-shop-versandkostenfrei</link>
+            <guid>voucher-shipping-only</guid>
+            <description>NUR HEUTE: Kostenloser Versand im Onlineshop!</description>
+          </item>
+        </channel>
+      </rss>
+      """
+
+      [free_deal, shipping_deal] = Parser.parse_feed(freebie_rss, 1)
+      assert Decimal.equal?(free_deal.price, Decimal.new("0.00"))
+      assert shipping_deal.price == nil
+    end
+  end
 end

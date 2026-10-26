@@ -65,6 +65,23 @@ defmodule DealScout.Alerts.MatcherTest do
     }
 
     refute Matcher.matches?(deal, too_expensive_rule)
+
+    # Deal with nil price must not match when max_price is set
+    unpriced_deal = %{deal | price: nil}
+    refute Matcher.matches?(unpriced_deal, affordable_rule)
+
+    # Freebie deal (price 0.00) still matches max_price
+    free_deal = %{deal | price: Decimal.new("0.00")}
+    assert Matcher.matches?(free_deal, affordable_rule)
+
+    # Rule without max_price still matches unpriced deal
+    no_price_limit_rule = %AlertRule{
+      keywords: "RTX 4080",
+      max_price: nil,
+      is_active: true
+    }
+
+    assert Matcher.matches?(unpriced_deal, no_price_limit_rule)
   end
 
   test "filters by source feed", %{deal: deal} do

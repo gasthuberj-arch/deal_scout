@@ -154,7 +154,7 @@ defmodule DealScout.Alerts.Matcher do
 
   defp matches_price?(deal, max_price) do
     case deal.price do
-      nil -> true
+      nil -> false
       price -> Decimal.compare(price, max_price) in [:lt, :eq]
     end
   end
