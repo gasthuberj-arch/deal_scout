@@ -8,8 +8,6 @@ defmodule DealScout.Deals.Cache do
 
   @table :deal_scout_stream_cache
   @default_deals_ttl_ms 5_000
-  @default_feeds_ttl_ms 60_000
-  @default_analytics_ttl_ms 60_000
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -19,51 +17,6 @@ defmodule DealScout.Deals.Cache do
   def init(_opts) do
     table = :ets.new(@table, [:set, :public, :named_table, read_concurrency: true])
     {:ok, %{table: table}}
-  end
-
-  @doc """
-  Fetches active feeds from cache or executes fallback query.
-  """
-  def fetch_active_feeds(fallback_fn) when is_function(fallback_fn, 0) do
-    now = System.monotonic_time(:millisecond)
-
-    case lookup(:active_feeds) do
-      {:ok, feeds, expires_at} when expires_at > now ->
-        feeds
-
-      _ ->
-        feeds = fallback_fn.()
-        insert(:active_feeds, feeds, now + @default_feeds_ttl_ms)
-        feeds
-    end
-  end
-
-  @doc """
-  Fetches deal intelligence analytics stats from cache or executes fallback query.
-  When cache warming is active, the cache is periodically refreshed in the background.
-  If a cache miss occurs before the warmer completes, fallback_fn is invoked.
-  """
-  def fetch_deal_intelligence_stats(fallback_fn) when is_function(fallback_fn, 0) do
-    now = System.monotonic_time(:millisecond)
-
-    case lookup(:deal_intelligence_stats) do
-      {:ok, stats, expires_at} when expires_at > now ->
-        stats
-
-      _ ->
-        stats = fallback_fn.()
-        insert(:deal_intelligence_stats, stats, now + @default_analytics_ttl_ms)
-        stats
-    end
-  end
-
-  @doc """
-  Explicitly stores computed deal intelligence stats in ETS with standard TTL.
-  Used by `DealScout.Analytics.Warmer` to push warm cache snapshots.
-  """
-  def put_deal_intelligence_stats(stats) do
-    now = System.monotonic_time(:millisecond)
-    insert(:deal_intelligence_stats, stats, now + @default_analytics_ttl_ms)
   end
 
   @doc """
@@ -106,30 +59,6 @@ defmodule DealScout.Deals.Cache do
   def invalidate_deals do
     try do
       :ets.match_delete(@table, {{:deals, :_, :_, :_, :_, :_, :_}, :_, :_})
-      :ok
-    rescue
-      _ -> :ok
-    end
-  end
-
-  @doc """
-  Invalidates feeds cache on feed modification.
-  """
-  def invalidate_feeds do
-    try do
-      :ets.delete(@table, :active_feeds)
-      :ok
-    rescue
-      _ -> :ok
-    end
-  end
-
-  @doc """
-  Invalidates analytics stats cache.
-  """
-  def invalidate_analytics do
-    try do
-      :ets.delete(@table, :deal_intelligence_stats)
       :ok
     rescue
       _ -> :ok

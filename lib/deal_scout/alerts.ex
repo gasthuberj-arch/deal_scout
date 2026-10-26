@@ -5,9 +5,8 @@ defmodule DealScout.Alerts do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Alerts.{AlertRule, ComputeGuard, Matcher, UserMatch}
+  alias DealScout.Alerts.{AlertRule, ComputeGuard, Matcher, MatchRecorder, UserMatch}
   alias DealScout.Notifications.Dispatcher
-  alias DealScout.Deals.{Deal, CrossBorderGuard}
   alias DealScout.KeywordEngine
 
   def subscribe_to_user_matches(user_id) do
@@ -146,35 +145,7 @@ defmodule DealScout.Alerts do
     rules = Keyword.get(opts, :rules) || list_active_rules()
 
     {:ok, %{matches_by_rule: matches_by_rule}} = Matcher.match_batch(deals, rules, opts)
-
-    # Collect and persist non-duplicate matches grouped by rule
-    persisted_matches_by_rule =
-      for {rule, matched_deals} <- matches_by_rule, reduce: %{} do
-        acc ->
-          matched_for_rule =
-            for deal <- matched_deals,
-                not duplicate_canonical_match?(rule.user_id, rule.id, deal) do
-              case insert_match(deal, rule) do
-                {:ok, %UserMatch{id: id} = match} when not is_nil(id) ->
-                  match
-
-                _ ->
-                  nil
-              end
-            end
-            |> Enum.reject(&is_nil/1)
-
-          if matched_for_rule != [] do
-            Map.put(acc, rule, matched_for_rule)
-          else
-            acc
-          end
-      end
-
-    # Dispatch notifications per rule (Dispatcher enforces Cooldown, LiveView broadcast, and Digest queueing)
-    for {rule, matches} <- persisted_matches_by_rule do
-      Dispatcher.dispatch_batch(rule, matches)
-    end
+    MatchRecorder.record_and_dispatch(matches_by_rule)
   end
 
   defp maybe_preload_deals(deals) do
@@ -188,37 +159,6 @@ defmodule DealScout.Alerts do
     else
       deals
     end
-  end
-
-  defp insert_match(deal, rule) do
-    attrs = %{
-      user_id: rule.user_id,
-      deal_id: deal.id,
-      alert_rule_id: rule.id,
-      is_read: false
-    }
-
-    %UserMatch{}
-    |> UserMatch.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: :nothing,
-      conflict_target: [:user_id, :deal_id, :alert_rule_id]
-    )
-  end
-
-  defp duplicate_canonical_match?(user_id, rule_id, deal) do
-    canonical_id = deal.canonical_deal_id || deal.id
-    since = DateTime.add(DateTime.utc_now(), -24 * 3600, :second)
-
-    query =
-      from m in UserMatch,
-        join: d in Deal,
-        on: d.id == m.deal_id,
-        where: m.user_id == ^user_id and m.alert_rule_id == ^rule_id,
-        where: m.inserted_at >= ^since,
-        where: d.canonical_deal_id == ^canonical_id or d.id == ^canonical_id
-
-    Repo.exists?(query)
   end
 
   # ============================================================================
@@ -249,7 +189,6 @@ defmodule DealScout.Alerts do
 
     query
     |> Repo.all()
-    |> Enum.map(fn m -> %{m | deal: CrossBorderGuard.enrich(m.deal)} end)
   end
 
   def count_unread_matches(user_id) do

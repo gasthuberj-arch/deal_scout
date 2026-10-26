@@ -17,7 +17,7 @@ defmodule DealScout.Deals.Ingestion do
   require Logger
   alias DealScout.Repo
   alias DealScout.Deals
-  alias DealScout.Deals.{CrossBorderGuard, Deal, Deduplicator, Merchant, MerchantGuard}
+  alias DealScout.Deals.{CrossBorder, Deal, Deduplicator, Merchant, MerchantGuard}
   alias DealScout.Feeds.Parser
   alias DealScout.Alerts
 
@@ -172,6 +172,9 @@ defmodule DealScout.Deals.Ingestion do
         end
       end
 
+    country = CrossBorder.detect_country(item)
+    keyboard_warning = CrossBorder.keyboard_warning(item)
+
     deal_attrs = %{
       feed_id: feed_id,
       merchant_id: merchant_id,
@@ -190,7 +193,7 @@ defmodule DealScout.Deals.Ingestion do
       published_at: item.published_at
     }
 
-    %Deal{}
+    %Deal{country: country, keyboard_warning: keyboard_warning}
     |> Deal.changeset(deal_attrs)
     |> Repo.insert(
       on_conflict: :nothing,
@@ -215,8 +218,6 @@ defmodule DealScout.Deals.Ingestion do
         end
 
         deal = Repo.preload(deal, [:feed, :merchant, duplicates: [:feed]])
-        deal = CrossBorderGuard.enrich(deal)
-
         Deals.broadcast_deal({:ok, deal})
 
         {:ok, deal}

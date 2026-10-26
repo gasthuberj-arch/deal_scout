@@ -12,8 +12,8 @@ defmodule DealScout.Analytics.Warmer do
   require Logger
 
   alias DealScout.Analytics
-  alias DealScout.Deals.Cache
 
+  @table :deal_scout_analytics_cache
   # Default refresh every 60 seconds
   @default_interval_ms 60_000
 
@@ -30,6 +30,10 @@ defmodule DealScout.Analytics.Warmer do
 
   @impl true
   def init(opts) do
+    if :ets.whereis(@table) == :undefined do
+      :ets.new(@table, [:set, :public, :named_table, read_concurrency: true])
+    end
+
     interval = Keyword.get(opts, :interval_ms, @default_interval_ms)
 
     # Perform initial warm immediately on start
@@ -53,7 +57,7 @@ defmodule DealScout.Analytics.Warmer do
 
   defp refresh_stats do
     stats = Analytics.compute_deal_intelligence_stats()
-    Cache.put_deal_intelligence_stats(stats)
+    Analytics.put_cached_stats(stats)
   rescue
     e ->
       Logger.error(

@@ -29,34 +29,6 @@ defmodule DealScout.Deals.CacheTest do
     %{feed: feed, deal: deal}
   end
 
-  test "fetch_active_feeds/1 caches feeds and invalidates on feed update", %{feed: feed} do
-    Cache.invalidate_feeds()
-
-    call_count = :atomics.new(1, [])
-    :atomics.put(call_count, 1, 0)
-
-    fallback = fn ->
-      :atomics.add(call_count, 1, 1)
-      [feed]
-    end
-
-    # First fetch executes fallback
-    result1 = Cache.fetch_active_feeds(fallback)
-    assert length(result1) == 1
-    assert :atomics.get(call_count, 1) == 1
-
-    # Second fetch reads directly from ETS
-    result2 = Cache.fetch_active_feeds(fallback)
-    assert length(result2) == 1
-    assert :atomics.get(call_count, 1) == 1
-
-    # Invalidation clears the ETS entry
-    Cache.invalidate_feeds()
-    result3 = Cache.fetch_active_feeds(fallback)
-    assert length(result3) == 1
-    assert :atomics.get(call_count, 1) == 2
-  end
-
   test "fetch_deals/2 caches default deals and invalidates on broadcast_deal", %{deal: deal} do
     Cache.invalidate_deals()
 

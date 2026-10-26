@@ -2,13 +2,13 @@ defmodule DealScout.AnalyticsTest do
   use DealScout.DataCase
 
   alias DealScout.Analytics
+  alias DealScout.Analytics.Warmer
   alias DealScout.Repo
   alias DealScout.Deals
-  alias DealScout.Deals.Cache
   alias DealScout.Feeds.Feed
 
   setup do
-    Cache.invalidate_analytics()
+    start_supervised!({Warmer, interval_ms: 60_000})
 
     feed =
       Repo.insert!(%Feed{name: "MyDealz", slug: "mydealz", url: "https://www.mydealz.de/rss"})
@@ -37,6 +37,8 @@ defmodule DealScout.AnalyticsTest do
         canonical_deal_id: deal1.id,
         published_at: DateTime.utc_now()
       })
+
+    Analytics.invalidate_analytics_cache()
 
     %{feed: feed, deal1: deal1, deal2: deal2}
   end
@@ -73,19 +75,15 @@ defmodule DealScout.AnalyticsTest do
     assert stats2.total_deals == stats1.total_deals
 
     # When invalidated, fresh stats are computed
-    Cache.invalidate_analytics()
+    Analytics.invalidate_analytics_cache()
     stats3 = Analytics.get_deal_intelligence_stats()
     assert stats3.total_deals == stats1.total_deals + 1
   end
 
   test "Analytics.Warmer refreshes cache in background" do
-    alias DealScout.Analytics.Warmer
+    Analytics.invalidate_analytics_cache()
 
-    Cache.invalidate_analytics()
-    # Before warming or manual call, warmer can be started
-    start_supervised!({Warmer, interval_ms: 60_000})
-
-    # Wait for GenServer to handle initial :refresh
+    Warmer.warm_now()
     _ = :sys.get_state(Warmer)
 
     stats = Analytics.get_deal_intelligence_stats()

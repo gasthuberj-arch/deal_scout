@@ -2,7 +2,6 @@ defmodule DealScoutWeb.DealLive.Index do
   use DealScoutWeb, :live_view
 
   alias DealScout.Deals
-  alias DealScout.Deals.CrossBorderGuard
   alias DealScout.Feeds
 
   @page_size 30
@@ -394,14 +393,15 @@ defmodule DealScoutWeb.DealLive.Index do
                       </span>
                     <% end %>
 
-                    <% country = CrossBorderGuard.detect_country(deal) %>
-                    <%= if country do %>
+                    <%= if deal.country do %>
+                      <% country_name = deal.country[:name] || deal.country["name"]
+                      country_flag = deal.country[:flag] || deal.country["flag"] %>
                       <span
                         class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border border-base-300 bg-base-200/60 text-base-content/80 shadow-xs"
-                        title={"Dispatched / Origin: #{country.name}"}
+                        title={"Dispatched / Origin: #{country_name}"}
                       >
-                        <span>{country.flag}</span>
-                        <span>{country.name}</span>
+                        <span>{country_flag}</span>
+                        <span>{country_name}</span>
                       </span>
                     <% end %>
                   </div>
@@ -412,11 +412,11 @@ defmodule DealScoutWeb.DealLive.Index do
                 </div>
 
                 <!-- Foreign Keyboard Layout Warning Banner -->
-                <% kb_warning = CrossBorderGuard.keyboard_warning(deal) %>
-                <%= if kb_warning do %>
+                <%= if deal.keyboard_warning do %>
+                  <% kb_message = deal.keyboard_warning[:message] || deal.keyboard_warning["message"] %>
                   <div class="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
                     <.icon name="hero-exclamation-triangle" class="size-4 shrink-0 text-amber-500" />
-                    <span>{kb_warning.message}</span>
+                    <span>{kb_message}</span>
                   </div>
                 <% end %>
 

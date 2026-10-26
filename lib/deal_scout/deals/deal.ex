@@ -15,10 +15,9 @@ defmodule DealScout.Deals.Deal do
     field :idealo_url, :string
     field :geizhals_url, :string
     field :temperature, :integer
-
-    field :country, :map, virtual: true
-    field :keyboard_warning, :map, virtual: true
-    field :cross_border_evaluated, :boolean, virtual: true, default: false
+    field :country, :map
+    field :keyboard_warning, :map
+    field :cross_border_evaluated, :boolean, virtual: true, default: true
 
     belongs_to :feed, DealScout.Feeds.Feed
     belongs_to :merchant, DealScout.Deals.Merchant

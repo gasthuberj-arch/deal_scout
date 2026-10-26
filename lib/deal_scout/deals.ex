@@ -9,7 +9,6 @@ defmodule DealScout.Deals do
 
   alias DealScout.Deals.{
     Cache,
-    CrossBorderGuard,
     Deal,
     Deduplicator,
     Ingestion,
@@ -159,7 +158,6 @@ defmodule DealScout.Deals do
       end
 
     deals
-    |> Enum.map(&CrossBorderGuard.enrich/1)
     |> Enum.filter(fn d -> not exclude_dropshippers or not dropshipper_deal?(d) end)
   end
 
@@ -293,7 +291,6 @@ defmodule DealScout.Deals do
     Deal
     |> preload([:feed, :merchant, duplicates: [:feed, :merchant]])
     |> Repo.get!(id)
-    |> CrossBorderGuard.enrich()
   end
 
   @doc """

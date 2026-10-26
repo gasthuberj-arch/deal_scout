@@ -8,9 +8,8 @@ defmodule DealScout.Alerts.Matcher do
   """
 
   alias DealScout.Deals
-  alias DealScout.Deals.Deal
+  alias DealScout.Deals.{CrossBorder, Deal}
   alias DealScout.Alerts.{AlertRule, ComputeGuard}
-  alias DealScout.Deals.CrossBorderGuard
   alias DealScout.KeywordEngine
   alias DealScout.KeywordEngine.Query
 
@@ -33,12 +32,11 @@ defmodule DealScout.Alerts.Matcher do
     end
 
     prefilter? = Keyword.get(opts, :prefilter, true)
-    enriched_deals = Enum.map(deals, &CrossBorderGuard.enrich/1)
 
     {compiled_rules, candidates_by_deal_id} =
       if prefilter? do
         deal_items =
-          Enum.map(enriched_deals, fn d -> %{id: d.id, text: searchable_text(d)} end)
+          Enum.map(deals, fn d -> %{id: d.id, text: searchable_text(d)} end)
 
         KeywordEngine.prefilter_batch(deal_items)
       else
@@ -57,7 +55,7 @@ defmodule DealScout.Alerts.Matcher do
                 false
             end
 
-          Enum.filter(enriched_deals, fn deal ->
+          Enum.filter(deals, fn deal ->
             if compiled? do
               candidate_ids = Map.get(candidates_by_deal_id, deal.id, MapSet.new())
 
@@ -99,8 +97,7 @@ defmodule DealScout.Alerts.Matcher do
   """
   @spec test_rule(AlertRule.t(), [Deal.t()]) :: [Deal.t()]
   def test_rule(%AlertRule{} = rule, deals) when is_list(deals) do
-    enriched_deals = Enum.map(deals, &CrossBorderGuard.enrich/1)
-    Enum.filter(enriched_deals, &matches?(&1, rule))
+    Enum.filter(deals, &matches?(&1, rule))
   end
 
   @doc """
@@ -185,17 +182,17 @@ defmodule DealScout.Alerts.Matcher do
   defp matches_country?(_deal, "all"), do: true
 
   defp matches_country?(deal, "de_only") do
-    case CrossBorderGuard.detect_country(deal) do
+    case deal_country_code(deal) do
       nil -> true
-      %{code: "DE"} -> true
+      "DE" -> true
       _ -> false
     end
   end
 
   defp matches_country?(deal, "eu_only") do
-    case CrossBorderGuard.detect_country(deal) do
+    case deal_country_code(deal) do
       nil -> true
-      %{code: code} when code in ["US", "UK", "CN"] -> false
+      code when code in ["US", "UK", "CN"] -> false
       _ -> true
     end
   end
@@ -206,7 +203,23 @@ defmodule DealScout.Alerts.Matcher do
   defp not_foreign_keyboard?(_deal, nil), do: true
 
   defp not_foreign_keyboard?(deal, true) do
-    is_nil(CrossBorderGuard.keyboard_warning(deal))
+    is_nil(deal_keyboard_warning(deal))
+  end
+
+  defp deal_country(deal) do
+    deal.country || CrossBorder.detect_country(deal)
+  end
+
+  defp deal_country_code(deal) do
+    case deal_country(deal) do
+      %{code: code} -> code
+      %{"code" => code} -> code
+      _ -> nil
+    end
+  end
+
+  defp deal_keyboard_warning(deal) do
+    deal.keyboard_warning || CrossBorder.keyboard_warning(deal)
   end
 
   @doc """

@@ -5,18 +5,69 @@ defmodule DealScout.Analytics do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Deals.{Cache, Deal, CrossBorderGuard}
+  alias DealScout.Deals.Deal
   alias DealScout.Feeds.Feed
   alias DealScout.Accounts.User
+
+  @table :deal_scout_analytics_cache
+  @default_analytics_ttl_ms 60_000
 
   @doc """
   Computes aggregated deal intelligence metrics for the `/analytics` dashboard.
   Uses an in-memory ETS cache with a 60-second TTL to avoid heavy recalculations.
   """
   def get_deal_intelligence_stats do
-    Cache.fetch_deal_intelligence_stats(fn ->
-      compute_deal_intelligence_stats()
-    end)
+    now = System.monotonic_time(:millisecond)
+
+    case lookup_cached_stats() do
+      {:ok, stats, expires_at} when expires_at > now ->
+        stats
+
+      _ ->
+        stats = compute_deal_intelligence_stats()
+        put_cached_stats(stats)
+        stats
+    end
+  end
+
+  @doc """
+  Stores computed deal intelligence stats in the analytics ETS cache.
+  """
+  def put_cached_stats(stats) do
+    if :ets.whereis(@table) != :undefined do
+      now = System.monotonic_time(:millisecond)
+      :ets.insert(@table, {:deal_intelligence_stats, stats, now + @default_analytics_ttl_ms})
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  @doc """
+  Invalidates the analytics ETS cache.
+  """
+  def invalidate_analytics_cache do
+    if :ets.whereis(@table) != :undefined do
+      :ets.delete(@table, :deal_intelligence_stats)
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  defp lookup_cached_stats do
+    if :ets.whereis(@table) != :undefined do
+      case :ets.lookup(@table, :deal_intelligence_stats) do
+        [{:deal_intelligence_stats, stats, expires_at}] -> {:ok, stats, expires_at}
+        _ -> :error
+      end
+    else
+      :error
+    end
+  rescue
+    _ -> :error
   end
 
   @doc """
@@ -104,25 +155,11 @@ defmodule DealScout.Analytics do
       )
       |> Repo.all()
 
-    # Fast sampling of deals for cross-border and keyboard warning calculations
-    sample_deals =
-      from(d in Deal,
-        order_by: [desc: d.id],
-        limit: 200,
-        select: %{url: d.url, title: d.title, clean_text: d.clean_text}
-      )
-      |> Repo.all()
+    cross_border_count =
+      Repo.one(from d in Deal, where: not is_nil(d.country), select: count(d.id)) || 0
 
-    {cross_border_count, foreign_kb_count} =
-      Enum.reduce(sample_deals, {0, 0}, fn deal, {cb_acc, kb_acc} ->
-        has_cb = CrossBorderGuard.detect_country(deal) != nil
-        has_kb = CrossBorderGuard.keyboard_warning(deal) != nil
-
-        {
-          if(has_cb, do: cb_acc + 1, else: cb_acc),
-          if(has_kb, do: kb_acc + 1, else: kb_acc)
-        }
-      end)
+    foreign_kb_count =
+      Repo.one(from d in Deal, where: not is_nil(d.keyboard_warning), select: count(d.id)) || 0
 
     %{
       total_deals: total_deals,

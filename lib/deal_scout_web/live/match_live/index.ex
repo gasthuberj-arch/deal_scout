@@ -2,7 +2,6 @@ defmodule DealScoutWeb.MatchLive.Index do
   use DealScoutWeb, :live_view
 
   alias DealScout.Alerts
-  alias DealScout.Deals.CrossBorderGuard
   alias DealScoutWeb.PWAComponents
   alias DealScoutWeb.PushNotificationHandler
 
@@ -202,8 +201,6 @@ defmodule DealScoutWeb.MatchLive.Index do
         <% else %>
           <div class="space-y-3">
             <%= for match <- @matches do %>
-              <% country = CrossBorderGuard.detect_country(match.deal)
-              keyboard_warn = CrossBorderGuard.keyboard_warning(match.deal) %>
               <div
                 id={"match-#{match.id}"}
                 class={[
@@ -235,13 +232,16 @@ defmodule DealScoutWeb.MatchLive.Index do
                         <span class="badge badge-ghost badge-sm">
                           {if match.deal.feed, do: match.deal.feed.name, else: "Deal"}
                         </span>
-                        <%= if country do %>
+                        <%= if match.deal.country do %>
+                          <% country_name = match.deal.country[:name] || match.deal.country["name"]
+                          country_flag = match.deal.country[:flag] || match.deal.country["flag"]
+                          country_code = match.deal.country[:code] || match.deal.country["code"] %>
                           <span
                             class="badge badge-ghost badge-sm gap-1"
-                            title={"Origin: #{country.name}"}
+                            title={"Origin: #{country_name}"}
                           >
-                            <span>{country.flag}</span>
-                            <span>{country.code}</span>
+                            <span>{country_flag}</span>
+                            <span>{country_code}</span>
                           </span>
                         <% end %>
                         <%= if !match.is_read do %>
@@ -264,10 +264,16 @@ defmodule DealScoutWeb.MatchLive.Index do
                       </h2>
 
                       <!-- Keyboard warning if foreign -->
-                      <%= if keyboard_warn do %>
+                      <%= if match.deal.keyboard_warning do %>
+                        <% kb_flag =
+                          match.deal.keyboard_warning[:flag] || match.deal.keyboard_warning["flag"]
+
+                        kb_msg =
+                          match.deal.keyboard_warning[:message] ||
+                            match.deal.keyboard_warning["message"] %>
                         <div class="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20 font-medium w-fit">
-                          <span>{keyboard_warn.flag}</span>
-                          <span>{keyboard_warn.message}</span>
+                          <span>{kb_flag}</span>
+                          <span>{kb_msg}</span>
                         </div>
                       <% end %>
 
