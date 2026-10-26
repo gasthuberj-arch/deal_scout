@@ -293,7 +293,18 @@ defmodule DealScoutWeb.UserAuth do
       end
     end
 
-    socket
+    if Map.has_key?(socket.private, :lifecycle) and
+         not Map.get(socket.private, :deal_scout_feedback_attached, false) do
+      socket
+      |> Phoenix.LiveView.attach_hook(
+        :deal_scout_feedback_handler,
+        :handle_event,
+        &DealScoutWeb.Components.FeedbackModal.handle_event/3
+      )
+      |> then(fn s -> %{s | private: Map.put(s.private, :deal_scout_feedback_attached, true)} end)
+    else
+      socket
+    end
   end
 
   @doc "Returns the path to redirect to after log in."

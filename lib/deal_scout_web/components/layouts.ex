@@ -5,7 +5,7 @@ defmodule DealScoutWeb.Layouts do
   """
   use DealScoutWeb, :html
 
-  alias DealScoutWeb.Components.{SupportModal, AdblockAdvisory}
+  alias DealScoutWeb.Components.{SupportModal, AdblockAdvisory, FeedbackModal}
 
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
@@ -173,8 +173,23 @@ defmodule DealScoutWeb.Layouts do
                         <.icon name="hero-shield-check" class="size-3.5" /> Admin System Ops
                       </.link>
                     </li>
+                    <li>
+                      <.link navigate={~p"/admin/feedback"} class="text-error font-medium">
+                        <.icon name="hero-inbox-stack" class="size-3.5" /> Admin User Feedback
+                      </.link>
+                    </li>
                   <% end %>
                   <li><.link navigate={~p"/users/settings"}>Settings</.link></li>
+                  <li>
+                    <button
+                      type="button"
+                      phx-click={FeedbackModal.show_feedback_modal()}
+                      class="flex items-center gap-2 font-medium w-full text-left cursor-pointer"
+                    >
+                      <.icon name="hero-chat-bubble-bottom-center-text" class="size-4" />
+                      Send feedback
+                    </button>
+                  </li>
                   <li>
                     <button
                       type="button"
@@ -209,6 +224,7 @@ defmodule DealScoutWeb.Layouts do
     </div>
 
     <SupportModal.coffee_modal />
+    <FeedbackModal.feedback_widget current_scope={@current_scope} />
     <.flash_group flash={@flash} />
     """
   end
@@ -235,7 +251,7 @@ defmodule DealScoutWeb.Layouts do
         phx-disconnected={JS.remove_attribute("hidden", to: "#reconnect-badge")}
         phx-connected={JS.set_attribute({"hidden", ""}, to: "#reconnect-badge")}
         hidden
-        class="fixed bottom-4 right-4 z-50 pointer-events-none transition-all duration-300 [animation:fade-in_0.3s_ease-out_2s_both]"
+        class="fixed bottom-20 right-5 z-50 pointer-events-none transition-all duration-300 [animation:fade-in_0.3s_ease-out_2s_both]"
       >
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-100/95 text-base-content/80 text-xs font-medium shadow-lg backdrop-blur border border-base-content/10">
           <span class="size-2 rounded-full bg-warning animate-ping"></span>

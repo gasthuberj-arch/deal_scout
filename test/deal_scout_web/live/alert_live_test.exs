@@ -21,7 +21,7 @@ defmodule DealScoutWeb.AlertLiveTest do
     # Submit new rule form
     {:ok, _, html} =
       index_live
-      |> form("form", %{
+      |> form("#alert-rule-form", %{
         "alert_rule" => %{
           "name" => "RTX 4080 Alert",
           "keywords" => "RTX 4080",
@@ -60,7 +60,7 @@ defmodule DealScoutWeb.AlertLiveTest do
 
     {:ok, redirect_live, _html} =
       index_live
-      |> form("form", %{
+      |> form("#alert-rule-form", %{
         "alert_rule" => %{
           "name" => "OLED TV Hunter",
           "keywords" => "\"LG G4 OLED\"",

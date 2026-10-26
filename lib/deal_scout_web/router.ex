@@ -82,6 +82,7 @@ defmodule DealScoutWeb.Router do
         {DealScoutWeb.UserAuth, :require_admin}
       ] do
       live "/system", SystemLive.Index, :index
+      live "/feedback", FeedbackLive.Index, :index
     end
   end
 
