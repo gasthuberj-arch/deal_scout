@@ -29,7 +29,7 @@ defmodule DealScoutWeb.DealLive.Index do
       |> assign(:interstitial_deal, nil)
       |> assign(:page_offset, 0)
       |> assign(:has_more?, true)
-      |> load_deals()
+      |> stream(:deals, [])
 
     {:ok, socket}
   end

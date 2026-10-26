@@ -72,9 +72,11 @@ defmodule DealScout.Deals.Cache do
   """
   def fetch_deals(opts, fallback_fn) when is_function(fallback_fn, 0) do
     if cacheable_opts?(opts) do
+      feed_key = Keyword.get(opts, :feed) || Keyword.get(opts, :feed_id, "all")
+
       cache_key = {
         :deals,
-        Keyword.get(opts, :feed_id, "all"),
+        feed_key,
         Keyword.get(opts, :merchant, "all"),
         Keyword.get(opts, :exclude_dropshippers, false),
         Keyword.get(opts, :group_deals, true),
