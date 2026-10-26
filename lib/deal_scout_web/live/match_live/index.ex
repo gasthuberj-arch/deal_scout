@@ -20,8 +20,9 @@ defmodule DealScoutWeb.MatchLive.Index do
       |> assign(:unread_only, false)
       |> assign(:sound_enabled, true)
       |> assign(:highlight_id, nil)
+      |> assign(:matches, [])
+      |> assign(:unread_count, 0)
       |> PushNotificationHandler.init_push_assigns()
-      |> load_matches()
 
     {:ok, socket}
   end
