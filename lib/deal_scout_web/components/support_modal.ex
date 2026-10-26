@@ -12,7 +12,8 @@ defmodule DealScoutWeb.Components.SupportModal do
   """
   def show_coffee_modal(js \\ %JS{}) do
     js
-    |> JS.show(to: "#coffee-modal")
+    |> JS.remove_attribute("hidden", to: "#coffee-modal")
+    |> JS.show(to: "#coffee-modal", display: "block")
     |> JS.add_class("overflow-hidden", to: "body")
   end
 
@@ -71,7 +72,7 @@ defmodule DealScoutWeb.Components.SupportModal do
     ~H"""
     <div
       id="coffee-modal"
-      hidden
+      style="display: none;"
       class="fixed inset-0 z-50 overflow-y-auto"
       role="dialog"
       aria-modal="true"

@@ -12,9 +12,9 @@ defmodule DealScoutWeb.Components.FeedbackModal do
   """
   def show_feedback_modal(js \\ %JS{}) do
     js
-    |> JS.show(to: "#feedback-modal")
+    |> JS.remove_attribute("hidden", to: "#feedback-modal")
+    |> JS.show(to: "#feedback-modal", display: "block")
     |> JS.add_class("overflow-hidden", to: "body")
-    |> JS.focus(to: "#feedback-message")
   end
 
   @doc """
@@ -95,10 +95,10 @@ defmodule DealScoutWeb.Components.FeedbackModal do
         id="feedback-trigger-btn"
         type="button"
         phx-click={show_feedback_modal()}
-        class="group fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-base-900 text-white dark:bg-primary dark:text-primary-content shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 border border-white/10 cursor-pointer font-medium text-xs sm:text-sm"
+        class="group fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-primary text-primary-content shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 border border-primary/20 cursor-pointer font-medium text-xs sm:text-sm"
         title="Give feedback"
       >
-        <span class="inline-flex items-center justify-center size-5 rounded-full bg-white/20 group-hover:rotate-12 transition-transform">
+        <span class="inline-flex items-center justify-center size-5 rounded-full bg-primary-content/20 group-hover:rotate-12 transition-transform">
           <.icon name="hero-chat-bubble-bottom-center-text" class="size-3.5" />
         </span>
         <span>Feedback</span>
@@ -108,7 +108,7 @@ defmodule DealScoutWeb.Components.FeedbackModal do
       <div id="feedback-modal-wrapper" phx-hook=".FeedbackHook">
         <div
           id="feedback-modal"
-          hidden
+          style="display: none;"
           class="fixed inset-0 z-50 overflow-y-auto"
           role="dialog"
           aria-modal="true"
@@ -245,7 +245,9 @@ defmodule DealScoutWeb.Components.FeedbackModal do
                 populateUrl();
 
                 const modal = document.querySelector('#feedback-modal');
-                if (modal) modal.hidden = true;
+                if (modal) {
+                  modal.style.display = 'none';
+                }
                 document.body.classList.remove('overflow-hidden');
               });
             }
