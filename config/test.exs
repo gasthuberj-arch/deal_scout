@@ -52,3 +52,6 @@ config :deal_scout, :feed_fetcher, DealScout.Feeds.Fetcher.TestAdapter
 
 # Use in-memory test double adapter for Web Push transport
 config :deal_scout, :web_push_transport, DealScout.Notifications.WebPush.TestTransport
+
+# Use in-memory test double adapter for deal thumbnail fetching
+config :deal_scout, :thumbnail_fetcher, DealScout.Deals.ThumbnailProxy.TestAdapter

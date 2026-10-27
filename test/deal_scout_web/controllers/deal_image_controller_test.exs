@@ -4,10 +4,10 @@ defmodule DealScoutWeb.DealImageControllerTest do
   alias DealScout.Repo
   alias DealScout.Feeds.Feed
   alias DealScout.Deals
-  alias DealScout.Deals.ImageCache
+  alias DealScout.Deals.ThumbnailProxy
 
   setup do
-    ImageCache.clear()
+    ThumbnailProxy.clear()
 
     feed =
       Repo.insert!(%Feed{name: "Test Feed", slug: "test-feed", url: "https://example.com/feed"})
@@ -34,7 +34,7 @@ defmodule DealScoutWeb.DealImageControllerTest do
 
   test "returns cached image with Cache-Control and ETag if present", %{conn: conn, deal: deal} do
     sample_png = <<137, 80, 78, 71, 13, 10, 26, 10>>
-    ImageCache.put(deal.id, "image/png", sample_png)
+    ThumbnailProxy.put(deal.id, "image/png", sample_png)
 
     conn = get(conn, ~p"/deals/#{deal.id}/image")
     assert response(conn, 200) == sample_png

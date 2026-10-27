@@ -1,69 +1,26 @@
 defmodule DealScoutWeb.DealImageController do
   use DealScoutWeb, :controller
 
-  alias DealScout.Repo
-  alias DealScout.Deals.Deal
-  alias DealScout.Deals.ImageCache
-  alias DealScout.Deals.ImageFetcher
-
-  @max_thumbnail_bytes 60_000
+  alias DealScout.Deals.ThumbnailProxy
 
   @doc """
-  Proxies and caches remote deal images.
-  This allows mobile devices (e.g. Pixel/Android/iOS) with strict adblockers,
-  private DNS, or cellular carrier CDN restrictions to reliably load deal thumbnails
-  from the same-origin server with zero cross-origin or anti-hotlinking issues.
+  Proxies and caches remote deal images via same-origin delivery.
+  Allows mobile devices with strict adblockers, private DNS, or carrier restrictions
+  to reliably load deal thumbnails without cross-origin or anti-hotlinking issues.
 
-  Includes:
-  - Cache-Control (24h) and ETag support for client-side HTTP 304 caching.
-  - Tiered in-memory ETS + persistent volume caching for thumbnails <= 60 KB.
-  - Concurrency limiting via ImageFetcher to prevent upstream network stampedes.
-  - Oversized payloads (>60 KB) served directly without storing in ETS/disk.
-  - Direct upstream fallback on errors or saturation.
+  Delegates the entire proxy, caching, and concurrency lifecycle to `DealScout.Deals.ThumbnailProxy`.
   """
   def show(conn, %{"id" => id}) do
-    case ImageCache.get(id) do
+    case ThumbnailProxy.get_thumbnail(id) do
       {:ok, content_type, body} ->
         send_image(conn, content_type, body)
 
-      :miss ->
-        fetch_and_serve(conn, id)
-    end
-  end
+      {:redirect, external_url} ->
+        redirect(conn, external: external_url)
 
-  defp fetch_and_serve(conn, id) do
-    case Repo.get(Deal, id) do
-      %Deal{image_url: url} when is_binary(url) and url != "" ->
-        case ImageFetcher.with_permit(fn -> fetch_remote_image(url) end) do
-          {:ok, %Req.Response{status: 200, body: body} = resp}
-          when is_binary(body) and byte_size(body) <= @max_thumbnail_bytes ->
-            content_type = extract_content_type(resp)
-            _ = ImageCache.put(id, content_type, body)
-            send_image(conn, content_type, body)
-
-          {:ok, %Req.Response{status: 200, body: body} = resp} when is_binary(body) ->
-            content_type = extract_content_type(resp)
-            send_image(conn, content_type, body)
-
-          _ ->
-            redirect(conn, external: url)
-        end
-
-      _ ->
+      :not_found ->
         send_resp(conn, 404, "Not Found")
     end
-  end
-
-  defp fetch_remote_image(url) do
-    Req.get(url,
-      headers: [
-        {"user-agent",
-         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
-        {"accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
-      ],
-      receive_timeout: 4000,
-      max_retries: 1
-    )
   end
 
   defp send_image(conn, content_type, body) do
@@ -81,13 +38,6 @@ defmodule DealScoutWeb.DealImageController do
       |> put_resp_header("content-type", content_type)
       |> put_resp_header("access-control-allow-origin", "*")
       |> send_resp(200, body)
-    end
-  end
-
-  defp extract_content_type(resp) do
-    case Req.Response.get_header(resp, "content-type") do
-      [ct | _] when is_binary(ct) -> ct
-      _ -> "image/jpeg"
     end
   end
 end
