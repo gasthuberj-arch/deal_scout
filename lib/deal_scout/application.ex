@@ -12,7 +12,6 @@ defmodule DealScout.Application do
         DealScoutWeb.Telemetry,
         DealScout.Repo,
         DealScout.Deals.StreamCache,
-        DealScout.Media.ImageProxy,
         DealScout.KeywordEngine.Server,
         DealScout.Analytics.Server,
         {Ecto.Migrator,
