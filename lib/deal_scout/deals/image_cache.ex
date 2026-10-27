@@ -15,6 +15,7 @@ defmodule DealScout.Deals.ImageCache do
   @max_entries 150
   @max_item_bytes 60_000
   @ttl_seconds 900
+  @disk_ttl_seconds 3_600
   @sweep_interval_ms 300_000
 
   def start_link(opts \\ []) do
@@ -232,8 +233,8 @@ defmodule DealScout.Deals.ImageCache do
     dir = cache_dir()
 
     if File.dir?(dir) do
-      # Evict cache files older than 7 days (604,800 seconds)
-      cutoff_time = System.os_time(:second) - 7 * 86_400
+      # Evict cache files older than 1 hour (3,600 seconds)
+      cutoff_time = System.os_time(:second) - @disk_ttl_seconds
 
       case File.ls(dir) do
         {:ok, files} ->
