@@ -89,6 +89,8 @@ defmodule DealScoutWeb.Router do
   scope "/", DealScoutWeb do
     pipe_through [:browser]
 
+    get "/deals/:id/image", DealImageController, :show
+
     live_session :current_user,
       on_mount: [{DealScoutWeb.UserAuth, :mount_current_scope}] do
       live "/", DealLive.Index, :index

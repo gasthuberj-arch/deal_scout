@@ -214,6 +214,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                 <div class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div class="flex items-start gap-4 flex-1 min-w-0">
                     <.deal_image
+                      deal_id={match.deal.id}
                       src={match.deal.image_url}
                       alt=""
                       class="size-16 shrink-0"

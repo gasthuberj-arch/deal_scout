@@ -433,6 +433,7 @@ defmodule DealScoutWeb.DealLive.Index do
                 <!-- Deal Image & Title Row -->
                 <div class="flex gap-4">
                   <.deal_image
+                    deal_id={deal.id}
                     src={deal.image_url}
                     alt=""
                     class="size-20 shrink-0"

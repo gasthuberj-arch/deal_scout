@@ -478,15 +478,25 @@ defmodule DealScoutWeb.CoreComponents do
   @doc """
   Renders a deal or product image with graceful fallback placeholder when
   loading fails or no image is provided.
-  Directly renders remote CDN images with referrerpolicy="no-referrer" and explicit
-  dimensions, preventing mobile hotlink blocking and layout shifts without server overhead.
+  Uses same-origin `/deals/:id/image` proxy when `deal_id` is supplied, with client-side
+  fallback to direct CDN `@src` and finally placeholder hiding.
   """
+  attr :deal_id, :any, default: nil
   attr :src, :string, default: nil
   attr :alt, :string, default: ""
   attr :class, :string, default: "size-20"
   attr :img_class, :string, default: "size-20 object-cover"
 
   def deal_image(assigns) do
+    primary_src =
+      cond do
+        assigns[:deal_id] -> "/deals/#{assigns[:deal_id]}/image"
+        assigns[:src] && assigns[:src] != "" -> assigns[:src]
+        true -> nil
+      end
+
+    assigns = assign(assigns, :primary_src, primary_src)
+
     ~H"""
     <div class={[
       "relative shrink-0 overflow-hidden rounded-xl border border-base-300 bg-base-200/80 dark:bg-base-300/40 flex items-center justify-center select-none shadow-xs",
@@ -499,9 +509,10 @@ defmodule DealScoutWeb.CoreComponents do
         </div>
       </div>
 
-      <%= if @src && @src != "" do %>
+      <%= if @primary_src do %>
         <img
-          src={@src}
+          src={@primary_src}
+          data-fallback={@src}
           alt={@alt}
           width="80"
           height="80"
@@ -511,7 +522,7 @@ defmodule DealScoutWeb.CoreComponents do
           ]}
           decoding="async"
           referrerpolicy="no-referrer"
-          onerror="this.style.display='none';"
+          onerror="if(this.dataset.fallback && this.src !== this.dataset.fallback){this.src=this.dataset.fallback;}else{this.style.display='none';}"
         />
       <% end %>
     </div>
