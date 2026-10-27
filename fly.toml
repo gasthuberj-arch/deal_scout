@@ -37,11 +37,14 @@ swap_size_mb = 512
     soft_limit = 200
 
   [[http_service.checks]]
-    grace_period = "10s"
+    grace_period = "60s"
     interval = "15s"
     method = "GET"
     path = "/health"
     timeout = "3s"
+
+[[restart]]
+  policy = "always"
 
 [metrics]
   port = 9091
