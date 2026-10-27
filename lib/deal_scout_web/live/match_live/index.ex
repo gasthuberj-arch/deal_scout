@@ -216,7 +216,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                     <.deal_image
                       src={match.deal.image_url}
                       deal_id={match.deal.id}
-                      alt={match.deal.title}
+                      alt=""
                       class="size-16 shrink-0"
                     />
 

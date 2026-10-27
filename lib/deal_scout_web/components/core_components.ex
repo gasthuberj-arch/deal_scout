@@ -499,12 +499,12 @@ defmodule DealScoutWeb.CoreComponents do
 
     ~H"""
     <div class={[
-      "relative shrink-0 overflow-hidden rounded-xl border border-base-200/80 bg-base-200/50 dark:bg-base-200/30 flex items-center justify-center select-none",
+      "relative shrink-0 overflow-hidden rounded-xl border border-base-300 bg-base-200/80 dark:bg-base-300/40 flex items-center justify-center select-none shadow-xs",
       @class
     ]}>
       <!-- Fallback Placeholder: soft shopping bag / tag glyph -->
       <div class="deal-image-placeholder absolute inset-0 flex items-center justify-center text-base-content/40 dark:text-base-content/60">
-        <div class="p-2.5 rounded-xl bg-base-300/40 dark:bg-base-100/50 flex items-center justify-center">
+        <div class="p-2.5 rounded-xl bg-base-300/50 dark:bg-base-100/60 flex items-center justify-center">
           <.icon name="hero-shopping-bag" class="size-6 stroke-[1.5]" />
         </div>
       </div>
@@ -516,7 +516,7 @@ defmodule DealScoutWeb.CoreComponents do
           width="80"
           height="80"
           class={[
-            "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
+            "absolute inset-0 w-full h-full object-cover text-transparent select-none transition-opacity duration-300",
             @img_class
           ]}
           decoding="async"

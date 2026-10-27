@@ -380,7 +380,7 @@ defmodule DealScoutWeb.DealLive.Index do
           <%= for {dom_id, deal} <- @streams.deals do %>
             <div
               id={dom_id}
-              class="card bg-base-100 border border-base-300 hover:border-primary/50 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col justify-between group"
+              class="card bg-base-100 dark:bg-base-200/90 border border-base-300 dark:border-base-300 shadow-sm hover:shadow-md hover:border-primary/60 transition-all duration-200 overflow-hidden flex flex-col justify-between group"
             >
               <div class="p-5 space-y-3">
                 <!-- Card Header: Feed & Community Temperature & Time -->
@@ -435,7 +435,7 @@ defmodule DealScoutWeb.DealLive.Index do
                   <.deal_image
                     src={deal.image_url}
                     deal_id={deal.id}
-                    alt={deal.title}
+                    alt=""
                     class="size-20 shrink-0"
                     img_class="group-hover:scale-105 transition-transform"
                   />
@@ -543,7 +543,7 @@ defmodule DealScoutWeb.DealLive.Index do
               </div>
 
               <!-- Card Footer: Host & Direct Deal Button -->
-              <div class="px-5 py-3 border-t border-base-300 bg-base-200/50 flex items-center justify-between text-xs">
+              <div class="px-5 py-3 border-t border-base-300 bg-base-200/70 dark:bg-base-100/70 flex items-center justify-between text-xs">
                 <span class="text-xs text-base-content/70 truncate max-w-[170px]">
                   {URI.parse(deal.url).host}
                 </span>
