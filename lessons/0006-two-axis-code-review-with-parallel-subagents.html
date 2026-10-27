@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0006: Two-Axis Code Review with Parallel Sub-Agents</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Review &bull; Lesson 0006</div>
+      <h1>Two-Axis Code Review with Parallel Sub-Agents</h1>
+      <p class="subtitle">How to evaluate code along Standards and Spec simultaneously without cognitive masking.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Applied to Real Workflows</h4>
+      <p>When you or a peer agent writes code—like the PWA and Web Push feature currently taking shape in DealScout—how do you know it's ready to merge? This lesson introduces the multi-agent review pattern from <a href="../.agents/skills/code-review/SKILL.md"><code>code-review</code></a>.</p>
+    </div>
+
+    <h2>1. The Problem with Monolithic Reviews</h2>
+    <p>Traditional human code review (and naive single-prompt AI review) suffers from a major blind spot: <strong>cognitive masking</strong>. Reviewers get dragged into styling debates, missing that the PR failed to implement an essential requirement. Or conversely, reviewers verify that the feature works, completely ignoring that the code introduced severe architectural rot (Middle Men, Feature Envy, or broken boundaries).</p>
+
+    <h2>2. The Two Orthogonal Axes</h2>
+    <p>A pull request can pass one axis while utterly failing the other:</p>
+    <ul>
+      <li><strong>Standards Pass, Spec Fail:</strong> Beautifully formatted, idiomatic Elixir that implements the wrong behavior or solves the wrong problem.</li>
+      <li><strong>Spec Pass, Standards Fail:</strong> The feature works for the user, but violates repository architecture rules (`AGENTS.md`) and introduces technical debt.</li>
+    </ul>
+
+    <h2>3. The Parallel Sub-Agent Architecture</h2>
+    <p>Rather than asking one agent to juggle both concerns, the review dispatches two parallel sub-agents against <code>git diff &lt;base&gt;...HEAD</code>:</p>
+
+    <pre><code>                     ┌─────────────────────────────┐
+                     │   git diff &lt;base&gt;...HEAD    │
+                     └──────────────┬──────────────┘
+                                    │
+               ┌────────────────────┴────────────────────┐
+               ▼                                         ▼
+   ┌───────────────────────┐                 ┌───────────────────────┐
+   │  Standards Sub-Agent  │                 │    Spec Sub-Agent     │
+   │  - AGENTS.md rules    │                 │  - Issue requirements │
+   │  - Fowler smells      │                 │  - Scope creep check  │
+   │  - Architecture rules │                 │  - Missing edges      │
+   └───────────┬───────────┘                 └───────────┬───────────┘
+               │                                         │
+               └────────────────────┬────────────────────┘
+                                    ▼
+                     ┌─────────────────────────────┐
+                     │   Side-by-Side Synthesis    │
+                     │   (No cross-axis reranking) │
+                     └─────────────────────────────┘</code></pre>
+
+    <p>By keeping the reports side-by-side without merging them into a single score, neither axis can hide behind the other.</p>
+
+    <h2>4. Check Your Understanding</h2>
+    <p>Test your grasp of two-axis code review with these retrieval checks. Feedback appears immediately upon clicking.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why do we review code along two separate axes?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Separating Standards and Spec prevents formatting debates or feature checks from masking each other.">
+            To prevent one axis from masking another
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Parallel sub-agents complete reviews in seconds, accelerating pull request velocity.">
+            To triple developer pull request review delays
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Code review supplements automated test suites; it never replaces them.">
+            To replace all automated unit test executions
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Code review evaluates deep design and specifications, not superficial naming mandates.">
+            To mandate uniform variable names across projects
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. What describes code that passes Standards but fails Spec?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Code passing standards compiles and adheres to all documented conventions.">
+            Highly broken and completely uncompilable code
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Passing standards with a failed spec produces clean, idiomatic code that implements the wrong behavior.">
+            Perfectly styled implementation of wrong behavior
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Working features with severe architectural smells represents Spec Pass, Standards Fail.">
+            Working feature with severe architectural smells
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Code that fails the specification cannot be deployed to production.">
+            Flawless pull request ready for deployment
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="quiz-text">3. Why run Standards and Spec reviews in parallel?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Version control branches remain an essential git primitive.">
+            Sub-agents eliminate the need for version control branches
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Review agents report findings to humans; they do not push unapproved code.">
+            Sub-agents automatically push bug fixes into main repositories
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Precisely! Parallel execution isolates focus, eliminates context contamination, and executes concurrently.">
+            Parallel execution prevents context pollution and increases speed
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Review agents are read-only observers and produce zero duplicate commits.">
+            Parallel agents generate duplicate commits across the tree
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read Chapter 3 ("Bad Smells in Code") of Martin Fowler's <em>Refactoring</em> and review the skill instructions in <a href="../.agents/skills/code-review/SKILL.md"><code>.agents/skills/code-review/SKILL.md</code></a>.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0005-root-cause-diagnosis-and-feedback-loops.html">Lesson 0005</a></span>
+        <span>📖 Reference: <a href="../reference/0006-code-review-two-axes-reference.html">0006 Code Review Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Have questions about how parallel sub-agents evaluate code? Reply in chat or review the lesson!</p>
+    </footer>
+  </div>
+</body>
+</html>

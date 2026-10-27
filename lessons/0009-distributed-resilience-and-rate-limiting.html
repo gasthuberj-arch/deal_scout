@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0009: Distributed Resilience &amp; Rate-Limiting in Ingestion Systems</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Systems Engineering &bull; Lesson 0009</div>
+      <h1>Distributed Resilience &amp; Rate-Limiting</h1>
+      <p class="subtitle">Architecting scrapers and background pollers that survive WAFs, 429 throttling, and memory leaks.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>DealScout depends on external data sources (Pepper feeds, RSS, merchant APIs). If our poller bursts, crashes on dirty payloads, or gets IP-banned by Cloudflare, deal flow stops completely. This lesson formalizes the resilience primitives built into <code>DealScout.Feeds.Poller</code>.</p>
+    </div>
+
+    <h2>1. The Anatomy of Feed Polling Hazards</h2>
+    <p>Background ingestion pipelines face three primary operational hazards:</p>
+    <ol>
+      <li><strong>Synchronized Herd Bursts:</strong> When multiple pollers or scheduled cron jobs wake up at the exact same second (e.g. every minute at <code>:00</code>), they slam target servers with concurrent requests, instantly triggering HTTP 429 (Too Many Requests).</li>
+      <li><strong>IP Reputation Blacklisting:</strong> Blasting an external merchant during a Cloudflare challenge or receiving repeated HTTP 403 (Forbidden) responses degrades server IP reputation and results in permanent network blacklisting.</li>
+      <li><strong>Binary Heap Bloat:</strong> Parsing multi-megabyte XML or JSON feeds inside a long-lived GenServer leaves large binary reference-counted (refc) chunks in process memory, causing silent memory leaks.</li>
+    </ol>
+
+    <h2>2. Solution 1: Ephemeral Worker Isolation</h2>
+    <p>In Elixir, long-lived GenServers that hold state should <strong>never directly parse large network payloads</strong>. Instead, DealScout delegates the network fetch and XML parsing to an ephemeral task supervised under <code>DealScout.Feeds.TaskSupervisor</code>:</p>
+
+    <pre><code>DealScout.Feeds.Poller (Long-lived GenServer)
+    │
+    ▼ (Spawns Task via Task.Supervisor)
+┌────────────────────────────────────────────────────────┐
+│  Ephemeral Task Process                                │
+│  - Downloads HTTP stream via Req with conditional ETag │
+│  - Parses XML DOM / JSON entities                     │
+│  - Writes normalized deals into Ecto Repo             │
+└────────────────────────────────────────────────────────┘
+    │
+    ▼ (Task process terminates immediately)
+Erlang VM reclaims all refc binaries and heap garbage instantly!</code></pre>
+
+    <h2>3. Solution 2: Request Staggering &amp; Conditional GETs</h2>
+    <p>Instead of requesting all 15 feeds simultaneously in parallel, DealScout uses <strong>leaky-bucket staggering</strong>:</p>
+    <ul>
+      <li><strong>Sequential Stagger Interval:</strong> Feeds are scheduled sequentially with a mandatory inter-request delay (<code>@min_stagger_ms 2_000</code>). Requests appear as a gentle, human-like trickle rather than an automated DDoS attack.</li>
+      <li><strong>Conditional HTTP Caching:</strong> Every outgoing request transmits <code>If-None-Match</code> (ETag) and <code>If-Modified-Since</code> headers. When feeds have no new deals, servers reply with <code>304 Not Modified</code>. <strong>Zero XML parsing, zero database writes, zero wasted bandwidth.</strong></li>
+    </ul>
+
+    <h2>4. Solution 3: Differentiated Backoff &amp; Jitter</h2>
+    <p>Not all errors are equal. DealScout enforces <strong>differentiated backoff strategies</strong> based on HTTP response semantics:</p>
+
+    <pre><code>HTTP Error Classification Matrix:
+┌──────────────┬───────────────────────────┬────────────────────────────────────────┐
+│ Status Code  │ Root Cause                │ DealScout Backoff Strategy             │
+├──────────────┼───────────────────────────┼────────────────────────────────────────┤
+│ 429          │ Rate limit / Throttling   │ Honor Retry-After header or 5m..2h exp │
+│ 403          │ Cloudflare / WAF block    │ Immediate aggressive 30m+ cooldown     │
+│ 500 / 502    │ Remote server error       │ Mild backoff after 2 consecutive fails │
+│ 304          │ Not modified (Success)    │ Reset error counter to 0 immediately   │
+└──────────────┴───────────────────────────┴────────────────────────────────────────┘</code></pre>
+
+    <div class="callout">
+      <h4>Why Exponential Backoff Needs Jitter</h4>
+      <p>Standard exponential backoff ($2^n$) has a fatal flaw: if 10 clients are rate-limited at the same moment, they all back off for exactly 300 seconds and attack the server again in a synchronized wave. Adding <strong>randomized jitter</strong> desynchronizes the retries across a wide time window, allowing the server to recover smoothly.</p>
+    </div>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Test your intuition for distributed resilience and rate-limiting architectures:</p>
+
+    <div class="quiz-container">
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why does DealScout execute feed fetching and parsing inside an ephemeral Task rather than inside the main Poller GenServer?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ephemeral tasks run on the same BEAM node; this is about memory management, not clustering.">
+            Tasks automatically distribute processing workloads across different remote physical hardware nodes
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. GenServers can execute HTTP requests directly; the concern is memory retention of large binary payloads.">
+            GenServer processes lack native capability to issue outgoing network requests using Req
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! When the ephemeral task terminates, the BEAM VM reclaims all binary references and heap immediately.">
+            Terminating the task process immediately frees large binary payloads and heap memory
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Database connection pool limits are managed by Ecto, regardless of process boundaries.">
+            Executing queries inside tasks permanently bypasses database connection pool limit constraints safely
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. How should an ingestion engine treat an HTTP 403 Forbidden compared to an HTTP 429 Too Many Requests?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! 403 indicates security/WAF intervention, demanding an extended cooldown to prevent permanent IP bans.">
+            403 indicates security blocking requiring extended cooldowns whereas 429 represents temporary throttling
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Retrying 403 rapidly against a WAF will escalate the block into a permanent network firewall ban.">
+            403 permits immediate rapid retries whereas 429 mandates permanent immediate feed decommissioning
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Both errors convey distinct status codes and require differentiated operational responses.">
+            Both error codes indicate identical server failures requiring identical fixed sixty second delays
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. 403 errors are not resolved by refreshing OAuth tokens for open public RSS feeds.">
+            403 requires clearing client authentication tokens whereas 429 requires switching protocol formats
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. What is the primary benefit of sending If-None-Match headers when polling high-frequency external data feeds?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Compression is handled by Accept-Encoding (gzip/brotli), not ETag conditional headers.">
+            Enables automatic gzip compression algorithms across all incoming external network response streams
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Authentication is handled by Authorization or API keys, not conditional ETag headers.">
+            Provides cryptographically verified user authentication credentials without passing plain cleartext secrets
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. ETag headers do not bypass upstream Cloudflare challenge pages or security checks.">
+            Instructs upstream server firewalls to bypass security verification routines and rate limits
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! A 304 response returns an empty body, saving network transit, XML parsing, and database transactions.">
+            Avoids downloading and parsing unchanged payloads when target servers return 304 Not Modified
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read the classic AWS Architecture Blog paper on <em>Exponential Backoff And Jitter</em> by Marc Brooker (<a href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank">aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/</a>) demonstrating how Full Jitter avoids synchronized retry storms.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0008-query-optimization-and-streaming-algorithms.html">0008 Query Optimization</a></span>
+        <span>📖 Reference: <a href="../reference/0009-distributed-resilience-and-rate-limiting-reference.html">0009 Resilience Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Want to see how DealScout handles proxy rotation, circuit breakers, or backoff persistence across node restarts? Ask in chat!</p>
+    </footer>
+  </div>
+</body>
+</html>

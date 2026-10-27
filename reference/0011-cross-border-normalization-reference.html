@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Cross-Border Normalization &amp; Regional Heuristics</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Domain Reference 0011</div>
+      <h1>Cross-Border Normalization Reference</h1>
+      <p class="subtitle">Quick reference for origin detection, hardware tagging, and keyboard layout warnings.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0011-cross-border-normalization-and-regional-heuristics.html">← Back to Lesson 0011: Cross-Border Normalization</a>
+    </div>
+
+    <h2>Core Normalization Primitives</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Host Domain Country Mapping</div>
+        <p>Extract URI host from deal URL. Map recognized European Amazon/community domains directly to country code, flag emoji, and localized name.</p>
+        <span class="term-code">URI.parse(url).host -&gt; "amazon.fr" -&gt; FR</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Title &amp; Text Fallback Heuristic</div>
+        <p>When deal URLs use affiliate link shorteners or cloaked redirects, inspect title and clean text for localized merchant tags like [amazon.es] or dealabs.</p>
+        <span class="term-code">Regex.run(~r/\[amazon\.es\]|dealabs/iu, text)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Hardware Taxonomy Gating</div>
+        <p>Restrict keyboard layout warnings strictly to products matching keyboard/laptop hardware keywords to prevent false positives on audio or monitors.</p>
+        <span class="term-code">~r/\b(laptop|notebook|macbook|tastatur)\b/iu</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Explicit Layout Token Detection</div>
+        <p>Scan title and body for explicit layout markers (azerty, qwerty, ansi, us-layout). When found, issue an immediate warning regardless of origin country.</p>
+        <span class="term-code">~r/\b(azerty|qwerty|ansi|us-layout)\b/iu</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Implicit Regional Layout Defaults</div>
+        <p>Hardware sourced from France defaults to AZERTY warnings. Hardware sourced from Spain defaults to QWERTY-ES warnings. Protects unaware domestic buyers.</p>
+        <span class="term-code">country_code == "FR" and is_hardware? -&gt; "AZERTY"</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Write-Time Precomputation</div>
+        <p>Execute enrichment during deal ingestion pipeline and persist country and keyboard_warning onto %Deal{} to eliminate read-path regex compute overhead.</p>
+        <span class="term-code">%{deal | country: c, keyboard_warning: kw}</span>
+      </div>
+    </div>
+
+    <h2>Ingestion Audit Checklist</h2>
+    <ul>
+      <li>[ ] <strong>Taxonomy:</strong> Does non-keyboard hardware bypass physical layout warning rules?</li>
+      <li>[ ] <strong>Fallback:</strong> Can deals with redirect affiliate domains still resolve origin countries?</li>
+      <li>[ ] <strong>Persistence:</strong> Are enriched flags stored in DB columns rather than computed in LiveView renders?</li>
+      <li>[ ] <strong>Null-Safe:</strong> Does the enrichment pipeline handle nil URLs and nil titles gracefully?</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0011-cross-border-normalization-and-regional-heuristics.html">Lesson 0011</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Two-Axis Code Review</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .axes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .axes-grid { grid-template-columns: 1fr; }
+    }
+    .axis-box {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1.25rem;
+    }
+    .axis-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+    .standards-title { color: #0369a1; }
+    .spec-title { color: #15803d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Review Reference 0006</div>
+      <h1>Two-Axis Code Review</h1>
+      <p class="subtitle">Separating Standards and Spec into parallel sub-agents to prevent masking.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0006-two-axis-code-review-with-parallel-subagents.html">← Back to Lesson 0006: Two-Axis Code Review</a>
+    </div>
+
+    <blockquote>
+      <strong>The Core Insight:</strong> A change can pass one axis and fail the other. Code can follow every standard perfectly while implementing the wrong feature (Standards pass, Spec fail). Or it can do exactly what was asked while breaking architecture rules (Spec pass, Standards fail). Reporting them separately stops one axis from masking the other.
+    </blockquote>
+
+    <h2>The Two Review Axes</h2>
+    <div class="axes-grid">
+      <div class="axis-box">
+        <div class="axis-title standards-title">Axis 1: Standards</div>
+        <strong>Does the code follow repo guidelines?</strong>
+        <ul style="margin-top: 0.5rem;">
+          <li>Documented repo rules (e.g. <code>AGENTS.md</code>, Phoenix v1.8 conventions).</li>
+          <li>Fowler code smells (Middle Man, Feature Envy, Speculative Generality).</li>
+          <li>Repo standards always override general baselines.</li>
+          <li>Focus: Code hygiene, maintainability, architectural health.</li>
+        </ul>
+      </div>
+
+      <div class="axis-box">
+        <div class="axis-title spec-title">Axis 2: Spec</div>
+        <strong>Does the code match what was asked for?</strong>
+        <ul style="margin-top: 0.5rem;">
+          <li>Missing or partially implemented requirements.</li>
+          <li>Scope creep (unrequested behavior or speculative knobs).</li>
+          <li>Incorrect interpretations of domain requirements.</li>
+          <li>Focus: Fidelity to intent and user value.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Why Use Parallel Sub-Agents?</h2>
+    <ul>
+      <li><strong>Context Independence:</strong> A single agent reviewing a PR easily suffers from confirmation bias or gets distracted arguing about variable names while missing that a core requirement was omitted.</li>
+      <li><strong>Speed:</strong> Spawning two lightweight sub-agents runs both analyses concurrently against <code>git diff &lt;base&gt;...HEAD</code>.</li>
+      <li><strong>Side-by-Side Aggregation:</strong> Findings are presented side-by-side without reranking across axes.</li>
+    </ul>
+
+    <footer>
+      <p>DealScout Engineering Reference &bull; Derived from <code>.agents/skills/code-review/SKILL.md</code></p>
+    </footer>
+  </div>
+</body>
+</html>

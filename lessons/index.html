@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DealScout Engineering &amp; Architecture Curriculum</title>
+  <link rel="stylesheet" href="/assets/teach-style.css">
+  <style>
+    .curriculum-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      margin: 2rem 0;
+    }
+    .lesson-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .lesson-card:hover {
+      border-color: var(--accent-color);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .lesson-number {
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-color);
+      margin-bottom: 0.25rem;
+    }
+    .lesson-card-title {
+      font-family: var(--font-serif);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .lesson-card-desc {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .badge-new {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #10b981;
+      padding: 0.1rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-family: var(--font-sans);
+      margin-left: 0.5rem;
+      font-weight: 600;
+    }
+    .reference-section {
+      margin-top: 3rem;
+      border-top: 2px solid var(--border-color);
+      padding-top: 1.5rem;
+    }
+    .reference-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 1rem;
+    }
+    .reference-list li {
+      margin-bottom: 0.75rem;
+    }
+    .reference-list a {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      color: var(--accent-color);
+      text-decoration: none;
+    }
+    .reference-list a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">DealScout Interactive Academy</div>
+      <h1>Engineering, Architecture &amp; Systems Curriculum</h1>
+      <p class="subtitle">Complete interactive lessons and reference cards drawn from real-world engineering in DealScout.</p>
+    </header>
+
+    <h2>Interactive Lessons</h2>
+    <div class="curriculum-grid">
+      <a href="/lessons/0012-multi-node-cluster-coordination-and-poller-consensus.html" class="lesson-card" style="border-left: 4px solid #8b5cf6;">
+        <div class="lesson-number">Lesson 0012 <span class="badge-new">NEW</span></div>
+        <div class="lesson-card-title">Multi-Node Cluster Coordination &amp; Poller Consensus</div>
+        <div class="lesson-card-desc">Solving duplicate polling collisions, PostgreSQL session advisory locks (pg_try_advisory_lock), BEAM :global singletons, and consistent hashing work partitioning.</div>
+      </a>
+
+      <a href="/lessons/0011-cross-border-normalization-and-regional-heuristics.html" class="lesson-card" style="border-left: 4px solid #f59e0b;">
+        <div class="lesson-number">Lesson 0011 <span class="badge-new">NEW</span></div>
+        <div class="lesson-card-title">Cross-Border Normalization &amp; Regional Heuristics</div>
+        <div class="lesson-card-desc">Merchant domain country detection, hardware taxonomy tagging, the AZERTY / QWERTY layout trap, and ingestion-time precomputation onto %Deal{} schemas.</div>
+      </a>
+
+      <a href="/lessons/0010-pathological-query-defense-and-compute-guards.html" class="lesson-card" style="border-left: 4px solid #ef4444;">
+        <div class="lesson-number">Lesson 0010 <span class="badge-new">NEW</span></div>
+        <div class="lesson-card-title">Pathological Query Defense &amp; Compute Guards</div>
+        <div class="lesson-card-desc">Defending against ReDoS, AST grammar bounding, normalized microsecond execution budgets, and the auto-pause circuit breaker in DealScout.Alerts.ComputeGuard.</div>
+      </a>
+
+      <a href="/lessons/0009-distributed-resilience-and-rate-limiting.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0009</div>
+        <div class="lesson-card-title">Distributed Resilience &amp; Rate-Limiting</div>
+        <div class="lesson-card-desc">Ephemeral task isolation for binary memory reclamation, leaky-bucket staggering, differentiated 403/429 backoff, conditional GETs, and retry jitter.</div>
+      </a>
+
+      <a href="/lessons/0008-query-optimization-and-streaming-algorithms.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0008</div>
+        <div class="lesson-card-title">Query Optimization &amp; Streaming Algorithms</div>
+        <div class="lesson-card-desc">Percolation reverse search, Aho-Corasick in :persistent_term, composite stream indexing, thundering herd cache warmers, and LiveView dual-mount query deduplication.</div>
+      </a>
+
+      <a href="/lessons/0007-authoring-custom-agent-skills-and-rules.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0007</div>
+        <div class="lesson-card-title">Authoring Custom Agent Skills &amp; Rules</div>
+        <div class="lesson-card-desc">Writing high-leverage agent instructions, progressive disclosure via SKILL.md, and declarative customization workflows.</div>
+      </a>
+
+      <a href="/lessons/0006-two-axis-code-review-with-parallel-subagents.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0006</div>
+        <div class="lesson-card-title">Two-Axis Code Review with Parallel Subagents</div>
+        <div class="lesson-card-desc">Decoupling standards adherence from specification compliance using isolated parallel agent reviewers.</div>
+      </a>
+
+      <a href="/lessons/0005-root-cause-diagnosis-and-feedback-loops.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0005</div>
+        <div class="lesson-card-title">Root-Cause Diagnosis &amp; Feedback Loops</div>
+        <div class="lesson-card-desc">Systematic fault isolation, instrumented reproduction scripts, and tight verification feedback cycles.</div>
+      </a>
+
+      <a href="/lessons/0004-tdd-at-seams-and-vertical-slices.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0004</div>
+        <div class="lesson-card-title">TDD at Seams &amp; Vertical Slices</div>
+        <div class="lesson-card-desc">Building resilient Phoenix and Elixir features test-first by establishing testable boundaries and contract verification.</div>
+      </a>
+
+      <a href="/lessons/0003-design-it-twice-and-grilling.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0003</div>
+        <div class="lesson-card-title">Design It Twice &amp; Grilling</div>
+        <div class="lesson-card-desc">Exploring architectural alternatives in parallel and stress-testing decisions across a tree frontier before coding.</div>
+      </a>
+
+      <a href="/lessons/0002-seams-adapters-and-dependency-rules.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0002</div>
+        <div class="lesson-card-title">Seams, Adapters, &amp; Dependency Rules</div>
+        <div class="lesson-card-desc">Categorizing dependencies (in-process, local substitutable, remote owned, external) and placing boundaries cleanly.</div>
+      </a>
+
+      <a href="/lessons/0001-deep-modules-and-the-leverage-test.html" class="lesson-card">
+        <div class="lesson-number">Lesson 0001</div>
+        <div class="lesson-card-title">Deep Modules &amp; The Leverage Test</div>
+        <div class="lesson-card-desc">Maximizing behavior hidden behind compact interfaces and spotting shallow wrappers using the Deletion Test.</div>
+      </a>
+    </div>
+
+    <div class="reference-section">
+      <h2>Reference Documents (Cheat Sheets &amp; Checklists)</h2>
+      <ul class="reference-list">
+        <li>📌 <a href="/reference/0012-cluster-coordination-and-consensus-reference.html">0012: Multi-Node Cluster Coordination &amp; Consensus Reference Card</a></li>
+        <li>📌 <a href="/reference/0011-cross-border-normalization-reference.html">0011: Cross-Border Normalization Reference Card</a></li>
+        <li>📌 <a href="/reference/0010-compute-guards-and-redos-defense-reference.html">0010: Compute Guards &amp; ReDoS Defense Reference Card</a></li>
+        <li>📌 <a href="/reference/0009-distributed-resilience-and-rate-limiting-reference.html">0009: Distributed Resilience &amp; Rate-Limiting Reference Card</a></li>
+        <li>📌 <a href="/reference/0008-query-and-streaming-algorithms-reference.html">0008: Query Optimization &amp; Streaming Algorithms Reference Card</a></li>
+        <li>📌 <a href="/reference/0007-agent-authoring-and-skills-reference.html">0007: Custom Agent Authoring &amp; Skills Reference Card</a></li>
+        <li>📌 <a href="/reference/0006-code-review-two-axes-reference.html">0006: Two-Axis Code Review Reference Card</a></li>
+        <li>📌 <a href="/reference/0005-diagnosing-bugs-reference.html">0005: Diagnosing Bugs &amp; Root-Cause Reference Card</a></li>
+        <li>📌 <a href="/reference/0004-tdd-and-test-seams-reference.html">0004: TDD &amp; Test Seams Reference Card</a></li>
+        <li>📌 <a href="/reference/0003-design-it-twice-and-grilling-reference.html">0003: Design It Twice &amp; Grilling Reference Card</a></li>
+        <li>📌 <a href="/reference/0002-seams-and-dependency-categories.html">0002: Seams &amp; Dependency Categories Reference Card</a></li>
+        <li>📌 <a href="/reference/0001-codebase-design-reference.html">0001: Deep Modules &amp; Architecture Vocabulary Reference Card</a></li>
+      </ul>
+    </div>
+
+    <footer style="margin-top: 3rem; border-top: 2px solid var(--border-color); padding-top: 1rem;">
+      <p style="font-size: 0.85rem; color: var(--text-muted); font-family: var(--font-sans);">
+        Server running from <code>deal_scout</code> workspace. Use in chat to ask followup questions or inspect specific codebase files.
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Query Optimization &amp; Streaming Algorithms</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Engineering Reference 0008</div>
+      <h1>Query Optimization &amp; Streaming Algorithms</h1>
+      <p class="subtitle">Quick reference for percolation search, index alignment, caching, and LiveView lifecycles.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0008-query-optimization-and-streaming-algorithms.html">← Back to Lesson 0008: Query Optimization &amp; Streaming Algorithms</a>
+    </div>
+
+    <h2>Core Engineering Patterns</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Percolation Search</div>
+        <p>Inverting the search direction: matching 1 streaming document against $N$ standing user queries. Solved via Aho-Corasick multi-pattern token scanning and inverted token-to-rule maps in memory.</p>
+        <span class="term-code">:binary.compile_pattern(tokens)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Composite Stream Indexing</div>
+        <p>Combining the filter column(s) with the exact ORDER BY columns in a B-Tree index. Eliminates all database temporary sort files and enables instant forward/backward leaf traversal.</p>
+        <span class="term-code">create index(:deals, [:canonical_id, :published_at, :id])</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">LiveView Dual-Mount Guard</div>
+        <p>Preventing duplicate SQL queries caused by the static HTTP render and subsequent WebSocket connected mount. Initialize empty streams in mount/3 and defer queries to handle_params/3.</p>
+        <span class="term-code">socket |> stream(:items, [])</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Proactive Cache Warming</div>
+        <p>Mitigating the thundering herd / cache stampede. Instead of reactive cache-aside on reader miss, an active GenServer calculates and writes to ETS in the background before expiration.</p>
+        <span class="term-code">GenServer.send_after(self(), :warm, interval)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Assoc Preload Safeguard</div>
+        <p>Avoiding redundant N+1 queries during batch ingestion. Verify if associations are already attached before executing unconditional Repo.preload calls on collections.</p>
+        <span class="term-code">Enum.any?(deals, &(not Ecto.assoc_loaded?(&1.feed)))</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Strict Filter Null Semantics</div>
+        <p>Defending against missing or nil attributes in alert predicates. Explicitly reject nil values when evaluating threshold bounds so users are never alerted on garbage data.</p>
+        <span class="term-code">not is_nil(deal.price) and deal.price &lt;= rule.max_price</span>
+      </div>
+    </div>
+
+    <h2>Checklist: Auditing a New Data Feature</h2>
+    <ul>
+      <li>[ ] <strong>Query Plan Check:</strong> Run <code>EXPLAIN ANALYZE</code> on feeds and verify index scans without "Sort Method: external merge / quicksort".</li>
+      <li>[ ] <strong>LiveView Mount Check:</strong> Verify no heavy Ecto queries run inside <code>mount/3</code> before <code>connected?(socket)</code> or before <code>handle_params/3</code>.</li>
+      <li>[ ] <strong>Batch Preload Check:</strong> Avoid re-preloading already loaded Ecto associations in high-frequency pipelines.</li>
+      <li>[ ] <strong>Stampede Defense:</strong> If a query takes &gt; 50ms and is executed by public visitors, use a background GenServer cache warmer.</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0008-query-optimization-and-streaming-algorithms.html">Lesson 0008</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

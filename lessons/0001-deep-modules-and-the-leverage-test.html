@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0001: Deep Modules &amp; The Leverage Test</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Architecture &bull; Lesson 0001</div>
+      <h1>Deep Modules &amp; The Leverage Test</h1>
+      <p class="subtitle">How to deliver maximum behavior behind minimum surface area in DealScout.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>In <a href="../MISSION.md">MISSION.md</a>, our target is designing robust, high-leverage modules in DealScout that resist rot. This lesson equips you with the vocabulary and mental model to spot shallow wrappers and design deep, durable interfaces.</p>
+    </div>
+
+    <h2>1. The Problem: Shallow Sprawl</h2>
+    <p>In web codebases like DealScout, code frequently rots not from too little abstraction, but from <em>shallow abstraction</em>. Developers create layers of single-method modules, wrappers around wrappers, and pass-through delegates that do almost nothing except re-expose the underlying library's complexity under a different name.</p>
+    <p>A <strong>shallow module</strong> forces callers to learn a complex interface (parameters, configuration, error conditions) while providing almost no behavior in return.</p>
+
+    <h2>2. Deep vs. Shallow Defined</h2>
+    <blockquote>
+      <strong>Depth</strong> is leverage at the interface: the amount of behavior a caller or test can exercise per unit of interface they have to learn.
+    </blockquote>
+    <p>A <strong>deep module</strong> has a small, simple interface that conceals substantial internal complexity behind it:</p>
+
+    <pre><code>DEEP MODULE (High Leverage)
+┌────────────────────────────────────────────────────────┐
+│  DealScout.Deals.ingest_feed(source, url)              │ ← Tiny surface
+├────────────────────────────────────────────────────────┤
+│  - Downloads HTTP stream via Req with backoff          │
+│  - Parses XML/JSON vendor formats                      │ ← Deep implementation
+│  - Normalizes currencies and timestamps                │
+│  - Deduplicates against existing database deals        │
+│  - Emits telemetry and notifies LiveView subscribers   │
+└────────────────────────────────────────────────────────┘
+
+SHALLOW MODULE (Low Leverage / Wrapper)
+┌────────────────────────────────────────────────────────┐
+│  DealScout.HttpWrapper.get(url, headers, timeout, ...) │ ← Same size as Req
+├────────────────────────────────────────────────────────┤
+│  Req.get!(url, headers: headers, receive_timeout: ...) │ ← Zero hidden work
+└────────────────────────────────────────────────────────┘</code></pre>
+
+    <p>Notice the difference: <code>HttpWrapper</code> gives callers zero leverage. If you delete <code>HttpWrapper</code>, callers just call <code>Req.get/2</code> directly with zero lost behavior. But deleting <code>DealScout.Deals.ingest_feed/2</code> would require scattering five distinct subsystems across every caller.</p>
+
+    <h2>3. The Deletion Test</h2>
+    <p>Whenever you are evaluating whether an Elixir module in DealScout is earning its keep, run <strong>The Deletion Test</strong>:</p>
+    <ul>
+      <li><strong>Imagine deleting the module entirely.</strong></li>
+      <li>If its complexity <em>vanishes</em> (it was just delegating or re-formatting arguments), it was a shallow pass-through that shouldn't exist.</li>
+      <li>If its complexity <em>scatters across ten caller sites</em>, it was a deep module earning its keep.</li>
+    </ul>
+
+    <h2>4. Check Your Understanding</h2>
+    <p>Put your mental model to the test with these quick retrieval checks. Immediate feedback is provided on selection.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. What fundamentally distinguishes a deep module from a shallow module?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. An expansive interface with many exposed methods is the defining hallmark of a shallow module.">
+            Large interface surface exposing many internal methods
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Depth is leverage: minimal interface surface concealing substantial implementation logic.">
+            Small interface surface hiding significant internal complexity
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Depth is about interface leverage, not raw line count or file quantity.">
+            Massive implementation code containing numerous separate files
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Wrapping an underlying dependency with a one-to-one pass-through is pure shallowness.">
+            Pure pass-through layer wrapping one underlying dependency
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. According to the Deletion Test, how do you know a module is earning its keep?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! If removing the module forces callers to absorb its hidden complexity, the module provided genuine leverage.">
+            Deleting it scatters complexity across callers
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. If callers are unaffected or trivially adjusted, the module was likely an unnecessary layer.">
+            Deleting it leaves all callers completely unchanged
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Test breakage alone does not prove design depth; tests often break from deleting trivial wrappers.">
+            Deleting it produces zero broken test cases
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Merely counting lines deleted doesn't determine whether the abstraction provided leverage.">
+            Deleting it reduces total lines of code
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. When does introducing a seam and adapter earn its place in your architecture?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. A single caller with a single implementation is a hypothetical seam that adds indirection.">
+            When code has only a single concrete caller
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Creating seams blindly across every module creates accidental complexity and ceremony.">
+            Whenever you create any new context boundary module
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! One adapter is a hypothetical seam. At least two concrete adapters (e.g. production HTTP + in-memory test fake) make it real.">
+            When at least two distinct concrete implementations exist
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Internal private logic should never be forced through an external seam just for test access.">
+            Whenever you want to test private internal functions
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read Chapters 4 ("Modules Should Be Deep") and 5 ("Information Hiding") of John Ousterhout's <em>A Philosophy of Software Design</em>. It is the clearest modern treatise on interface simplicity and cognitive load.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Reference: <a href="../reference/0001-codebase-design-reference.html">0001 Deep Modules Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Have questions about how this applies to a specific module in DealScout? Reply in chat to discuss, or ask the agent to inspect a module in this repo using the Deletion Test!</p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -5,7 +5,7 @@ defmodule DealScoutWeb.DealImageController do
   alias DealScout.Deals.Deal
   alias DealScout.Deals.ImageCache
 
-  @max_download_bytes 60_000
+  @max_thumbnail_bytes 60_000
 
   @doc """
   Proxies and caches remote deal images.
@@ -15,9 +15,9 @@ defmodule DealScoutWeb.DealImageController do
 
   Includes:
   - Cache-Control (24h) and ETag support for client-side HTTP 304 caching.
-  - Memory-safe bounded streaming download (caps payloads <= 60 KB).
   - Bounded in-memory caching for thumbnails <= 60 KB.
-  - Direct upstream fallback on errors or oversized entries.
+  - Oversized payloads (>60 KB) served directly without storing in ETS.
+  - Direct upstream fallback on errors.
   """
   def show(conn, %{"id" => id}) do
     case ImageCache.get(id) do
@@ -32,9 +32,23 @@ defmodule DealScoutWeb.DealImageController do
   defp fetch_and_serve(conn, id) do
     case Repo.get(Deal, id) do
       %Deal{image_url: url} when is_binary(url) and url != "" ->
-        case fetch_remote_thumbnail(url) do
-          {:ok, content_type, body} ->
+        case Req.get(url,
+               headers: [
+                 {"user-agent",
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
+                 {"accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
+               ],
+               receive_timeout: 4000,
+               max_retries: 1
+             ) do
+          {:ok, %Req.Response{status: 200, body: body} = resp}
+          when is_binary(body) and byte_size(body) <= @max_thumbnail_bytes ->
+            content_type = extract_content_type(resp)
             _ = ImageCache.put(id, content_type, body)
+            send_image(conn, content_type, body)
+
+          {:ok, %Req.Response{status: 200, body: body} = resp} when is_binary(body) ->
+            content_type = extract_content_type(resp)
             send_image(conn, content_type, body)
 
           _ ->
@@ -44,39 +58,6 @@ defmodule DealScoutWeb.DealImageController do
       _ ->
         send_resp(conn, 404, "Not Found")
     end
-  end
-
-  defp fetch_remote_thumbnail(url) do
-    collect_chunks = fn {:data, chunk}, {acc, size} ->
-      new_size = size + byte_size(chunk)
-
-      if new_size > @max_download_bytes do
-        {:halt, {:too_large, ""}}
-      else
-        {:cont, {[chunk | acc], new_size}}
-      end
-    end
-
-    case Req.get(url,
-           headers: [
-             {"user-agent",
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
-             {"accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
-           ],
-           into: {collect_chunks, {[], 0}},
-           receive_timeout: 4000,
-           max_retries: 1
-         ) do
-      {:ok, %Req.Response{status: 200, body: {chunks, _size}} = resp} ->
-        body = chunks |> Enum.reverse() |> IO.iodata_to_binary()
-        content_type = extract_content_type(resp)
-        {:ok, content_type, body}
-
-      _ ->
-        :error
-    end
-  rescue
-    _ -> :error
   end
 
   defp send_image(conn, content_type, body) do

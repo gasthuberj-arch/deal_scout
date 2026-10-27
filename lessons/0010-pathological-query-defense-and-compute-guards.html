@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0010: Pathological Query Defense &amp; Compute Guards</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Systems Security &bull; Lesson 0010</div>
+      <h1>Pathological Query Defense &amp; Compute Guards</h1>
+      <p class="subtitle">Protecting high-throughput ingestion pipelines from ReDoS, runaway ASTs, and CPU exhaustion.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>In DealScout, users configure flexible alert rules with keyword phrases, negative terms, and custom parameters. In an open alerting system, a single pathological query (such as a catastrophic backtracking regex or a deeply nested boolean AST) can monopolize BEAM schedulers and stall deal ingestion for all users. This lesson covers how <code>DealScout.Alerts.ComputeGuard</code> defends the pipeline.</p>
+    </div>
+
+    <h2>1. The Vulnerability: Regular Expression Denial of Service (ReDoS)</h2>
+    <p>Many systems allow users to match text using patterns or wildcards. Consider what happens when an alert rule compiles an unconstrained or nested quantifier pattern against an incoming deal text:</p>
+    <pre><code>Pathological Pattern:  (a+)+$
+Target Deal Text:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaab"</code></pre>
+    <p>Because every <code>a</code> can belong to either the inner or outer repetition, a naive NFA engine attempts $2^{30}$ (over one billion) state transitions before rejecting the match. A single deal evaluation can lock up a CPU core for tens of seconds.</p>
+
+    <h2>2. Architectural Defense 1: Bounded AST Compilation</h2>
+    <p>DealScout never exposes raw, user-supplied regexes directly to the matching engine. In <code>DealScout.KeywordEngine.Query</code>:</p>
+    <ul>
+      <li><strong>Structured AST Grammar:</strong> User inputs are parsed into a restricted Abstract Syntax Tree (AST) supporting only conjunctions, disjunctions, and literal exclusions (e.g. <code>+rtx +4090 -laptop</code>).</li>
+      <li><strong>Recursion Depth Limiting:</strong> The parser enforces a maximum nesting depth to prevent stack exhaustion attacks.</li>
+      <li><strong>Literal Token Extraction:</strong> Patterns are reduced to exact literal strings fed into an Aho-Corasick automaton, completely bypassing backtracking regex engines during candidate prefiltering.</li>
+    </ul>
+
+    <h2>3. Architectural Defense 2: Runtime Microsecond Budgets</h2>
+    <p>Even with prefiltering, evaluation functions must execute arbitrary predicate checks (price conversions, temperature thresholds, merchant filters). <code>DealScout.Alerts.ComputeGuard</code> wraps rule evaluation inside an active budget boundary:</p>
+
+    <pre><code>DealScout.Alerts.ComputeGuard.run(rule, deals, opts, eval_fun)
+┌────────────────────────────────────────────────────────┐
+│ 1. Record Monotonic Start Time:                        │
+│    start = System.monotonic_time(:microsecond)        │
+│ 2. Execute Rule Predicate:                             │
+│    matched = eval_fun.()                               │
+│ 3. Calculate Normalized Duration:                      │
+│    normalized_us = div(elapsed_us, length(deals))      │
+│ 4. Threshold &amp; Budget Checks:                          │
+│    - If elapsed_us > 5,000µs: Log to NDJSON slow log   │
+│    - If normalized_us > 30,000µs: Trigger Auto-Pause   │
+└────────────────────────────────────────────────────────┘</code></pre>
+
+    <h2>4. The Auto-Pause Circuit Breaker</h2>
+    <p>If an alert rule exceeds its per-deal budget (default <code>30,000µs</code>), <code>ComputeGuard</code> halts the hazard automatically:</p>
+    <ol>
+      <li><strong>State Transition:</strong> The rule's database record is updated to <code>is_active = false</code> with a recorded reason (<code>auto_paused_over_budget</code>).</li>
+      <li><strong>Cache Eviction:</strong> The keyword engine's compiled index is marked dirty (<code>KeywordEngine.mark_dirty()</code>), expelling the rule from memory.</li>
+      <li><strong>Live Notification:</strong> A broadcast event (<code>{:rule_auto_paused, rule, reason}</code>) alerts the user in the UI, explaining why their rule was paused without taking down the pipeline for everyone else.</li>
+    </ol>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Test your understanding of compute defense and circuit breakers:</p>
+
+    <div class="quiz-container">
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. What causes catastrophic backtracking in poorly designed regular expression engines?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Erlang process memory remains stable; the failure mode is CPU core saturation through repeated iterations.">
+            Process memory allocations exceed maximum operating system limits during string lookups
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Unicode character points are parsed efficiently; backtracking occurs from grammar permutations.">
+            Unicode character transformations fail to compile into native bytecode binaries cleanly
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Overlapping nested quantifiers force the backtracking matcher through exponential branch paths.">
+            Nested overlapping quantifiers create exponential branch evaluation paths upon match failure
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Backtracking is an algorithmic complexity problem within the regex engine, not an IO timeout.">
+            Database connection timeouts interrupt string comparison pipelines before evaluations complete safely
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. Why does ComputeGuard calculate duration normalized by the number of deals evaluated?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! A rule evaluating 1,000 deals naturally takes longer than 1 deal; normalizing prevents false-positive tripping.">
+            Prevents large batch sizes from falsely penalizing fast efficient alert rules
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Microsecond timing comes from System.monotonic_time, not batch normalization division.">
+            Ensures CPU microsecond clocks remain calibrated across distinct physical server cores
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Telemetry events record both total and normalized metrics; normalization exists for fairness.">
+            Satisfies mandatory telemetry specification requirements imposed by standard Phoenix metrics
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ingestion processes allocate memory independently of duration normalization logic.">
+            Reduces database transaction logging volumes generated during high throughput ingestion cycles
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. What is the immediate architectural action when ComputeGuard triggers an auto-pause?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Dropping database connections punishes innocent callers; only the offending rule is isolated.">
+            Terminating all open database connection pool workers to clear outstanding query queues
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. The user account remains active; only the offending rule is disabled.">
+            Suspending the entire user account permanently until administrators approve security access
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Polling continues normally; only the slow rule is excluded from future evaluations.">
+            Pausing background feed pollers for thirty minutes to prevent incoming network congestion
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! ComputeGuard deactivates the rule and marks the index dirty so subsequent matches skip it immediately.">
+            Deactivating the rule in persistence and invalidating the active compiled keyword index
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read OWASP's guide on <em>Regular Expression Denial of Service (ReDoS)</em> (<a href="https://owasp.org/www-community/attacks/Regular_Expression_Denial_of_Service_-_ReDoS" target="_blank">owasp.org/www-community/attacks/Regular_Expression_Denial_of_Service_-_ReDoS</a>) and Russ Cox's seminal paper <em>Regular Expression Matching Can Be Simple And Fast</em>.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0009-distributed-resilience-and-rate-limiting.html">0009 Distributed Resilience</a></span>
+        <span>📖 Reference: <a href="../reference/0010-compute-guards-and-redos-defense-reference.html">0010 Compute Guards Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Ask the agent to inspect slow evaluation logs in <code>log/alert_evaluations.log</code> or review <code>ComputeGuard.run/4</code>!</p>
+    </footer>
+  </div>
+</body>
+</html>

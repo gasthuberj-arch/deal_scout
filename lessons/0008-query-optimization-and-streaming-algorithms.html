@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0008: Query Optimization &amp; Streaming Algorithms in DealScout</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Engineering &bull; Lesson 0008</div>
+      <h1>Query Optimization &amp; Streaming Algorithms</h1>
+      <p class="subtitle">What DealScout teaches about percolation search, composite indexes, thundering herds, and LiveView lifecycles.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>Building DealScout exposed a unique set of real-time engineering bottlenecks: streaming thousands of live deals against thousands of standing alert rules. In this lesson, we break down the core algorithmic paradigms and database patterns discovered and refined throughout this codebase.</p>
+    </div>
+
+    <h2>1. The Core Paradigm: Percolation vs. Traditional Search</h2>
+    <p>Most web applications solve traditional search: <strong>one incoming query evaluated against millions of indexed documents</strong>. You build an inverted index (e.g. Postgres GIN or Elasticsearch) and look up documents matching the search keywords.</p>
+    <p>A real-time notification engine like DealScout flips this problem upside down. This is the <strong>Percolation Problem</strong> (also called Reverse Search):</p>
+    <ul>
+      <li>You have <strong>thousands of standing rules</strong> (user alerts with positive keywords, negative exclusions, and price caps).</li>
+      <li>You have a <strong>continuous stream of new documents</strong> arriving one-by-one or in batches.</li>
+    </ul>
+
+    <pre><code>TRADITIONAL SEARCH (1 Query vs. N Docs)
+┌────────────────┐      ┌──────────────────────────────┐
+│  Search Query  │ ───► │  Inverted Index (100k Deals) │ ───► Top Results
+└────────────────┘      └──────────────────────────────┘
+
+PERCOLATION / REVERSE SEARCH (1 Doc vs. N Queries)
+┌────────────────┐      ┌──────────────────────────────┐
+│  Incoming Deal │ ───► │ 10,000 Standing Alert Rules  │ ───► Matched Users
+└────────────────┘      └──────────────────────────────┘</code></pre>
+
+    <p>A naive solution iterates over all $N$ rules for every incoming deal: running regexes or string operations across the deal's text. At 5,000 rules and 1,000 deals, that is 5,000,000 evaluations per ingestion cycle, which quickly exhausts CPU.</p>
+
+    <h3>How DealScout Solved It: Aho-Corasick + Inverted Rule Map</h3>
+    <p>In <code>DealScout.KeywordEngine</code>, DealScout compiles all literal tokens from active alert rules into an Erlang <code>:binary.compile_pattern/1</code> (an Aho-Corasick automaton) and stores an inverted token-to-rule map in <code>:persistent_term</code>.</p>
+    <ol>
+      <li><strong>Single-Pass Text Scan:</strong> An incoming deal's title and description are scanned in a single pass ($O(\text{text length})$), identifying all matching tokens simultaneously.</li>
+      <li><strong>Candidate Rule Filtering:</strong> The matched tokens look up candidate rules in the inverted index. Rules whose required keywords never appeared are pruned instantly without running any Elixir logic.</li>
+      <li><strong>Cost-Bounded Detailed Evaluation:</strong> Only candidate rules are evaluated for price bounds, dropshipper exclusions, and boolean negation, wrapped inside a <code>ComputeGuard</code> budget.</li>
+    </ol>
+
+    <h2>2. Database Indexing: The Composite Stream Pattern</h2>
+    <p>During the optimization of DealScout's deal feed, a critical database bottleneck appeared: single-column indexes on <code>canonical_deal_id</code> misled the query planner into performing full table scans and expensive external sorts when running queries such as:</p>
+    <pre><code>SELECT * FROM deals
+WHERE canonical_deal_id IS NOT NULL
+ORDER BY published_at DESC, id DESC
+LIMIT 50;</code></pre>
+
+    <p>When an index only covers <code>canonical_deal_id</code>, the database must retrieve every matching row pointer, fetch the table pages, and sort all matching records in working memory. When the table grows into tens of thousands of rows, query latency spikes.</p>
+
+    <h3>The Fix: Composite Index Matching Sort Order</h3>
+    <pre><code>create index(:deals, [:canonical_deal_id, :published_at, :id])
+create index(:deals, [:feed_id, :canonical_deal_id, :published_at, :id])</code></pre>
+    <p>By defining the composite index to include both the filter predicate and the <code>ORDER BY</code> columns in exact sequence, Postgres and SQLite can perform a pure <strong>index-ordered backward/forward scan</strong>. The database walks the B-tree leaf nodes and halts immediately after 50 rows. Sorting time drops to <strong>zero milliseconds</strong>.</p>
+
+    <h2>3. The LiveView Dual-Mount Trap</h2>
+    <p>Phoenix LiveView's architecture provides instant SEO rendering followed by real-time WebSocket enhancement. However, this creates a classic query multiplication hazard:</p>
+    <ul>
+      <li><strong>Initial HTTP Request:</strong> LiveView invokes <code>mount/3</code> and renders a static HTML response.</li>
+      <li><strong>WebSocket Connection:</strong> The client browser establishes a WebSocket. LiveView invokes <code>mount/3</code> a <em>second</em> time in the stateful process.</li>
+      <li><strong>Route Navigation:</strong> LiveView immediately executes <code>handle_params/3</code> after mount.</li>
+    </ul>
+    <p>If your <code>mount/3</code> calls <code>load_matches()</code> or <code>load_deals()</code>, you execute the database query twice on page load. If <code>handle_params/3</code> also executes the load, you run it <strong>three times per user visit</strong>.</p>
+    <div class="callout">
+      <h4>The Pattern: Lazy Streams in Mount</h4>
+      <p>DealScout fixed this in <code>DealLive.Index</code> and <code>MatchLive.Index</code> by initializing streams empty in <code>mount/3</code> (<code>stream(socket, :deals, [])</code>) and deferring database queries strictly to <code>handle_params/3</code>, cutting database queries per page load in half.</p>
+    </div>
+
+    <h2>4. Cache Stampedes and Background Warmers</h2>
+    <p>Heavy analytic aggregations (deal volumes, discount distributions, merchant trust metrics) cannot run on every page visit without overloading the database. Caching results in ETS with a Time-To-Live (TTL) is standard practice, but introduces a failure mode under load:</p>
+    <blockquote>
+      <strong>The Thundering Herd (Cache Stampede):</strong> The moment a popular cached key expires, 30 concurrent user requests miss the cache at the exact same millisecond. All 30 processes simultaneously initiate the expensive aggregation query, causing CPU spikes and database pool exhaustion.
+    </blockquote>
+    <p>DealScout solved this by decoupling cache reads from cache writes via <code>DealScout.Analytics.Warmer</code>: an active background GenServer that periodically recalculates analytics and updates ETS ahead of schedule. Incoming web requests only ever read from ETS, guaranteeing sub-millisecond responses and zero stampedes.</p>
+
+    <h2>5. Real-World Dirty Data &amp; Filter Semantics</h2>
+    <p>When parsing external RSS and JSON feeds, DealScout encountered dirty real-world data:</p>
+    <ul>
+      <li><strong>Locale Number Formats:</strong> European thousand separators and commas (e.g., <code>1.299,00 €</code> vs. <code>$1,299.00</code>) crash standard float parsers.</li>
+      <li><strong>The Nil-Price Semantic Trap:</strong> When a user creates an alert with <code>max_price: 50.00</code>, how should a deal with <code>price: nil</code> be handled? If nil is coerced or ignored, the user receives alerts for products without prices. DealScout enforces strict filtering: <code>not is_nil(deal.price) and deal.price &lt;= rule.max_price</code>.</li>
+    </ul>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Verify your understanding of these core query and algorithm principles:</p>
+
+    <div class="quiz-container">
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why does percolation matching require single-pass tokenization (Aho-Corasick) instead of evaluating each rule against the incoming document?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Regex engines do compile patterns, but running N regexes sequentially still takes O(N * D) time.">
+            Regular expression engines cannot compile multiple search patterns in Elixir code
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Single-pass token scanning scales with document length rather than standing rule count.">
+            Evaluating rules individually against incoming documents scales poorly with rule counts
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. While memory safety is essential, the driving problem is CPU exhaustion from excessive loops.">
+            Iterating through rule lists inevitably causes Erlang heap crashes and memory leakage
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Price comparisons and negative keyword rules are evaluated after token prefiltering.">
+            Inverted index structures cannot filter numerical bounds or merchant exclusion limits
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. How does a composite index like [canonical_deal_id, published_at, id] eliminate sorting overhead for streaming feeds?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! When the index matches both filter criteria and sort order, the engine reads directly in order.">
+            The database engine traverses ordered B-tree leaf nodes directly without temporary files
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Composite indexes do not keep entire database tables in memory; they structure disk pointers.">
+            The composite index automatically mirrors every database table row inside RAM memory
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Postgres query planning still evaluates costs, but finds a zero-cost index-ordered path.">
+            The query planner disables safety checks whenever composite indices are found on tables
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Pagination limits still apply; the difference is avoiding in-memory sort steps.">
+            The index eliminates pagination limits and streams thousands of rows in one packet
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. What is the most effective architectural defense against a cache thundering herd (stampede) on expensive analytics?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Extending the TTL merely delays the stampede; whenever it eventually expires, the rush happens.">
+            Extending the duration of cache expiration timers so data remains valid indefinitely
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Rejecting user traffic degrades user experience; caching should protect systems gracefully.">
+            Returning HTTP 429 rate limit responses whenever concurrent database queries arrive
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! A background worker re-populates the cache proactively so user requests never experience a miss.">
+            Refreshing the cache asynchronously with background workers before cached entries expire
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Locking the database table serializes callers into a long waiting queue, causing timeouts.">
+            Locking the underlying database tables exclusively during aggregation query calculations
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Study Markus Winand's <em>Use The Index, Luke!</em> (<a href="https://use-the-index-luke.com/" target="_blank">use-the-index-luke.com</a>), especially the chapters on Index-Organized Tables and Index Range Scans vs. Sorting. For stream matching, read the Elasticsearch Percolation architecture documentation on inverted query execution.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0007-authoring-custom-agent-skills-and-rules.html">0007 Authoring Custom Agent Skills</a></span>
+        <span>📖 Reference: <a href="../reference/0008-query-and-streaming-algorithms-reference.html">0008 Query &amp; Algorithms Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Have thoughts on how these patterns apply to your next feature in DealScout? Ask the agent to inspect any query, index, or background worker!</p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0005: Root-Cause Diagnosis &amp; Feedback Loops</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Engineering &bull; Lesson 0005</div>
+      <h1>Root-Cause Diagnosis &amp; Feedback Loops</h1>
+      <p class="subtitle">The scientific method for squashing elusive bugs and performance regressions without guessing.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Closing the Practical Engineering Loop</h4>
+      <p>In <a href="0004-tdd-at-seams-and-vertical-slices.html">Lesson 0004</a>, you learned to drive features forward with TDD at seams. But when something breaks in production or tests flake, guessing and adding random print statements wastes hours. This lesson introduces the rigorous, scientific debugging discipline from <a href="../.agents/skills/diagnosing-bugs/SKILL.md"><code>diagnosing-bugs</code></a>.</p>
+    </div>
+
+    <h2>1. The Cardinal Creed: Building the Loop IS the Skill</h2>
+    <p>Most developers fail at debugging because they stare at code and leap straight into guessing theories. In our system:</p>
+    <blockquote>
+      <strong>Building the feedback loop IS the skill. Everything else is mechanical.</strong>
+    </blockquote>
+    <p>If you have a tight, repeatable signal (a test, a curl command, a CLI script) that fails predictably on the bug and takes under 3 seconds to run, finding the root cause is straightforward. If you don't have one, no amount of guessing will save you.</p>
+
+    <h2>2. Phase 1: The Four Rules of a Valid Loop</h2>
+    <p>Before writing a single hypothesis, Phase 1 requires you to name one runnable command that is:</p>
+    <ol>
+      <li><strong>Red-capable:</strong> Drives the actual code path and asserts the user's exact symptom (not just "didn't crash").</li>
+      <li><strong>Deterministic:</strong> Consistent outcome on every execution (or pinned to a high repro rate for race conditions).</li>
+      <li><strong>Fast:</strong> Takes seconds, not minutes.</li>
+      <li><strong>Agent-runnable:</strong> Executes unattended in terminal or test runner.</li>
+    </ol>
+
+    <h2>3. Phase 2 &amp; 3: Minimize and Hypothesize</h2>
+    <ul>
+      <li>
+        <strong>Minimize (Phase 2):</strong> Strip inputs, configurations, and steps one by one. You are done minimizing when <em>every remaining element is load-bearing</em>—removing any single item makes the reproduction go green. A minimal repro drastically narrows the suspect space.
+      </li>
+      <li>
+        <strong>Hypothesize (Phase 3):</strong> Formulate 3–5 ranked, falsifiable hypotheses before testing. Avoid anchoring on your first hunch. Every hypothesis must state a testable prediction: <em>"If X is the cause, then changing Y makes it disappear."</em>
+      </li>
+    </ul>
+
+    <h2>4. Phase 4: Clean Instrumentation</h2>
+    <p>When probing with logs, never sprinkle generic <code>IO.puts</code> across twenty files. Tag every debug statement with a unique ID (e.g. <code>[DEBUG-7f2a]</code>). When the bug is fixed, a single grep command cleanly eliminates 100% of temporary probe code.</p>
+
+    <h2>5. Check Your Understanding</h2>
+    <p>Test your grasp of scientific diagnosis with these retrieval checks. Feedback is immediate.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. What must be established before hypothesizing about bug causes?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Rewriting code before understanding the bug causes catastrophic regressions.">
+            Complete rewrite of all affected module files
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Jumping to hypotheses without an automated, red-capable loop is the exact failure this skill prevents.">
+            A fast deterministic red-capable automated feedback loop
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Managerial sign-off is not an engineering diagnostic prerequisite.">
+            Approval from engineering managers across every team
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Unstructured scattershot logging creates noise and obscures the root cause.">
+            Fifty debug print statements logging all variables
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. When is the bug reproduction scenario considered fully minimized?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Compiler cleanliness has nothing to do with minimal reproduction criteria.">
+            When code compiles without compiler warnings
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Concurrent execution does not indicate minimization of inputs.">
+            When all test suites execute concurrently
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Precisely! Minimization is done when every remaining element is load-bearing for the failure.">
+            When every remaining input is load-bearing
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Deleting the entire codebase removes the bug along with all functionality.">
+            When zero lines of code remain
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. Why should all temporary debug logs carry unique tags?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Unique tag prefixes like [DEBUG-a4f2] allow clean, zero-risk removal before committing.">
+            They allow instant complete cleanup via simple grep
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Debug logging adds I/O overhead rather than increasing throughput.">
+            They increase network throughput during high production traffic
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Logging tags have no effect on process concurrency or execution mechanics.">
+            They convert synchronous controller requests into background tasks
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Debug log tags do not alter relational database transaction locks.">
+            They bypass database locks during long running transactions
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read Andreas Zeller's <em>Why Programs Fail: A Guide to Systematic Debugging</em> and the project skill docs in <a href="../.agents/skills/diagnosing-bugs/SKILL.md"><code>.agents/skills/diagnosing-bugs/SKILL.md</code></a>.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0004-tdd-at-seams-and-vertical-slices.html">Lesson 0004</a></span>
+        <span>📖 Reference: <a href="../reference/0005-diagnosing-bugs-reference.html">0005 Diagnosing Bugs Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> We've now completed the foundational lessons for both Architecture &amp; Design and Practical Engineering! Where would you like to apply these superpowers next?</p>
+    </footer>
+  </div>
+</body>
+</html>

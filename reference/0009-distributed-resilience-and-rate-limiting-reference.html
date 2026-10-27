@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Distributed Resilience &amp; Rate-Limiting</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Systems Reference 0009</div>
+      <h1>Distributed Resilience &amp; Rate-Limiting</h1>
+      <p class="subtitle">Quick reference for ingestion resilience, backoff rules, jitter, and memory reclamation.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0009-distributed-resilience-and-rate-limiting.html">← Back to Lesson 0009: Distributed Resilience &amp; Rate-Limiting</a>
+    </div>
+
+    <h2>Core Resilience Architecture Primitives</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Ephemeral Task Isolation</div>
+        <p>Spawn parsing and network tasks under a Task.Supervisor so reference-counted binary heaps are reclaimed immediately upon completion, protecting long-lived GenServers from leaks.</p>
+        <span class="term-code">Task.Supervisor.async_nolink(Sup, task_fn)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Conditional GET Validation</div>
+        <p>Send If-None-Match (ETag) and If-Modified-Since headers with every request. Upstream servers return 304 Not Modified when feeds have no updates, bypassing download and parsing.</p>
+        <span class="term-code">{"if-none-match", feed.etag}</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Differentiated 403 vs 429</div>
+        <p>Treat 403 Forbidden as a WAF / security block demanding long quarantine cooldowns (30m+). Treat 429 as temporary rate throttling that respects Retry-After headers.</p>
+        <span class="term-code">max(1_800, base * round(:math.pow(2, n)))</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Decorrelated Retry Jitter</div>
+        <p>Avoid synchronized thundering herd retries by introducing randomness into the backoff delay. Desynchronizes multiple workers so they do not collide simultaneously.</p>
+        <span class="term-code">Enum.random(0..backoff_delay)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Leaky-Bucket Staggering</div>
+        <p>Schedule feed dispatches sequentially with a minimum inter-request delay (e.g. 2,000ms) rather than firing a burst across all feeds at once.</p>
+        <span class="term-code">Process.send_after(self(), :tick, @min_stagger_ms)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Success Reset Boundary</div>
+        <p>Upon receiving a valid 200 OK or 304 Not Modified, immediately clear consecutive error counters and reset backoff_until to nil in the database state.</p>
+        <span class="term-code">%{consecutive_errors: 0, backoff_until: nil}</span>
+      </div>
+    </div>
+
+    <h2>Checklist: Auditing an External Data Source</h2>
+    <ul>
+      <li>[ ] <strong>Isolation:</strong> Is parsing done in an ephemeral process or will large binaries stay pinned in GenServer state?</li>
+      <li>[ ] <strong>Conditionals:</strong> Are ETags / Last-Modified timestamps tracked and sent on subsequent requests?</li>
+      <li>[ ] <strong>WAF Handling:</strong> Does a 403 trigger quarantine backoff or rapid aggressive retries that risk IP bans?</li>
+      <li>[ ] <strong>Jitter:</strong> Is retry delay randomized to prevent synchronized thundering retries?</li>
+      <li>[ ] <strong>Rate Smoothing:</strong> Are requests staggered with a rate limiter or minimum delay?</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0009-distributed-resilience-and-rate-limiting.html">Lesson 0009</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

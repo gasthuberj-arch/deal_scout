@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0004: TDD at Seams &amp; Vertical Slices</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Engineering &bull; Lesson 0004</div>
+      <h1>TDD at Seams &amp; Vertical Slices</h1>
+      <p class="subtitle">How to write durable tests that survive refactoring and drive features via tracer bullets.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Transitioning to the Engineering Loop</h4>
+      <p>Now that you know where architectural seams belong (<a href="0002-seams-adapters-and-dependency-rules.html">Lesson 0002</a>), this lesson shows you how to test across those seams using <strong>Test-Driven Development (TDD)</strong> without creating brittle, implementation-coupled test suites.</p>
+    </div>
+
+    <h2>1. The Anatomy of a Good Test</h2>
+    <p>Tests must verify <strong>observable behavior through public interfaces</strong>, never private implementation details. A test should read like a specification of system capability:</p>
+    <pre><code># GOOD: Verifies observable outcome through the public seam
+test "ingest_feed/2 parses valid feeds and stores deals", %{source: source} do
+  feed_xml = fixture("sample_feed.xml")
+  
+  assert {:ok, count} = Deals.ingest_feed(source, feed_xml)
+  assert count == 3
+  assert Deals.list_deals_for_source(source.id) |> length() == 3
+end
+
+# BAD: Implementation-coupled spy test
+test "ingest_feed/2 calls internal parser and repo" do
+  # Mocks internal helper and asserts on private calls
+  expect(FeedParser, :parse, fn _ -> {:ok, []} end)
+  expect(Repo, :insert_all, fn _ -> {0, nil} end)
+  
+  Deals.ingest_feed(:mock_source, "xml")
+end</code></pre>
+
+    <p>The good test survives when you replace <code>FeedParser</code> with a streaming XML parser. The bad test breaks the moment you touch an internal function name, even when the feature works perfectly.</p>
+
+    <h2>2. Beware the Three Fatal Anti-Patterns</h2>
+    <ol>
+      <li>
+        <strong>Implementation Coupling:</strong> Mocking internal functions or checking intermediate database tables. <em>The tell:</em> your test breaks when you refactor even though user-observable behavior didn't change.
+      </li>
+      <li>
+        <strong>Tautological Tests:</strong> The test assertion calculates the expected result with the exact same logic as the production code (e.g. <code>expected = Enum.sum(items)</code>). The test passes by construction and cannot catch logic flaws. Expected values must come from independent literal sources or worked examples.
+      </li>
+      <li>
+        <strong>Horizontal Slicing:</strong> Writing 10 speculative test cases upfront before writing code. You end up asserting on <em>imagined</em> structures rather than real capabilities.
+      </li>
+    </ol>
+
+    <h2>3. Vertical Slicing (Tracer Bullets)</h2>
+    <p>Instead of horizontal test dumping, work in <strong>vertical slices</strong>:</p>
+    <blockquote>
+      <strong>One test &rarr; One minimal implementation &rarr; Repeat.</strong>
+    </blockquote>
+    <p>Each test acts as a tracer bullet through the entire stack, teaching you about the real interface and allowing you to adjust before committing to the next step.</p>
+
+    <h2>4. Check Your Understanding</h2>
+    <p>Reinforce your understanding with these retrieval checks. Feedback is instant.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. What is the telltale sign of an implementation-coupled test?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! If a refactor changes no external behavior yet breaks the test, the test was coupled to internal mechanics.">
+            It breaks when refactoring internal code
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Testing across public seams is the recommended best practice for durable tests.">
+            It tests behavior across public seams
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Fast test execution is desirable, not a flaw.">
+            It runs within two hundred milliseconds
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Asserting on return values is standard behavior verification.">
+            It asserts on final returned values
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. Why is writing many speculative tests upfront (horizontal slicing) an anti-pattern?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Compilers handle any number of test files without issue.">
+            Because compilers cannot parse multiple test files
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Test suites do not run during production user traffic.">
+            Because testing reduces execution performance in production
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Bulk upfront tests verify an imagined structure before feedback from running code can guide design.">
+            Because bulk tests verify imagined structure prematurely
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Database migrations have no bearing on horizontal vs vertical slicing.">
+            Because database migrations require manual developer approval
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. How can a developer prevent writing a tautological test assertion?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Excessive mocking causes implementation coupling, not test independence.">
+            Mock out every internal collaborator using dynamic spies
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! Using an independent known literal or worked example ensures the test can actually catch calculation bugs.">
+            Use known independent literals instead of code calculations
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Duplicating code formulas into tests creates the exact tautology we want to prevent.">
+            Copy implementation formulas directly into your test file
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Tests without assertions provide zero verification of output correctness.">
+            Remove all assertions and verify zero exception crashes
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read Kent Beck's foundational book <em>Test-Driven Development: By Example</em> and Martin Fowler's classic essay <em>Mocks Aren't Stubs</em>.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0003-design-it-twice-and-grilling.html">Lesson 0003</a></span>
+        <span>📖 Reference: <a href="../reference/0004-tdd-and-test-seams-reference.html">0004 TDD Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Ready to see how this pairs with hunting down hard bugs? Next up: <strong>Root-Cause Diagnosis &amp; The Feedback Loop Discipline</strong>!</p>
+    </footer>
+  </div>
+</body>
+</html>

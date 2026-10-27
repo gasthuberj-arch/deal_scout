@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0011: Cross-Border Normalization &amp; Regional Heuristics</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Domain Engineering &bull; Lesson 0011</div>
+      <h1>Cross-Border Normalization &amp; Regional Heuristics</h1>
+      <p class="subtitle">Taxonomy classification, merchant origin heuristics, and foreign hardware layout detection.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>European deal aggregators frequently source deals from foreign Amazon branches (Amazon.es, Amazon.fr, Amazon.it). While savings on graphics cards or headphones translate seamlessly, laptops and keyboards carry physical layout traps (French AZERTY, Spanish QWERTY). This lesson explores how <code>DealScout.Deals.CrossBorder</code> enriches deals at ingestion.</p>
+    </div>
+
+    <h2>1. The Real-World Cross-Border Trap</h2>
+    <p>A German or Austrian user spotting a €900 MacBook on Amazon Spain might jump on the purchase—only to discover upon delivery that the physical keyboard has Spanish punctuation keys, an inverted enter key, or an AZERTY layout. Worse, return shipping across borders often incurs non-refundable postage.</p>
+    <p>A smart aggregator must not treat deals as generic text; it must enrich each deal with <strong>geographic origin and physical compatibility metadata</strong>.</p>
+
+    <h2>2. Layer 1: Merchant Domain &amp; Host Heuristics</h2>
+    <p>In <code>DealScout.Deals.CrossBorder.detect_country/1</code>, the origin country is resolved using a cascaded heuristic:</p>
+    <pre><code>Deal URL Hostname Analysis:
+amazon.fr, dealabs.com, fnac.com    ───► %{code: "FR", flag: "🇫🇷", name: "France"}
+amazon.es, chollometro.com          ───► %{code: "ES", flag: "🇪🇸", name: "Spain"}
+amazon.it                           ───► %{code: "IT", flag: "🇮🇹", name: "Italy"}
+preisjaeger.at, amazon.at           ───► %{code: "AT", flag: "🇦🇹", name: "Austria"}
+amazon.co.uk                        ───► %{code: "UK", flag: "🇬🇧", name: "UK"}</code></pre>
+
+    <p>If the URL is a redirection affiliate link, fallback regular expressions scan the title and deal body for text signatures (e.g. <code>[amazon.es]</code>, <code>amazon spanien</code>, <code>dealabs</code>).</p>
+
+    <h2>3. Layer 2: Hardware Taxonomy &amp; Layout Warnings</h2>
+    <p>Not every product from France or Spain requires a keyboard warning. Audio equipment, monitors, and RAM work identically regardless of origin country. The heuristic must only trigger when <strong>hardware with physical keys</strong> is detected:</p>
+
+    <ol>
+      <li><strong>Hardware Keyword Match:</strong>
+        <pre><code>@keyboard_hardware_pattern ~r/\b(laptop|notebook|macbook|thinkpad|zenbook|ideapad|tastatur|keyboard|chromebook)\b/iu</code></pre>
+      </li>
+      <li><strong>Explicit Layout Tokens in Text:</strong> If the deal text explicitly mentions <code>azerty</code>, <code>qwerty</code>, <code>ansi</code>, or <code>französisches layout</code>, an immediate warning is generated regardless of the merchant store.</li>
+      <li><strong>Implicit Regional Defaults:</strong> If hardware keywords match and the country is France (<code>FR</code>), a warning flag for <strong>AZERTY</strong> is attached. If Spain (<code>ES</code>), <strong>QWERTY-ES</strong> is attached.</li>
+    </ol>
+
+    <h2>4. Architectural Pattern: Ingestion-Time Precomputation</h2>
+    <div class="callout">
+      <h4>Why Precompute in Ingestion?</h4>
+      <p>Running multi-step regex cascades across titles and URLs on every user page load or LiveView stream render destroys UI responsiveness. DealScout runs <code>CrossBorder.enrich/1</code> <strong>once during ingestion</strong> and persists <code>country</code> and <code>keyboard_warning</code> directly onto the <code>%Deal{}</code> database schema. Reads remain pure, zero-cost column accesses.</p>
+    </div>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Verify your understanding of regional normalization and domain heuristics:</p>
+
+    <div class="quiz-container">
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why does CrossBorder evaluate hardware keywords before generating regional keyboard layout warnings?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Amazon ships all product categories across European borders; layout warnings are specific to keyboards.">
+            Foreign retail merchants only export computer hardware across national European borders
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Non-keyboard products like monitors or headphones don't have physical layout conflicts.">
+            Prevents non-hardware products like headphones from triggering false layout incompatibility alerts
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Currency conversion and VAT calculations are handled separately from physical keyboard warnings.">
+            Enables currency conversion algorithms to calculate correct local value added taxes
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. The database schema stores country and warning fields for any product category.">
+            Satisfies strict database validation constraints before writing records into persistence tables
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. What is the primary performance benefit of running CrossBorder enrichment during the ingestion phase?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ingestion processes still perform XML parsing; enrichment adds precomputed metadata.">
+            Completely eliminates the need to parse external XML feeds during ingestion
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Database storage actually increases slightly to hold the enriched columns; the win is read latency.">
+            Reduces database disk storage space requirements by compressing repeated string tokens
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Precomputing once at write time converts expensive runtime regexes into instant column reads.">
+            Transforms expensive regular expression scans into instant zero-cost database column lookups
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Alert matching runs in Elixir memory; precomputed fields speed up predicate evaluation.">
+            Allows the operating system kernel to cache full web responses in RAM
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. How does CrossBorder resolve the origin country if a deal's link uses a redirection affiliate domain?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Following HTTP redirects synchronously for every feed item would severely degrade poller throughput.">
+            Follows all HTTP redirect chains synchronously over the network before database insertion
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Assigning random or default countries pollutes user search and alert accuracy.">
+            Defaults immediately to the local domestic server region without inspecting text content
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Affiliate deals are valuable deal inventory and should not be discarded.">
+            Discards the deal completely to avoid displaying unverified merchant domain web addresses
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! When domain hostnames are masked by affiliate shorteners, title and body text markers provide fallback origin clues.">
+            Falls back to regex scans across title and description text for regional markers
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Consult the <em>European Consumer Centre (ECC-Net) Cross-Border Online Shopping Guidelines</em> on statutory warranty rights, VAT thresholds, and import rules across European single-market member states.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0010-pathological-query-defense-and-compute-guards.html">0010 Pathological Query Defense</a></span>
+        <span>📖 Reference: <a href="../reference/0011-cross-border-normalization-reference.html">0011 Cross-Border Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Inspect <code>DealScout.Deals.CrossBorder</code> to see how layout warnings are rendered in DealLive templates!</p>
+    </footer>
+  </div>
+</body>
+</html>

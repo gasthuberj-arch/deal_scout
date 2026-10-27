@@ -1,0 +1,23 @@
+# Teaching Notes
+
+- **Primary Goal**: Master day-to-day engineering workflows while building DealScout.
+- **Immediate Focus**: Architecture & Design cluster (`codebase-design` and `grilling`).
+- **Target Audience Level**: Intermediate/Senior engineer looking for high leverage, rapid feedback, and practical application to Phoenix/Elixir.
+- **Progress**:
+  - Lesson 0001: Completed with 100% correct answers. Recorded in learning-record 0002.
+  - Lesson 0002: Completed with 100% correct answers. Recorded in learning-record 0003.
+  - Lesson 0003: Completed with 100% correct answers. Recorded in learning-record 0004.
+  - Lesson 0004: Completed with 100% correct answers. Recorded in learning-record 0006.
+  - Lesson 0005: Completed with 100% correct answers.
+  - Lesson 0006: Completed with 100% correct answers.
+  - Lesson 0007: Completed with 100% correct answers.
+  - Lesson 0008: Completed with 100% correct answers. Recorded in learning-record 0011. Synthesizes percolation search (Aho-Corasick), composite streaming indexes, cache stampede mitigation (thundering herd warmer), and LiveView lifecycle query deduplication.
+  - Lesson 0009: Completed with 100% correct answers. Recorded in learning-record 0012. Covers ephemeral Task.Supervisor isolation for binary GC, leaky-bucket request staggering, differentiated 403 vs 429 backoff, conditional 304 validation, and decorrelated retry jitter.
+  - Lesson 0010: Completed with 100% correct answers. Recorded in learning-record 0013. Covered ReDoS mitigation, AST grammar restrictions, microsecond normalized budgeting, NDJSON slow logging, and the auto-pause circuit breaker in DealScout.Alerts.ComputeGuard.
+  - Lesson 0011: Completed with 100% correct answers. Recorded in learning-record 0014. Covered merchant domain detection, hardware taxonomy tagging, AZERTY/QWERTY layout traps, and ingestion-time precomputation onto %Deal{}.
+  - Lesson 0012: Completed with 100% correct answers. Recorded in learning-record 0015. Covered multi-node duplicate polling hazards, PostgreSQL session advisory locks (pg_try_advisory_lock), BEAM :global singletons, and consistent hashing work partitioning.
+  - Teaching Journey Status: Complete comprehensive master engineering curriculum (Lessons 0001 - 0012) delivering Architecture & Design, Engineering Execution, Meta-Agent Crafting, Systems/Performance Engineering, Distributed Resilience, Security/Compute Guards, Regional Domain Modeling, and Cluster Consensus.
+- **Format Requirements**:
+  - Tufte-inspired typography, elegant styling, and fast interactive quizzes.
+  - Quizzes: matched word counts (and close character counts across choices), varied correct positions, instant automatic feedback.
+  - Keep lessons tightly scoped with tangible wins tied back to [[MISSION.md]].

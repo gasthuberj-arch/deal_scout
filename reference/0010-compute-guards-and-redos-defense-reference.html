@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Compute Guards &amp; ReDoS Defense</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Security Reference 0010</div>
+      <h1>Compute Guards &amp; ReDoS Defense</h1>
+      <p class="subtitle">Quick reference for execution budgets, circuit breakers, AST limiting, and slow logging.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0010-pathological-query-defense-and-compute-guards.html">← Back to Lesson 0010: Compute Guards &amp; ReDoS Defense</a>
+    </div>
+
+    <h2>Core Compute Guard Primitives</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Microsecond Budgeting</div>
+        <p>Measure execution time using System.monotonic_time(:microsecond). Divide elapsed microseconds by batch deal count to calculate fair normalized duration per item.</p>
+        <span class="term-code">div(elapsed_us, max(length(deals), 1))</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Auto-Pause Circuit Breaker</div>
+        <p>When normalized duration exceeds the safety threshold (default 30ms/deal), immediately disable the offending rule in the database and mark the index dirty.</p>
+        <span class="term-code">apply_auto_pause(rule, duration, budget)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">NDJSON Slow Eval Logging</div>
+        <p>Append execution metadata to a structured append-only NDJSON log file when total batch duration exceeds 5,000µs for offline diagnosis and performance audits.</p>
+        <span class="term-code">File.write(path, json &lt;&gt; "\n", [:append])</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">AST Grammar Bounding</div>
+        <p>Never permit unconstrained raw regular expressions. Parse queries into an AST with strictly bounded token counts and maximum recursion depth.</p>
+        <span class="term-code">DealScout.KeywordEngine.Query.parse/1</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Linear Aho-Corasick Scans</div>
+        <p>Extract all search literals into a deterministic finite automaton (:binary.compile_pattern). Guarantees O(text length) scanning regardless of query quantity.</p>
+        <span class="term-code">:binary.matches(text, compiled_pattern)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Live User Broadcast</div>
+        <p>When an alert is paused by the compute guard, emit an event over Phoenix.PubSub so the user's dashboard displays an explanatory notification immediately.</p>
+        <span class="term-code">broadcast({:rule_auto_paused, rule, reason})</span>
+      </div>
+    </div>
+
+    <h2>Audit Checklist: Query Safety</h2>
+    <ul>
+      <li>[ ] <strong>Grammar:</strong> Does the parser reject nested repetition patterns like <code>(a+)+</code>?</li>
+      <li>[ ] <strong>Isolation:</strong> Is user query execution wrapped inside <code>ComputeGuard.run/4</code>?</li>
+      <li>[ ] <strong>Thresholds:</strong> Are per-deal budgets (<code>30_000µs</code>) and slow log thresholds (<code>5_000µs</code>) configured?</li>
+      <li>[ ] <strong>Index Invalidation:</strong> Does auto-pausing a rule immediately call <code>KeywordEngine.mark_dirty()</code>?</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0010-pathological-query-defense-and-compute-guards.html">Lesson 0010</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

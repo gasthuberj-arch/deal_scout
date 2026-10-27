@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Multi-Node Cluster Coordination &amp; Poller Consensus</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Distributed Reference 0012</div>
+      <h1>Multi-Node Cluster Coordination Reference</h1>
+      <p class="subtitle">Quick reference for distributed leader election, PostgreSQL advisory locks, and consistent hash partitioning.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0012-multi-node-cluster-coordination-and-poller-consensus.html">← Back to Lesson 0012: Multi-Node Cluster Coordination</a>
+    </div>
+
+    <h2>Core Distributed Primitives</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Postgres Session Advisory Locks</div>
+        <p>Distributed mutex backed by Postgres. Non-blocking (pg_try_advisory_lock). Automatically freed by the database if the holding node drops its TCP connection.</p>
+        <span class="term-code">SELECT pg_try_advisory_lock(1001);</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">BEAM Global Registration</div>
+        <p>Register a singleton process across the entire BEAM cluster using {:global, Name}. Only one instance runs cluster-wide; survivors restart it on failure.</p>
+        <span class="term-code">GenServer.start_link(M, opts, name: {:global, Name})</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Consistent Hash Partitioning</div>
+        <p>Distribute feed polling across N cluster nodes using :erlang.phash2(feed_id, total_nodes). Each node processes its slice without central coordination bottlenecks.</p>
+        <span class="term-code">rem(:erlang.phash2(feed.id), num_nodes) == node_idx</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Process Groups (:pg)</div>
+        <p>Erlang/OTP 23+ native distributed process membership. Allows nodes to discover peer pollers and publish synchronization broadcasts without central brokers.</p>
+        <span class="term-code">:pg.join(:pollers, self())</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Split-Brain Mitigation</div>
+        <p>When networks partition, BEAM clusters can form two independent sub-clusters. Using the relational database as the lock arbiter ensures exactly one writer.</p>
+        <span class="term-code">Postgres advisory lock / lease fence</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Dynamic Rebalancing</div>
+        <p>When a node joins or leaves, Node.monitor/2 triggers partition recalculation. Only 1/N of the hash keys migrate between surviving members.</p>
+        <span class="term-code">:net_kernel.monitor_nodes(true)</span>
+      </div>
+    </div>
+
+    <h2>Multi-Node Audit Checklist</h2>
+    <ul>
+      <li>[ ] <strong>Duplicate Protection:</strong> Are background pollers prevented from running identically on all nodes?</li>
+      <li>[ ] <strong>Crash Safety:</strong> Does a killed node immediately release its lock without waiting for a 10-minute lease?</li>
+      <li>[ ] <strong>Throughput:</strong> If running 5+ nodes, is work partitioned across nodes rather than pinned to 1 singleton?</li>
+      <li>[ ] <strong>Netsplit Defense:</strong> Can two separate network partitions ever poll the same external source at once?</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0012-multi-node-cluster-coordination-and-poller-consensus.html">Lesson 0012</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

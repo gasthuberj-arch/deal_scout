@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Diagnosing Bugs &amp; The Feedback Loop</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .phase-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1.1rem 1.3rem;
+      margin-bottom: 1.25rem;
+    }
+    .phase-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      color: #0369a1;
+      font-size: 1.05rem;
+      margin-bottom: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Engineering Reference 0005</div>
+      <h1>Diagnosing Bugs &amp; Feedback Loops</h1>
+      <p class="subtitle">The scientific 6-phase discipline for isolating and eliminating non-trivial defects.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0005-root-cause-diagnosis-and-feedback-loops.html">← Back to Lesson 0005: Root-Cause Diagnosis</a>
+    </div>
+
+    <blockquote>
+      <strong>Core Creed:</strong> Building the feedback loop IS the skill. Everything else is mechanical. If you have a tight, red-capable pass/fail signal, you will find the bug.
+    </blockquote>
+
+    <h2>The Six Phases of Scientific Diagnosis</h2>
+
+    <div class="phase-card">
+      <div class="phase-title">Phase 1: Build the Feedback Loop</div>
+      <p>Construct a single, repeatable command (test, curl, script, or trace replay) that drives the exact code path and asserts the user's specific symptom. <strong>Never hypothesize before this loop exists.</strong></p>
+      <ul>
+        <li><strong>Red-capable:</strong> Fails on this exact defect.</li>
+        <li><strong>Deterministic:</strong> Consistent result every run (or pinned high repro rate).</li>
+        <li><strong>Fast:</strong> Takes seconds, not minutes.</li>
+      </ul>
+    </div>
+
+    <div class="phase-card">
+      <div class="phase-title">Phase 2: Reproduce &amp; Minimize</div>
+      <p>Shrink the scenario to the smallest input that still goes red. Remove configuration, callers, and data one by one. Done when <strong>every remaining element is load-bearing</strong> (removing any one makes it go green).</p>
+    </div>
+
+    <div class="phase-card">
+      <div class="phase-title">Phase 3: Hypothesize (3–5 Ranked Predictions)</div>
+      <p>Generate 3–5 falsifiable hypotheses before testing. Avoid anchoring on the first thought. Format: <em>"If X is the cause, then changing Y makes it vanish / Z makes it worse."</em></p>
+    </div>
+
+    <div class="phase-card">
+      <div class="phase-title">Phase 4: Targeted Instrumentation</div>
+      <p>Change one variable at a time. Tag every log with a unique prefix (e.g. <code>[DEBUG-a7b2]</code>) for zero-risk cleanup. Prefer debuggers and targeted boundary probes over "logging everything".</p>
+    </div>
+
+    <div class="phase-card">
+      <div class="phase-title">Phase 5: Fix &amp; Regression Test</div>
+      <p>Write the regression test at the correct public seam before applying the fix. Watch it fail, apply the fix, and watch it turn green.</p>
+    </div>
+
+    <div class="phase-card">
+      <div class="phase-title">Phase 6: Cleanup</div>
+      <p>Grep and remove all tagged debug logs, delete throwaway harnesses, and ensure the original Phase 1 loop passes completely.</p>
+    </div>
+
+    <footer>
+      <p>DealScout Engineering Reference &bull; Derived from <code>.agents/skills/diagnosing-bugs/SKILL.md</code></p>
+    </footer>
+  </div>
+</body>
+</html>

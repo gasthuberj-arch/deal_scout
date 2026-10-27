@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0007: Authoring Custom Agent Skills &amp; Rules</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Agent Craft &bull; Lesson 0007</div>
+      <h1>Authoring Custom Agent Skills &amp; Rules</h1>
+      <p class="subtitle">How to write predictable, high-leverage instructions, skills, and rules that shape agent behavior.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Transitioning to Agent Crafting</h4>
+      <p>Now that you've used skills like <code>teach</code>, <code>codebase-design</code>, <code>tdd</code>, <code>diagnosing-bugs</code>, and <code>code-review</code>, how are these tools actually built? This lesson introduces the authoring levers from <a href="../.agents/skills/writing-for-agents/SKILL.md"><code>writing-for-agents</code></a> and <a href="../.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md"><code>agy-customizations</code></a>.</p>
+    </div>
+
+    <h2>1. The Two Budgets: Context Load vs. Cognitive Load</h2>
+    <p>Every line of instruction you create spends one of two finite budgets:</p>
+    <ul>
+      <li><strong>Context Load:</strong> The token and attention cost on the model's active window. Always-loaded rules (like <code>AGENTS.md</code>) spend context on <em>every single turn</em>, whether they fire or not.</li>
+      <li><strong>Cognitive Load:</strong> The mental burden on the human to remember that a skill exists and type its slash command.</li>
+    </ul>
+
+    <h2>2. Invocation: Model-Invoked vs. User-Invoked</h2>
+    <p>In Antigravity, every skill in <code>.agents/skills/&lt;name&gt;/SKILL.md</code> trades between these two loads:</p>
+    <ul>
+      <li>
+        <strong>Model-Invoked (Default):</strong> Its <code>description</code> acts as an active context pointer loaded into the agent's window. The agent can trigger the skill autonomously whenever relevant.
+      </li>
+      <li>
+        <strong>User-Invoked (<code>disable-model-invocation: true</code>):</strong> The description is stripped from the model's window, costing <strong>zero context load</strong>. Only the human typing its command (e.g. <code>/teach</code>) can trigger it.
+      </li>
+    </ul>
+
+    <h2>3. The Writing Levers</h2>
+    <p>Writing for an LLM is different from writing for humans. Use these three key levers:</p>
+    <ol>
+      <li>
+        <strong>Leading Words:</strong> Choose compact terms rich in pretrained priors (<em>tight</em>, <em>red</em>, <em>tracer bullet</em>, <em>relentless</em>). Repeating a leading word anchors complex behaviors in a single token instead of paragraphs of explanation.
+      </li>
+      <li>
+        <strong>Prompt the Positive:</strong> Telling a model <em>"Do not use mock libraries"</em> activates the concept of mock libraries in its attention weights (the "don't think of an elephant" trap). Instead, prompt the positive: <em>"Use real in-memory adapters and public interfaces."</em>
+      </li>
+      <li>
+        <strong>Exhaustive Completion Criteria:</strong> Avoid fuzzy bounds like "review the code carefully." Use crisp, checkable bounds: "every modified struct has a test asserting observable output."
+      </li>
+    </ol>
+
+    <h2>4. Check Your Understanding</h2>
+    <p>Reinforce what you've learned about agent authoring with these retrieval checks. Feedback appears immediately.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why make an agent skill user-invoked rather than model-invoked?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! User-invoked skills (disable-model-invocation: true) have zero context load until explicitly invoked by the human.">
+            To eliminate permanent context load until invoked
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. User-invoked skills remain completely visible and editable by human engineers.">
+            To prevent human developers from viewing instructions
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Tool execution capabilities are completely independent of invocation triggers.">
+            To disable all automated bash command executions
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Invocation types govern context loading, not background recurring cron schedules.">
+            To force continuous background cron job executions
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. What is the primary benefit of choosing effective leading words?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Coining artificial words forces you to spend tokens defining them from scratch.">
+            They invent entirely novel grammar rules
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Pretrained leading words (like 'tight' or 'tracer bullets') recruit existing model knowledge in the fewest tokens.">
+            They recruit existing pretrained model priors
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Leading words guide linguistic reasoning; they do not interact with security authentication.">
+            They bypass all repository authentication barriers
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Leading words are plain text instructions, not cryptographic encryption algorithms.">
+            They encrypt sensitive system environment variables
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. Why should instructions prompt the positive instead of stating prohibitions?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Phrasing style has zero impact on network or compiler execution latency.">
+            Prohibitions increase network request latency during compilation tasks
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Prohibitions do not alter the agent's file writing tool availability.">
+            Prohibitions prevent the agent from writing documentation files
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Precisely! Negations activate the forbidden concept in the model's attention. Directing toward the desired target avoids the trap.">
+            Negations drag forbidden concepts directly into active context
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Instruction wording cannot execute destructive git commands on its own.">
+            Negations delete existing git branches without warning users
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read the project skill docs in <a href="../.agents/skills/writing-for-agents/SKILL.md"><code>.agents/skills/writing-for-agents/SKILL.md</code></a> and the Antigravity customisation guide in <a href="../.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md"><code>.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md</code></a>.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0006-two-axis-code-review-with-parallel-subagents.html">Lesson 0006</a></span>
+        <span>📖 Reference: <a href="../reference/0007-agent-authoring-and-skills-reference.html">0007 Agent Authoring Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> You now understand both how to use the entire agent skill system and how to author new skills and rules for your team!</p>
+    </footer>
+  </div>
+</body>
+</html>

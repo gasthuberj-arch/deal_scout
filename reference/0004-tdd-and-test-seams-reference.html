@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: TDD at Seams &amp; Test Quality</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+    }
+    .comparison-table th, .comparison-table td {
+      border: 1px solid var(--border-color);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    .comparison-table th {
+      background: #f3f4f6;
+      font-weight: 700;
+    }
+    .good-col { background: #f0fdf4; }
+    .bad-col { background: #fef2f2; }
+    .anti-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-left: 4px solid #ef4444;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .anti-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      color: #991b1b;
+      margin-bottom: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Engineering Reference 0004</div>
+      <h1>TDD at Seams &amp; Test Quality</h1>
+      <p class="subtitle">Heuristics for writing resilient tests, avoiding brittle anti-patterns, and vertical slicing.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0004-tdd-at-seams-and-vertical-slices.html">← Back to Lesson 0004: TDD at Seams &amp; Vertical Slices</a>
+    </div>
+
+    <h2>Good Tests vs. Bad Tests</h2>
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th class="good-col">Good Test (Behavioral)</th>
+          <th class="bad-col">Bad Test (Implementation-Coupled)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Test Surface</strong></td>
+          <td class="good-col">Crosses public seam; uses caller interface</td>
+          <td class="bad-col">Calls private methods or spies on internals</td>
+        </tr>
+        <tr>
+          <td><strong>Assertion Target</strong></td>
+          <td class="good-col">Observable outcome (state change, return value)</td>
+          <td class="bad-col">Call counts (<code>expect(mock).toHaveBeenCalled()</code>)</td>
+        </tr>
+        <tr>
+          <td><strong>Expected Values</strong></td>
+          <td class="good-col">Independent literal or worked example from spec</td>
+          <td class="bad-col">Recomputed with the same logic as the code</td>
+        </tr>
+        <tr>
+          <td><strong>Refactoring Resilience</strong></td>
+          <td class="good-col">Survives full internal restructuring unscathed</td>
+          <td class="bad-col">Breaks whenever private functions or names change</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>The Three Fatal Test Anti-Patterns</h2>
+
+    <div class="anti-card">
+      <div class="anti-title">1. Implementation-Coupled Tests</div>
+      <p>Mocks internal collaborators, spies on private functions, or verifies via database side-channels instead of public APIs. <em>The tell:</em> the test breaks during a refactor even though user-observable behavior never changed.</p>
+    </div>
+
+    <div class="anti-card">
+      <div class="anti-title">2. Tautological Tests</div>
+      <p>The test assertion recomputes expected output using the exact same formula or helper the production code uses (e.g. <code>assert total == items.reduce(...)</code>). It passes by construction and can never catch real calculation bugs.</p>
+    </div>
+
+    <div class="anti-card">
+      <div class="anti-title">3. Horizontal Slicing</div>
+      <p>Writing 15 speculative test cases upfront before writing any code. Slicing horizontally commits to rigid, imagined interfaces. <em>The fix:</em> Use <strong>vertical slicing</strong> (tracer bullets): write one failing test &rarr; implement minimal passing code &rarr; repeat.</p>
+    </div>
+
+    <h2>The Rules of the Red-Green Loop</h2>
+    <ol>
+      <li><strong>Red before Green:</strong> Always see the test fail before making it pass.</li>
+      <li><strong>Minimal Code:</strong> Write only enough production code to turn the test green. Don't anticipate future steps.</li>
+      <li><strong>One Slice at a Time:</strong> One seam, one test, one minimal implementation per cycle.</li>
+      <li><strong>Separate Refactoring:</strong> Keep refactoring in the review phase, not inside the red-green loop.</li>
+    </ol>
+
+    <footer>
+      <p>DealScout Engineering Reference &bull; Derived from <code>.agents/skills/tdd/SKILL.md</code></p>
+    </footer>
+  </div>
+</body>
+</html>

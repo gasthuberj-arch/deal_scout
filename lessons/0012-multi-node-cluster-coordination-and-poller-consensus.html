@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0012: Multi-Node Cluster Coordination &amp; Poller Consensus</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Distributed Systems &bull; Lesson 0012</div>
+      <h1>Multi-Node Cluster Coordination &amp; Poller Consensus</h1>
+      <p class="subtitle">Solving duplicate polling collisions, leader election, and work partitioning across BEAM clusters.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>When running DealScout in production across multiple instances (e.g. Fly.io, Kubernetes, or multi-host nodes), each node starts an identical supervision tree by default. If left uncoordinated, every node polls every feed simultaneously—multiplying traffic, triggering instant HTTP 429 bans, and racing on database writes. This lesson explains how to coordinate background pollers in distributed Elixir.</p>
+    </div>
+
+    <h2>1. The Distributed Duplication Problem</h2>
+    <p>In a single-node deployment, <code>DealScout.Feeds.Poller</code> maintains a queue, enforces a 2-second stagger, and handles backoff smoothly. But consider a 3-node cluster:</p>
+    <pre><code>Node A (FRA) ───► GET https://www.pepper.com/rss/all ──┐
+Node B (AMS) ───► GET https://www.pepper.com/rss/all ──┼──► 429 / 403 WAF BAN!
+Node C (WAW) ───► GET https://www.pepper.com/rss/all ──┘</code></pre>
+    <p>Each node thinks it is following polite 2-second staggering rules, but upstream servers see 3x or 10x concurrent bursts from our infrastructure.</p>
+
+    <h2>2. Strategy 1: Database Advisory Locks (Zero Split-Brain)</h2>
+    <p>When nodes share a PostgreSQL database, Postgres provides an elegant distributed mutex: <strong>Session-level Advisory Locks</strong>:</p>
+    <pre><code># Attempt to acquire a non-blocking 64-bit advisory lock for feed polling:
+SELECT pg_try_advisory_lock(1001);
+# Returns true if acquired, false if another node is currently polling.</code></pre>
+
+    <ul>
+      <li><strong>Automatic Cleanup on Crash:</strong> If the worker process or node crashes, the database connection terminates, and PostgreSQL automatically releases the advisory lock immediately.</li>
+      <li><strong>Split-Brain Immunity:</strong> Unlike distributed consensus algorithms operating across flaky networks, the database is the authoritative single source of truth.</li>
+    </ul>
+
+    <h2>3. Strategy 2: BEAM Native Global Registration (`:global`)</h2>
+    <p>Erlang provides built-in distributed process registration. Instead of registering the poller locally with <code>name: __MODULE__</code>, you register globally:</p>
+    <pre><code>GenServer.start_link(__MODULE__, opts, name: {:global, DealScout.Feeds.Poller})</code></pre>
+    <p>Across the entire connected cluster of BEAM nodes, only <strong>one singleton instance</strong> runs. If the active node crashes, the supervisor on another node detects the absence and starts a replacement. However, during network netsplits, both partitions may elect a leader unless partition arbitration is configured.</p>
+
+    <h2>4. Strategy 3: Horizontal Work Partitioning via Consistent Hashing</h2>
+    <p>Singleton leader election forces one node to do 100% of the work while four other nodes sit idle. A more scalable pattern partitions feeds across active cluster members using <strong>consistent hashing</strong>:</p>
+
+    <pre><code># Inside each node's poller loop:
+live_nodes = Enum.sort(Node.list([:this, :visible]))
+node_index = Enum.find_index(live_nodes, &amp;(&amp;1 == Node.self()))
+total_nodes = length(live_nodes)
+
+# Each node only polls feeds matching its hash partition:
+def should_poll_feed?(feed_id, node_index, total_nodes) do
+  rem(:erlang.phash2(feed_id), total_nodes) == node_index
+end</code></pre>
+    <p>If you have 100 feeds and 4 cluster nodes, each node handles exactly 25 feeds. When a node dies or a new node joins, ownership redistributes predictably with minimal re-shuffling.</p>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Test your intuition for distributed consensus and cluster poller patterns:</p>
+
+    <div class="quiz-container">
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. What primary hazard arises when running standard uncoordinated background pollers on multiple application nodes?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Phoenix channels operate via PubSub and function properly across multiple nodes.">
+            Websocket connections drop unexpectedly whenever client browsers trigger real-time interface page reloads
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Every node executes its local poller, slamming external providers with duplicate concurrent requests.">
+            Multiple nodes poll identical feeds simultaneously triggering rate limit bans from upstream providers
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Database migration locks prevent concurrent migration corruption across nodes.">
+            Database schema tables fail to apply database migrations cleanly during deployment container startup cycles
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ephemeral tasks use local node memory; heap exhaustion doesn't propagate across nodes.">
+            Erlang virtual machine schedulers suffer sudden memory crashes from synchronized garbage collection sweeps
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. Why are PostgreSQL session advisory locks particularly robust for distributed leader election?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Advisory locks do not touch table rows; they operate on in-memory integer keys.">
+            Locks automatically encrypt row data contents preventing unauthorized tenant visibility during database reads
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Advisory locks are fast, but they do not eliminate disk writes for actual application data.">
+            Advisory locks permanently eliminate database write latencies across remote physical read replica instances
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Advisory locks do not manage load balancing for user HTTP requests; reverse proxies do that.">
+            They automatically redirect user HTTP web traffic away from overloaded application worker nodes
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! If the node crashes or loses connection, Postgres frees the lock automatically with zero stale leases.">
+            Terminating the database connection automatically releases the lock immediately if a node crashes
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. What advantage does consistent hashing provide over running a single global singleton poller process?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Consistent hashing distributes feed polling evenly across all cluster nodes rather than overwhelming one singleton.">
+            Distributes polling workloads evenly across all available nodes rather than bottlenecking on one
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Hashing partitions work; network backoff and retry rules are still required.">
+            Eliminates all network backoff requirements when upstream remote APIs return HTTP error responses
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Data persistence in Ecto tables is unchanged by whether poller tasks are distributed or singleton.">
+            Guarantees that database records are stored in memory without touching persistent database tables
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Consistent hashing operates on node lists; it does not replace TLS certificates or encryption.">
+            Bypasses external firewall verification requirements by rotating cryptographic client TLS certificate keys
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read the Erlang/OTP documentation on the <em>:global module and :pg (Process Groups)</em>, and explore Martin Kleppmann's analysis of <em>Distributed Locks with Fencing Tokens</em> to understand why simple time-based leases can fail during network pauses.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0011-cross-border-normalization-and-regional-heuristics.html">0011 Cross-Border Normalization</a></span>
+        <span>📖 Reference: <a href="../reference/0012-cluster-coordination-and-consensus-reference.html">0012 Cluster Coordination Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Interested in exploring how to wire <code>pg_try_advisory_lock</code> or `:pg` into <code>DealScout.Feeds.Poller</code>? Let's discuss in chat!</p>
+    </footer>
+  </div>
+</body>
+</html>

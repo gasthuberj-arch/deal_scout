@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Authoring Agent Skills &amp; Rules</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-authoring {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      grid-authoring { grid-template-columns: 1fr; }
+    }
+    .author-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1.1rem 1.3rem;
+    }
+    .card-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      color: #0369a1;
+      font-size: 1.05rem;
+      margin-bottom: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Agent Authoring Reference 0007</div>
+      <h1>Authoring Skills &amp; Rules Reference</h1>
+      <p class="subtitle">Architectural levers for writing predictable, high-leverage agent instructions.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0007-authoring-custom-agent-skills-and-rules.html">← Back to Lesson 0007: Authoring Agent Skills</a>
+    </div>
+
+    <h2>The Two Budgets</h2>
+    <div class="grid-authoring">
+      <div class="author-card">
+        <div class="card-title">Context Load</div>
+        <p>The cost of always-loaded tokens in the agent's context window. Spends attention on every single turn whether used or not (e.g. <code>AGENTS.md</code> lines, model-invoked descriptions).</p>
+      </div>
+
+      <div class="author-card">
+        <div class="card-title">Cognitive Load</div>
+        <p>The mental burden on the human to remember which slash commands and documents exist and when to invoke each. Spend it only where human judgement genuinely matters.</p>
+      </div>
+    </div>
+
+    <h2>Model-Invoked vs. User-Invoked Skills</h2>
+    <table style="width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-family: var(--font-sans); font-size: 0.95rem;">
+      <thead>
+        <tr style="background: #f3f4f6; text-align: left;">
+          <th style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">Dimension</th>
+          <th style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">Model-Invoked</th>
+          <th style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">User-Invoked</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);"><strong>Frontmatter</strong></td>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">Standard (includes <code>description</code>)</td>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);"><code>disable-model-invocation: true</code></td>
+        </tr>
+        <tr>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);"><strong>Context Load</strong></td>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">Continuous (description always in context)</td>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);"><strong>Zero</strong> (invisible to model until typed)</td>
+        </tr>
+        <tr>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);"><strong>Reach</strong></td>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">Autonomous by agent or peer skills</td>
+          <td style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">Explicit human trigger (e.g. <code>/teach</code>)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Core Writing Levers</h2>
+    <ul>
+      <li><strong>Leading Words:</strong> Use words already rich in model priors (<em>tight</em>, <em>red</em>, <em>tracer bullet</em>, <em>relentless</em>) to collapse multiple paragraphs of explanation into a single hook.</li>
+      <li><strong>Prompt the Positive:</strong> Steering by prohibition ("do not write long functions") drags the forbidden concept into context. State the positive target behavior instead ("write compact functions under 20 lines").</li>
+      <li><strong>Progressive Disclosure:</strong> Keep top-level steps lean; push detailed edge cases, reference tables, and checklists into disclosed sibling files reached by pointers.</li>
+      <li><strong>Checkable Completion Criteria:</strong> Avoid fuzzy bounds like "ensure clean design". Use checkable bounds: "every modified struct has a corresponding test asserting observable output".</li>
+    </ul>
+
+    <footer>
+      <p>DealScout Agent Engineering Reference &bull; Derived from <code>.agents/skills/writing-for-agents/SKILL.md</code></p>
+    </footer>
+  </div>
+</body>
+</html>

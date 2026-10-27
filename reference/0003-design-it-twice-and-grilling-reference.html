@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Design It Twice &amp; Grilling</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+    }
+    .process-step {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1.1rem 1.3rem;
+      margin-bottom: 1rem;
+    }
+    .step-number {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      color: var(--accent-color);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Architecture Reference 0003</div>
+      <h1>Design It Twice &amp; Grilling Reference</h1>
+      <p class="subtitle">Exploration patterns and relentless interrogation to eliminate hidden assumptions.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0003-design-it-twice-and-grilling.html">← Back to Lesson 0003: Design It Twice &amp; Grilling</a>
+    </div>
+
+    <h2>Pattern 1: Design It Twice (Ousterhout)</h2>
+    <p>Your first interface idea is rarely the best. Before writing code, explore 3+ radically different shapes:</p>
+
+    <div class="comparison-grid">
+      <div class="process-step">
+        <div class="step-number">Approach A: Minimal Surface</div>
+        <strong>1–3 entry points max.</strong>
+        <p>Maximizes leverage per call. Default configuration, hidden complexity, opinionated defaults.</p>
+      </div>
+
+      <div class="process-step">
+        <div class="step-number">Approach B: Maximum Flexibility</div>
+        <strong>Configurable &amp; Extensible.</strong>
+        <p>Supports custom pipelines, plugins, and pluggable strategies behind the interface.</p>
+      </div>
+
+      <div class="process-step">
+        <div class="step-number">Approach C: Common-Case First</div>
+        <strong>Zero-friction default call.</strong>
+        <p>Optimizes ergonomics for 90% of callers, tucking advanced options into optional keyword lists.</p>
+      </div>
+
+      <div class="process-step">
+        <div class="step-number">Approach D: Ports &amp; Adapters</div>
+        <strong>Seam-first decoupling.</strong>
+        <p>Decouples business logic from external transports or database representations.</p>
+      </div>
+    </div>
+
+    <h2>Pattern 2: Grilling (Decision Tree Frontier)</h2>
+    <p>Systematically stress-test an architecture plan before implementation by interrogating the decision tree:</p>
+
+    <div class="process-step">
+      <div class="step-number">Rule 1: The Frontier</div>
+      <strong>Ask only settled prerequisites.</strong>
+      <p>The <em>frontier</em> contains decisions that can be answered <em>right now</em> without guessing unsettled upstream questions.</p>
+    </div>
+
+    <div class="process-step">
+      <div class="step-number">Rule 2: Facts vs. Decisions</div>
+      <strong>Agents find facts; users make decisions.</strong>
+      <p>Never ask the user for facts obtainable from the filesystem, codebase, or tests. Dispatch tool calls or sub-agents to find facts; put only decisions to the user.</p>
+    </div>
+
+    <div class="process-step">
+      <div class="step-number">Rule 3: Recommendation Phrasing</div>
+      <strong>Provide a clear recommendation.</strong>
+      <p>Word questions so that replying "yes" accepts the recommended answer. The user directs; the system evaluates.</p>
+    </div>
+
+    <div class="process-step">
+      <div class="step-number">Rule 4: Stop Condition</div>
+      <strong>Empty Frontier.</strong>
+      <p>The grilling session concludes only when every branch of the design tree has been visited and zero silent assumptions remain.</p>
+    </div>
+
+    <footer>
+      <p>DealScout Architecture Reference &bull; Derived from <code>.agents/skills/codebase-design/DESIGN-IT-TWICE.md</code> and <code>.agents/skills/grilling/SKILL.md</code></p>
+    </footer>
+  </div>
+</body>
+</html>

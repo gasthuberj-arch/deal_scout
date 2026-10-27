@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0003: Design It Twice &amp; Grilling the Frontier</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Architecture &bull; Lesson 0003</div>
+      <h1>Design It Twice &amp; Grilling the Frontier</h1>
+      <p class="subtitle">How to explore interface alternatives and eliminate silent assumptions before writing code.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Culmination of Your Architecture Mission</h4>
+      <p>In <a href="0001-deep-modules-and-the-leverage-test.html">Lesson 0001</a> and <a href="0002-seams-adapters-and-dependency-rules.html">Lesson 0002</a>, you mastered deep modules, seams, and dependency categories. Now, you combine them with two powerful techniques: <strong>Design It Twice</strong> (divergent exploration) and <strong>Grilling</strong> (convergent interrogation).</p>
+    </div>
+
+    <h2>1. Design It Twice: Escaping First-Idea Bias</h2>
+    <p>John Ousterhout observed that a software engineer's first idea for an interface is rarely their best. You tend to latch onto whatever implementation was easiest to imagine first.</p>
+    <p>In <strong>Design It Twice</strong>, before writing production code, you intentionally draft 3+ radically different interface variations for the same problem:</p>
+    <ul>
+      <li><strong>Design A (Minimalist):</strong> Shrinks the interface to 1–2 calls with opinionated defaults.</li>
+      <li><strong>Design B (Configurable):</strong> Exposes pluggable middleware or options for maximum extensibility.</li>
+      <li><strong>Design C (Common-Case First):</strong> Optimizes ergonomics for the 90% common path, keeping advanced options optional.</li>
+    </ul>
+    <p>Comparing these side-by-side reveals hidden trade-offs in depth, locality, and seam placement before you invest in code.</p>
+
+    <h2>2. Grilling: Eliminating Silent Assumptions</h2>
+    <p>Once you have a candidate design, how do you prevent costly rework? You <strong>grill</strong> the plan.</p>
+    <blockquote>
+      <strong>Grilling</strong> is systematic interrogation across a <strong>design tree</strong> to ensure no critical decision or edge case is left silently assumed.
+    </blockquote>
+
+    <h2>3. The Frontier &amp; Division of Labor</h2>
+    <p>A grilling session proceeds in rigorous rounds governed by two core rules:</p>
+    <ol>
+      <li>
+        <strong>The Frontier:</strong> The questions you ask in any round must only be those whose prerequisites are already settled. You never ask downstream questions whose answers depend on unsettled upstream choices.
+      </li>
+      <li>
+        <strong>Facts vs. Decisions:</strong> <em>Finding facts is the agent's job; making decisions is the user's.</em> If a question requires inspecting a database schema, reading an existing module, or running mix tests, the agent dispatches tools or sub-agents to discover the facts. The user is only asked to make genuine product or architectural decisions.
+      </li>
+    </ol>
+
+    <h2>4. Check Your Understanding</h2>
+    <p>Test your grasp of Design It Twice and Grilling with these quick checks. Feedback is instant.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why do we deliberately draft multiple interface designs before coding?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Comparing divergent designs surfaces non-obvious ergonomic and architectural trade-offs early.">
+            To evaluate fundamentally different ergonomic trade-offs upfront
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. We explore interfaces conceptually to choose the best one, not to implement duplicates.">
+            To write duplicate code across multiple branches
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. The goal is faster delivery with fewer rewrites, not artificial delays.">
+            To delay shipping features until next sprint
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Design It Twice focuses on module interface shape, not benchmarking external vendor libraries.">
+            To test every possible third-party library vendor
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. What constitutes the 'frontier' in a grilling interrogation round?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Asking ungrounded speculative questions violates the design tree discipline.">
+            Speculative questions lacking any known context
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. The frontier is specifically bounded by settled prerequisites, not an open grab bag.">
+            Every possible question in the universe
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Precisely! The frontier is strictly composed of questions whose dependencies are already resolved.">
+            Decisions whose prerequisites are already settled
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Facts are investigated by the agent, not asked as frontier decision questions.">
+            Obscure implementation facts from the filesystem
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. What is the fundamental division of labor during a grilling session?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. The user steers architectural choices; the agent does not unilaterally dictate decisions.">
+            Agent makes architectural choices while user writes tests
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Finding facts from code or tools is the agent's job, never the user's burden.">
+            Agent asks user to search the code repository
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Exploration and interrogation happen iteratively upfront before coding begins.">
+            Agent delays all exploration until user writes code
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! The agent investigates codebase facts; the human makes the steering decisions.">
+            Agent finds facts while user makes key decisions
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Review Chapter 17 ("Design it Twice") of John Ousterhout's <em>A Philosophy of Software Design</em> and the project skill docs in <a href="../.agents/skills/grilling/SKILL.md"><code>.agents/skills/grilling/SKILL.md</code></a>.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0002-seams-adapters-and-dependency-rules.html">Lesson 0002</a></span>
+        <span>📖 Reference: <a href="../reference/0003-design-it-twice-and-grilling-reference.html">0003 Grilling Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> You now possess the entire Architecture &amp; Design toolchain! When you're ready, we can run a live "Design It Twice" or "Grill Me" session on a real feature for DealScout!</p>
+    </footer>
+  </div>
+</body>
+</html>

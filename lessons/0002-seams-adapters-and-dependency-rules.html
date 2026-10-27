@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0002: Seams, Adapters &amp; Dependency Rules</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Architecture &bull; Lesson 0002</div>
+      <h1>Seams, Adapters &amp; Dependency Rules</h1>
+      <p class="subtitle">Where to draw lines, when to introduce ports, and how to classify dependencies in DealScout.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Progressing Your Mission</h4>
+      <p>Now that you know how to identify deep modules (<a href="0001-deep-modules-and-the-leverage-test.html">Lesson 0001</a>), the next architectural decision is <em>where</em> boundaries belong. This lesson gives you a disciplined decision rule for placing seams and classifying dependencies without introducing needless indirection.</p>
+    </div>
+
+    <h2>1. What Is a Seam?</h2>
+    <p>In software architecture, developers often throw around terms like "boundary", "layer", or "abstraction". We use Michael Feathers' precise term:</p>
+    <blockquote>
+      <strong>Seam:</strong> A place where you can alter behavior without editing in that place; the exact location where a module's interface lives.
+    </blockquote>
+    <p>An <strong>adapter</strong> is a concrete implementation that sits at a seam and satisfies the interface. For instance, in DealScout, a payment module might have a production Stripe adapter and a fast test in-memory adapter.</p>
+
+    <h2>2. Seam Discipline: The Two-Adapter Rule</h2>
+    <p>A very common trap in system design is speculative seams: creating an abstract behaviour/port "just in case we ever want to switch databases or vendors."</p>
+    <blockquote>
+      <strong>The Two-Adapter Rule:</strong> <em>One adapter means a hypothetical seam. Two adapters means a real one.</em>
+    </blockquote>
+    <p>If you only ever have one concrete implementation (e.g. PostgreSQL) and you don't use a stand-in for tests, do not create a generic repo port! A single-adapter seam is just indirection that drains cognitive energy.</p>
+
+    <h2>3. The Four Dependency Categories</h2>
+    <p>Before drawing a boundary or creating an adapter in DealScout, categorize what the code touches:</p>
+
+    <ol>
+      <li>
+        <strong>In-process (No Seam):</strong> Pure computation, string parsing, scoring rules, and in-memory structures. <em>Merge directly into the deep module. Never extract an adapter for pure calculation.</em>
+      </li>
+      <li>
+        <strong>Local-substitutable (Internal Seam):</strong> Local databases (SQLite, ETS, local disk). The test stand-in runs directly in the test suite. Keep the seam internal to the module—do not leak it into public interfaces.
+      </li>
+      <li>
+        <strong>Remote but Owned (Port &amp; Adapter):</strong> Services you own across a network boundary (e.g. an internal recommendation service). Define a clean port at the seam; supply an HTTP adapter in production and an in-memory adapter in test.
+      </li>
+      <li>
+        <strong>True External (Injected Mock):</strong> Third-party APIs outside your control (e.g. Stripe, Twilio, SendGrid). Inject an adapter at the port; use a mock adapter in tests to verify edge cases and failure modes.
+      </li>
+    </ol>
+
+    <h2>4. Testing Strategy: Replace, Don't Layer</h2>
+    <p>When you deepen a module by collapsing shallow pass-through layers, what happens to your tests?</p>
+    <ul>
+      <li><strong>Delete the obsolete unit tests:</strong> Fine-grained tests on intermediate helper layers become friction. Delete them.</li>
+      <li><strong>Test the interface:</strong> The external interface is your test surface. Tests should exercise high-leverage outcomes across the seam. When internal algorithms refactor, tests shouldn't break.</li>
+    </ul>
+
+    <h2>5. Check Your Understanding</h2>
+    <p>Reinforce what you've learned with these retrieval questions. Feedback appears immediately upon clicking.</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span>⚡ Quick Knowledge Check</span>
+      </div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Where should an in-process, pure computational function live relative to a module?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Pure calculation does not warrant an external port or boundary.">
+            Extracted behind an abstract external port
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! In-process computation should be absorbed directly into the deep module without seams.">
+            Merged directly into the deep module
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Splitting in-memory pure calculation across service boundaries adds extreme overhead.">
+            Wrapped inside a separate microservice boundary
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Pure logic should be tested directly with inputs and outputs, never mocked.">
+            Mocked out using dynamic test doubles
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. Why is creating an interface with only one concrete adapter considered an anti-pattern?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! A single adapter creates a hypothetical seam—indirection with zero actual substitution benefits.">
+            It introduces indirection without providing concrete flexibility
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Having one adapter does not prevent integration testing.">
+            It prevents writing integration tests for callers
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Architecture seams have nothing to do with Elixir immutability guarantees.">
+            It breaks functional immutability in Elixir modules
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. A single wrapper does not measurably degrade compiler performance.">
+            It slows down compilation speed during builds
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. What is the recommended strategy when dealing with third-party external services?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Calling external services raw from callers tightly couples the entire application to third-party churn.">
+            Direct unmediated network calls inside every caller function
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Leaving critical external integrations untested is irresponsible and dangerous.">
+            Complete omission of test coverage for third-party operations
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. External services cross network boundaries and cannot be merged as pure in-process code.">
+            Pure in-process merging without defining any seam location
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Precisely! Define an injected port at the seam with a mock adapter for robust test runs.">
+            Injected port with mock adapter for test environments
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read Chapter 4 ("The Seam Model") in Michael Feathers' classic <em>Working Effectively with Legacy Code</em>. It defines the seam discipline and teaches you to recognize natural points of modification.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0001-deep-modules-and-the-leverage-test.html">Lesson 0001</a></span>
+        <span>📖 Reference: <a href="../reference/0002-seams-and-dependency-categories.html">0002 Seams Reference Card</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+      <p><strong>Next Step / Discussion:</strong> Ready for the final piece of the architecture cluster? Next session, we'll dive into <em>Design It Twice &amp; Grilling the Frontier</em>—combining parallel sub-agent explorations with relentless plan interrogation!</p>
+    </footer>
+  </div>
+</body>
+</html>

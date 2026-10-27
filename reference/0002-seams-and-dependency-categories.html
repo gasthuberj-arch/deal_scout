@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Seams &amp; Dependency Categories</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .category-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+    }
+    .category-table th, .category-table td {
+      border: 1px solid var(--border-color);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    .category-table th {
+      background: #f3f4f6;
+      font-weight: 700;
+      color: #111827;
+    }
+    .category-table tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-blue { background: #e0f2fe; color: #0369a1; }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .badge-purple { background: #f3e8ff; color: #7e22ce; }
+    .badge-amber { background: #fef3c7; color: #b45309; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Architecture Reference 0002</div>
+      <h1>Seams &amp; Dependency Categories</h1>
+      <p class="subtitle">Heuristics for positioning seams, choosing adapters, and testing interfaces cleanly.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0002-seams-adapters-and-dependency-rules.html">← Back to Lesson 0002: Seams, Adapters &amp; Dependency Rules</a>
+    </div>
+
+    <h2>The Seam Concept</h2>
+    <p>Defined by Michael Feathers (<em>Working Effectively with Legacy Code</em>):</p>
+    <blockquote>
+      <strong>Seam:</strong> A place where you can alter behavior without editing in that place; the exact location where a module's interface lives.
+    </blockquote>
+
+    <h2>The Four Dependency Categories</h2>
+    <table class="category-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Characteristics</th>
+          <th>Seam Strategy</th>
+          <th>Testing Approach</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-blue">1. In-process</span></td>
+          <td>Pure computation, data transformation, internal memory. No I/O.</td>
+          <td><strong>No seam needed.</strong> Merge directly into the deep module.</td>
+          <td>Test directly through the module's interface.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-green">2. Local-substitutable</span></td>
+          <td>Persistent or stateful dependencies with local test doubles (e.g. SQLite, ETS).</td>
+          <td><strong>Internal seam only.</strong> Stand-in stays inside module boundary.</td>
+          <td>Run fast in-memory stand-in within test suite.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-purple">3. Remote Owned</span></td>
+          <td>Services you own across a network boundary (internal microservices, RPC).</td>
+          <td><strong>Port at the seam.</strong> External interface accepts adapter.</td>
+          <td>HTTP adapter in production; in-memory adapter in test.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-amber">4. True External</span></td>
+          <td>Third-party APIs outside your control (Stripe, Twilio, SendGrid).</td>
+          <td><strong>Injected port.</strong> Strict boundary to protect your domain.</td>
+          <td>Mock adapter satisfying the port contract in test.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Seam Discipline</h2>
+    <ul>
+      <li><strong>The Two-Adapter Rule:</strong> <em>One adapter means a hypothetical seam. Two adapters means a real one.</em> Never introduce interface indirection unless at least two adapters are actively justified (e.g., Production HTTP + In-memory test fake).</li>
+      <li><strong>Internal vs. External Seams:</strong> Private seams used internally for unit isolation must never be leaked across the module's public interface.</li>
+      <li><strong>Replace, Don't Layer:</strong> When deepening a module, delete old unit tests for deprecated internal parts. Test exclusively against the external interface.</li>
+    </ul>
+
+    <footer>
+      <p>DealScout Architecture Reference &bull; Derived from <code>.agents/skills/codebase-design/DEEPENING.md</code></p>
+    </footer>
+  </div>
+</body>
+</html>

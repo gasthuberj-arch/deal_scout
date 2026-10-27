@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Deep Modules & Architecture Vocabulary</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-avoid {
+      font-size: 0.82rem;
+      color: #991b1b;
+      margin-top: 0.4rem;
+      font-family: var(--font-sans);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Architecture Reference 0001</div>
+      <h1>Deep Modules & Seams Reference</h1>
+      <p class="subtitle">Canonical vocabulary and principles for high-leverage module design.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0001-deep-modules-and-the-leverage-test.html">← Back to Lesson 0001: Deep Modules &amp; The Leverage Test</a>
+    </div>
+
+    <h2>Core Architecture Vocabulary</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Module</div>
+        <p>Anything with an interface and an implementation. Deliberately scale-agnostic: a single function, an Elixir context, an OTP process, or a subsystem.</p>
+        <div class="term-avoid">Avoid: component, unit, service</div>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Interface</div>
+        <p>Everything a caller must know to use the module correctly: type signatures, invariants, ordering constraints, error modes, configuration, and runtime traits.</p>
+        <div class="term-avoid">Avoid: API, signature (too narrow)</div>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Implementation</div>
+        <p>The code body inside the module. What callers do not see. Distinct from an adapter: adapter describes the role at a seam; implementation is what is inside.</p>
+        <div class="term-avoid">Avoid confusing role with body</div>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Depth</div>
+        <p>Leverage at the interface. The amount of behavior a caller or test can exercise per unit of interface complexity they must learn. Deep = small surface, rich logic.</p>
+        <div class="term-avoid">Avoid: measuring lines of code</div>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Seam (Feathers)</div>
+        <p>A place where you can alter behavior without editing in that place; the exact location where a module's interface lives.</p>
+        <div class="term-avoid">Avoid: boundary (overloaded with DDD)</div>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Adapter</div>
+        <p>A concrete thing that satisfies an interface at a seam. Describes role (e.g. Postgres repo vs in-memory fake), not internal code size.</p>
+        <div class="term-avoid">Avoid: introducing with 1 implementation</div>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Leverage</div>
+        <p>What callers get from depth: massive capability unlocked with minimal cognitive surface. One implementation pays back across N call sites and M tests.</p>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Locality</div>
+        <p>What maintainers get from depth: change, bugs, and invariants concentrate in one place rather than leaking across callers. Fix once, fixed everywhere.</p>
+      </div>
+    </div>
+
+    <h2>Deep vs. Shallow Visualized</h2>
+    <pre><code>DEEP MODULE (High Leverage)
+┌──────────────────────────────────────────────┐
+│  Small Interface (1-3 intuitive calls)       │ ← What callers learn
+├──────────────────────────────────────────────┤
+│                                              │
+│  Rich Implementation                         │
+│  - Invariants preserved                      │ ← Complexity hidden
+│  - Internal coordination handled             │
+│                                              │
+└──────────────────────────────────────────────┘
+
+SHALLOW MODULE (Low Leverage / Pass-through)
+┌──────────────────────────────────────────────┐
+│  Large Interface (Many knobs, leaks details) │ ← High cognitive load
+├──────────────────────────────────────────────┤
+│  Thin Implementation (Pass-through to dep)   │ ← No complexity hidden
+└──────────────────────────────────────────────┘</code></pre>
+
+    <h2>Critical Heuristics</h2>
+    <ul>
+      <li><strong>The Deletion Test:</strong> If you delete the module and complexity simply vanishes, it was a pass-through. If complexity disperses into 10 callers, it was earning its keep.</li>
+      <li><strong>The Interface is the Test Surface:</strong> Callers and tests cross the same seam. If you need to test private internals past the interface, the module shape is wrong.</li>
+      <li><strong>Seam Discipline:</strong> One adapter = a hypothetical seam (unjustified indirection). Two adapters (e.g., Prod + In-Memory Test) = a real seam.</li>
+    </ul>
+
+    <footer>
+      <p>DealScout Teaching Reference &bull; Grounded in John Ousterhout's <em>A Philosophy of Software Design</em> and Michael Feathers' <em>Working Effectively with Legacy Code</em>.</p>
+    </footer>
+  </div>
+</body>
+</html>
