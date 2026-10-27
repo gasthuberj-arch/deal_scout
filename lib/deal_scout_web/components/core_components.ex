@@ -522,6 +522,7 @@ defmodule DealScoutWeb.CoreComponents do
             "absolute inset-0 w-full h-full object-cover text-transparent select-none transition-opacity duration-300",
             @img_class
           ]}
+          loading="lazy"
           decoding="async"
           referrerpolicy="no-referrer"
           onerror="if(this.dataset.fallback && this.src !== this.dataset.fallback){this.src=this.dataset.fallback;}else{this.style.display='none';}"

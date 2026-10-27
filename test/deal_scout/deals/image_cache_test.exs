@@ -45,5 +45,25 @@ defmodule DealScout.Deals.ImageCacheTest do
       ImageCache.clear()
       assert ImageCache.size() == 0
     end
+
+    test "recovers from disk when ETS is wiped" do
+      payload = "persistent-image-bytes"
+      assert :ok = ImageCache.put(42, "image/webp", payload)
+      assert File.exists?(ImageCache.disk_path(42))
+
+      # Simulate server reboot / memory loss by deleting ETS table entry only
+      :ets.delete(:deal_image_cache, 42)
+      assert :ets.lookup(:deal_image_cache, 42) == []
+
+      # Reading should reload from disk and repopulate ETS
+      assert {:ok, "image/webp", ^payload} = ImageCache.get(42)
+      assert [{42, "image/webp", ^payload, _}] = :ets.lookup(:deal_image_cache, 42)
+    end
+
+    test "rejects non-integer and path traversal keys" do
+      assert {:error, :invalid_id} = ImageCache.put("../../etc/passwd", "image/png", "abc")
+      assert :miss = ImageCache.get("../../etc/passwd")
+      assert :miss = ImageCache.get("-1")
+    end
   end
 end

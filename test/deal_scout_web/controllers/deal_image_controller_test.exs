@@ -68,4 +68,13 @@ defmodule DealScoutWeb.DealImageControllerTest do
     conn = get(conn, ~p"/deals/#{deal_no_img.id}/image")
     assert response(conn, 404)
   end
+
+  test "deal_image component renders with loading=lazy attribute" do
+    import Phoenix.LiveViewTest
+    import DealScoutWeb.CoreComponents
+
+    html = render_component(&deal_image/1, deal_id: 123, src: "https://example.com/item.jpg")
+    assert html =~ ~s(loading="lazy")
+    assert html =~ ~s(src="/deals/123/image")
+  end
 end

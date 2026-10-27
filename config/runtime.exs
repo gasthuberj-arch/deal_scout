@@ -25,6 +25,14 @@ config :deal_scout, DealScoutWeb.Endpoint,
 
 config :deal_scout,
   litestream_replica_dir: System.get_env("LITESTREAM_REPLICA_PATH", "/data/litestream"),
+  image_cache_dir:
+    System.get_env(
+      "IMAGE_CACHE_DIR",
+      if(config_env() == :prod,
+        do: "/data/image_cache",
+        else: Path.join(System.tmp_dir!(), "deal_scout_image_cache")
+      )
+    ),
   backup_token: System.get_env("ADMIN_BACKUP_TOKEN"),
   alert_auto_pause_enabled: System.get_env("ALERT_AUTO_PAUSE_ENABLED", "false") == "true",
   alert_eval_log_path: System.get_env("ALERT_EVAL_LOG_PATH", "log/alert_evaluations.log")

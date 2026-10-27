@@ -92,7 +92,7 @@ COPY scripts/server-entrypoint.sh /app/bin/entrypoint
 RUN chmod +x /app/bin/entrypoint
 
 # Prepare data directory for SQLite volume and Litestream replica
-RUN mkdir -p /data/litestream && chown -R nobody:root /data
+RUN mkdir -p /data/litestream /data/image_cache && chown -R nobody:root /data
 
 USER nobody
 

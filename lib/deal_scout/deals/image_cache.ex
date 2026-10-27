@@ -1,13 +1,13 @@
 defmodule DealScout.Deals.ImageCache do
   @moduledoc """
-  Bounded, in-memory ETS cache for deal thumbnail images.
+  Tiered (in-memory ETS + persistent volume disk) cache for deal thumbnail images.
 
   Guarantees:
-  - Hard cap on maximum cached entries (`@max_entries 150`, ~1-2 MB max RAM).
+  - Level 1: Hard cap on maximum in-memory ETS entries (`@max_entries 150`, ~1-2 MB max RAM).
+  - Level 2: Persistent disk cache on `/data/image_cache/` so cached thumbnails survive restarts/deploys.
   - Hard cap on individual image size (`@max_item_bytes 60_000` = 60 KB).
-  - Short TTL (`@ttl_seconds 900` = 15 minutes) with lazy expiry on read and
-    periodic background sweep via `:ets.select_delete`.
-  - Zero binary heap copying during eviction: pruning selects only `{id, timestamp}`.
+  - Short in-memory TTL (`@ttl_seconds 900` = 15 minutes) with fallback to disk on ETS miss.
+  - Zero binary heap copying during ETS eviction.
   """
   use GenServer
 
@@ -32,12 +32,14 @@ defmodule DealScout.Deals.ImageCache do
           @table
       end
 
+    File.mkdir_p!(cache_dir())
     schedule_sweep()
     {:ok, %{table: table}}
   end
 
   @doc """
   Looks up a cached image by deal ID.
+  Checks in-memory ETS first, falling back to disk cache before reporting `:miss`.
   Returns `{:ok, content_type, body}` or `:miss`.
   """
   def get(deal_id) do
@@ -57,7 +59,39 @@ defmodule DealScout.Deals.ImageCache do
           {:ok, content_type, body}
         else
           :ets.delete(@table, deal_id)
-          :miss
+          read_from_disk(deal_id)
+        end
+
+      _ ->
+        read_from_disk(deal_id)
+    end
+  rescue
+    _ -> :miss
+  end
+
+  defp read_from_disk(deal_id) do
+    file_path = disk_path(deal_id)
+
+    case File.read(file_path) do
+      {:ok, binary} ->
+        case :binary.split(binary, "\n") do
+          [content_type, body] when is_binary(body) and byte_size(body) <= @max_item_bytes ->
+            # Repopulate in-memory ETS table
+            try do
+              if :ets.info(@table, :size) >= @max_entries do
+                prune_oldest()
+              end
+
+              :ets.insert(@table, {deal_id, content_type, body, System.monotonic_time(:second)})
+            rescue
+              _ -> :ok
+            end
+
+            {:ok, content_type, body}
+
+          _ ->
+            File.rm(file_path)
+            :miss
         end
 
       _ ->
@@ -69,6 +103,7 @@ defmodule DealScout.Deals.ImageCache do
 
   @doc """
   Stores a thumbnail image in the cache if it meets the size constraints.
+  Persists to both ETS and filesystem.
   Returns `:ok` or `{:error, :too_large}`.
   """
   def put(deal_id, content_type, body) when is_binary(body) do
@@ -80,12 +115,12 @@ defmodule DealScout.Deals.ImageCache do
 
   def put(_, _, _), do: {:error, :invalid_body}
 
-  defp normalize_id(id) when is_integer(id), do: id
+  defp normalize_id(id) when is_integer(id) and id > 0, do: id
 
   defp normalize_id(id) when is_binary(id) do
     case Integer.parse(id) do
-      {int_id, ""} -> int_id
-      _ -> id
+      {int_id, ""} when int_id > 0 -> int_id
+      _ -> nil
     end
   end
 
@@ -101,6 +136,7 @@ defmodule DealScout.Deals.ImageCache do
         end
 
         :ets.insert(@table, {deal_id, content_type, body, System.monotonic_time(:second)})
+        write_to_disk(deal_id, content_type, body)
         :ok
       rescue
         _ -> :ok
@@ -108,8 +144,24 @@ defmodule DealScout.Deals.ImageCache do
     end
   end
 
+  defp write_to_disk(deal_id, content_type, body) do
+    path = disk_path(deal_id)
+    tmp_path = "#{path}.tmp.#{:erlang.unique_integer([:positive])}"
+
+    with :ok <- File.write(tmp_path, [content_type, ?\n, body]),
+         :ok <- File.rename(tmp_path, path) do
+      :ok
+    else
+      _ ->
+        File.rm(tmp_path)
+        :ok
+    end
+  rescue
+    _ -> :ok
+  end
+
   @doc """
-  Returns the current number of cached entries.
+  Returns the current number of cached in-memory ETS entries.
   """
   def size do
     :ets.info(@table, :size)
@@ -118,10 +170,40 @@ defmodule DealScout.Deals.ImageCache do
   end
 
   @doc """
-  Clears all cached images.
+  Returns the filesystem cache directory path.
+  """
+  def cache_dir do
+    Application.get_env(
+      :deal_scout,
+      :image_cache_dir,
+      Path.join(System.tmp_dir!(), "deal_scout_image_cache")
+    )
+  end
+
+  @doc """
+  Returns the disk path for a given deal ID cache file.
+  """
+  def disk_path(deal_id) do
+    Path.join(cache_dir(), "#{deal_id}.cache")
+  end
+
+  @doc """
+  Clears all cached images from both memory and disk.
   """
   def clear do
     :ets.delete_all_objects(@table)
+    dir = cache_dir()
+
+    if File.dir?(dir) do
+      case File.ls(dir) do
+        {:ok, files} ->
+          Enum.each(files, fn file -> File.rm(Path.join(dir, file)) end)
+
+        _ ->
+          :ok
+      end
+    end
+
     :ok
   rescue
     _ -> :ok
@@ -140,15 +222,42 @@ defmodule DealScout.Deals.ImageCache do
 
   defp sweep_expired do
     cutoff = System.monotonic_time(:second) - @ttl_seconds
-    # Match spec deletes rows directly in C without copying objects into heap:
-    # {{id, content_type, body, inserted_at}} where inserted_at < cutoff
     :ets.select_delete(@table, [{{:_, :_, :_, :"$1"}, [{:<, :"$1", cutoff}], [true]}])
+    sweep_disk()
+  rescue
+    _ -> :ok
+  end
+
+  defp sweep_disk do
+    dir = cache_dir()
+
+    if File.dir?(dir) do
+      # Evict cache files older than 7 days (604,800 seconds)
+      cutoff_time = System.os_time(:second) - 7 * 86_400
+
+      case File.ls(dir) do
+        {:ok, files} ->
+          Enum.each(files, fn file ->
+            path = Path.join(dir, file)
+
+            case File.stat(path, time: :posix) do
+              {:ok, %File.Stat{mtime: mtime}} when mtime < cutoff_time ->
+                File.rm(path)
+
+              _ ->
+                :ok
+            end
+          end)
+
+        _ ->
+          :ok
+      end
+    end
   rescue
     _ -> :ok
   end
 
   defp prune_oldest do
-    # Select only {id, inserted_at} pairs - binary body is NEVER copied into heap
     case :ets.select(@table, [{{:"$1", :_, :_, :"$2"}, [], [{{:"$1", :"$2"}}]}]) do
       items when is_list(items) and length(items) > 0 ->
         items

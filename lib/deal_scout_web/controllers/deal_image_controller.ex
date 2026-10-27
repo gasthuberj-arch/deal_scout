@@ -4,6 +4,7 @@ defmodule DealScoutWeb.DealImageController do
   alias DealScout.Repo
   alias DealScout.Deals.Deal
   alias DealScout.Deals.ImageCache
+  alias DealScout.Deals.ImageFetcher
 
   @max_thumbnail_bytes 60_000
 
@@ -15,9 +16,10 @@ defmodule DealScoutWeb.DealImageController do
 
   Includes:
   - Cache-Control (24h) and ETag support for client-side HTTP 304 caching.
-  - Bounded in-memory caching for thumbnails <= 60 KB.
-  - Oversized payloads (>60 KB) served directly without storing in ETS.
-  - Direct upstream fallback on errors.
+  - Tiered in-memory ETS + persistent volume caching for thumbnails <= 60 KB.
+  - Concurrency limiting via ImageFetcher to prevent upstream network stampedes.
+  - Oversized payloads (>60 KB) served directly without storing in ETS/disk.
+  - Direct upstream fallback on errors or saturation.
   """
   def show(conn, %{"id" => id}) do
     case ImageCache.get(id) do
@@ -32,15 +34,7 @@ defmodule DealScoutWeb.DealImageController do
   defp fetch_and_serve(conn, id) do
     case Repo.get(Deal, id) do
       %Deal{image_url: url} when is_binary(url) and url != "" ->
-        case Req.get(url,
-               headers: [
-                 {"user-agent",
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
-                 {"accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
-               ],
-               receive_timeout: 4000,
-               max_retries: 1
-             ) do
+        case ImageFetcher.with_permit(fn -> fetch_remote_image(url) end) do
           {:ok, %Req.Response{status: 200, body: body} = resp}
           when is_binary(body) and byte_size(body) <= @max_thumbnail_bytes ->
             content_type = extract_content_type(resp)
@@ -58,6 +52,18 @@ defmodule DealScoutWeb.DealImageController do
       _ ->
         send_resp(conn, 404, "Not Found")
     end
+  end
+
+  defp fetch_remote_image(url) do
+    Req.get(url,
+      headers: [
+        {"user-agent",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
+        {"accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
+      ],
+      receive_timeout: 4000,
+      max_retries: 1
+    )
   end
 
   defp send_image(conn, content_type, body) do
