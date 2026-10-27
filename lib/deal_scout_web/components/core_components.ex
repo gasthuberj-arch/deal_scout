@@ -482,7 +482,6 @@ defmodule DealScoutWeb.CoreComponents do
   dimensions, preventing mobile hotlink blocking and layout shifts without server overhead.
   """
   attr :src, :string, default: nil
-  attr :deal_id, :any, default: nil
   attr :alt, :string, default: ""
   attr :class, :string, default: "size-20"
   attr :img_class, :string, default: "size-20 object-cover"
