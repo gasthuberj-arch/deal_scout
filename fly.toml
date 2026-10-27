@@ -52,7 +52,6 @@ swap_size_mb = 512
 
 [deploy]
   strategy = "immediate"
-  release_command = "/app/bin/migrate"
 
 [[vm]]
   cpu_kind = "shared"
