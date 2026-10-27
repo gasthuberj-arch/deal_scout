@@ -371,7 +371,7 @@ defmodule DealScoutWeb.DealLive.Index do
           </div>
         </div>
 
-        <!-- Deals Stream Grid (Classic Setup) -->
+        <!-- Deals Stream Grid -->
         <div
           id="deals-stream"
           phx-update="stream"
@@ -383,27 +383,42 @@ defmodule DealScoutWeb.DealLive.Index do
               class="card bg-base-100 border border-base-300 hover:border-primary/50 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col justify-between group"
             >
               <div class="p-5 space-y-3">
-                <div class="flex items-center justify-between text-xs text-base-content/60">
+                <!-- Card Header: Feed & Community Temperature & Time -->
+                <div class="flex items-center justify-between text-xs text-base-content/70">
                   <div class="flex items-center gap-1.5 flex-wrap">
-                    <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md border tracking-tight shadow-xs bg-base-200 border-base-300">
+                    <span class={[
+                      "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md border tracking-tight shadow-xs",
+                      feed_badge_classes(deal.feed && deal.feed.slug)
+                    ]}>
                       {if deal.feed, do: deal.feed.name, else: "Deal"}
                     </span>
+
                     <%= if deal.temperature do %>
-                      <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border shadow-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40">
+                      <span class={[
+                        "inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border shadow-xs",
+                        temperature_badge_classes(deal.temperature)
+                      ]}>
                         <.icon name="hero-fire" class="size-3" />
                         {deal.temperature}°
                       </span>
                     <% end %>
+
                     <%= if deal.country do %>
-                      <% country_flag = deal.country[:flag] || deal.country["flag"] %>
-                      <% country_name = deal.country[:name] || deal.country["name"] %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border border-base-300 bg-base-200/60 text-base-content/80 shadow-xs">
+                      <% country_name = deal.country[:name] || deal.country["name"]
+                      country_flag = deal.country[:flag] || deal.country["flag"] %>
+                      <span
+                        class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border border-base-300 bg-base-200/60 text-base-content/90 shadow-xs"
+                        title={"Dispatched / Origin: #{country_name}"}
+                      >
                         <span>{country_flag}</span>
                         <span>{country_name}</span>
                       </span>
                     <% end %>
                   </div>
-                  <span>{format_time_ago(deal.published_at)}</span>
+
+                  <span title={DateTime.to_iso8601(deal.published_at)}>
+                    {format_time_ago(deal.published_at)}
+                  </span>
                 </div>
 
                 <!-- Foreign Keyboard Layout Warning Banner -->
@@ -411,10 +426,11 @@ defmodule DealScoutWeb.DealLive.Index do
                   <% kb_message = deal.keyboard_warning[:message] || deal.keyboard_warning["message"] %>
                   <div class="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
                     <.icon name="hero-exclamation-triangle" class="size-4 shrink-0 text-amber-500" />
-                    <span>Foreign Keyboard Layout: {kb_message}</span>
+                    <span>{kb_message}</span>
                   </div>
                 <% end %>
 
+                <!-- Deal Image & Title Row -->
                 <div class="flex gap-4">
                   <.deal_image
                     src={deal.image_url}
@@ -429,6 +445,7 @@ defmodule DealScoutWeb.DealLive.Index do
                       </a>
                     </h2>
 
+                    <!-- Price & Merchant Trust Row -->
                     <div class="flex flex-wrap items-center gap-2 pt-1">
                       <%= if deal.price do %>
                         <span class="text-base font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
@@ -436,28 +453,41 @@ defmodule DealScoutWeb.DealLive.Index do
                         </span>
                       <% end %>
 
+                      <!-- Merchant Intelligence Badge -->
                       <%= if deal.merchant do %>
-                        <button
-                          type="button"
-                          phx-click="select_merchant"
-                          phx-value-slug={deal.merchant.slug}
-                          class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md border bg-base-200 text-base-content/80 border-base-300"
-                        >
-                          <.icon name={merchant_icon(deal.merchant.trust_level)} class="size-3" />
-                          <span>{deal.merchant.name}</span>
-                        </button>
+                        <div class="tooltip tooltip-bottom" data-tip={merchant_tooltip(deal.merchant)}>
+                          <button
+                            type="button"
+                            phx-click="select_merchant"
+                            phx-value-slug={deal.merchant.slug}
+                            class={[
+                              "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md border transition-all cursor-pointer",
+                              merchant_badge_class(deal.merchant.trust_level)
+                            ]}
+                          >
+                            <.icon name={merchant_icon(deal.merchant.trust_level)} class="size-3" />
+                            <span>{deal.merchant.name}</span>
+                          </button>
+                        </div>
+                      <% else %>
+                        <%= if deal.raw_merchant do %>
+                          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-base-200 text-base-content/80">
+                            {deal.raw_merchant}
+                          </span>
+                        <% end %>
                       <% end %>
                     </div>
                   </div>
                 </div>
 
+                <!-- Deal Description Snippet -->
                 <%= if deal.clean_text && deal.clean_text != "" do %>
-                  <p class="text-xs text-base-content/70 line-clamp-2 leading-relaxed">
+                  <p class="text-xs text-base-content/80 line-clamp-2 leading-relaxed">
                     {deal.clean_text}
                   </p>
                 <% end %>
 
-                <!-- Duplicate Deals Pills -->
+                <!-- Duplicate Deals Sub-Pills -->
                 <%= if Ecto.assoc_loaded?(deal.duplicates) && deal.duplicates != [] do %>
                   <div class="pt-2 flex flex-wrap items-center gap-1.5 border-t border-base-200/60">
                     <span class="text-[11px] font-medium text-base-content/60">Also on:</span>
@@ -511,13 +541,18 @@ defmodule DealScoutWeb.DealLive.Index do
                 <% end %>
               </div>
 
-              <div class="p-4 pt-0">
+              <!-- Card Footer: Host & Direct Deal Button -->
+              <div class="px-5 py-3 border-t border-base-300 bg-base-200/50 flex items-center justify-between text-xs">
+                <span class="text-xs text-base-content/70 truncate max-w-[170px]">
+                  {URI.parse(deal.url).host}
+                </span>
+
                 <%= if deal.merchant && deal.merchant.trust_level == "high_risk" do %>
                   <button
                     type="button"
                     phx-click="open_high_risk_modal"
                     phx-value-id={deal.id}
-                    class="btn btn-xs btn-error gap-1 text-white shadow-sm w-full"
+                    class="btn btn-xs btn-error gap-1 text-white shadow-sm"
                   >
                     <.icon name="hero-shield-exclamation" class="size-3" />
                     <span>Open Deal</span>
@@ -527,7 +562,7 @@ defmodule DealScoutWeb.DealLive.Index do
                     href={deal.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="btn btn-xs btn-primary w-full gap-1"
+                    class="btn btn-xs btn-primary gap-1"
                   >
                     <span>Open Deal</span>
                     <.icon name="hero-arrow-top-right-on-square" class="size-3" />
@@ -639,6 +674,93 @@ defmodule DealScoutWeb.DealLive.Index do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp feed_badge_classes("mydealz"),
+    do: "bg-sky-500/20 text-sky-700 dark:text-sky-200 border-sky-500/40"
+
+  defp feed_badge_classes("mydealz-hot"),
+    do: "bg-amber-500/25 text-amber-800 dark:text-amber-200 border-amber-500/50"
+
+  defp feed_badge_classes("dealdoktor"),
+    do: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40"
+
+  defp feed_badge_classes("monsterdealz"),
+    do: "bg-orange-500/20 text-orange-800 dark:text-orange-200 border-orange-500/40"
+
+  defp feed_badge_classes("schnaeppchenfuchs"),
+    do: "bg-purple-500/20 text-purple-800 dark:text-purple-200 border-purple-500/40"
+
+  defp feed_badge_classes("mein-deal"),
+    do: "bg-rose-500/20 text-rose-800 dark:text-rose-200 border-rose-500/40"
+
+  defp feed_badge_classes("dealabs"),
+    do: "bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-500/40"
+
+  defp feed_badge_classes("chollometro"),
+    do: "bg-red-500/20 text-red-800 dark:text-red-200 border-red-500/40"
+
+  defp feed_badge_classes("pepper-nl"),
+    do: "bg-orange-500/20 text-orange-800 dark:text-orange-200 border-orange-500/40"
+
+  defp feed_badge_classes("ggdeals-freebies"),
+    do: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40"
+
+  defp feed_badge_classes("ggdeals-news"),
+    do: "bg-indigo-500/20 text-indigo-800 dark:text-indigo-200 border-indigo-500/40"
+
+  defp feed_badge_classes(_),
+    do: "bg-base-200 text-base-content border-base-300"
+
+  defp temperature_badge_classes(temp) when is_integer(temp) do
+    cond do
+      temp >= 300 ->
+        "bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40"
+
+      temp >= 100 ->
+        "bg-amber-500/25 text-amber-800 dark:text-amber-200 border-amber-500/50"
+
+      temp >= 0 ->
+        "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/35"
+
+      true ->
+        "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/35"
+    end
+  end
+
+  defp temperature_badge_classes(_), do: "bg-base-200 text-base-content/80 border-base-300"
+
+  defp merchant_badge_class("verified"),
+    do:
+      "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
+
+  defp merchant_badge_class("high_risk"),
+    do: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30 hover:bg-red-500/20"
+
+  defp merchant_badge_class("dropshipper"),
+    do:
+      "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20"
+
+  defp merchant_badge_class(_),
+    do: "bg-base-200 text-base-content/80 border-base-300 hover:bg-base-300"
+
+  defp merchant_tooltip(merchant) do
+    breakdown =
+      (merchant.feed_counts || %{})
+      |> Enum.map(fn {slug, count} -> "#{slug}: #{count}" end)
+      |> Enum.join(", ")
+
+    parts = [
+      "Total Deals: #{merchant.deal_count}",
+      if(breakdown != "", do: "Portals: #{breakdown}", else: nil),
+      if(merchant.avg_temperature && merchant.avg_temperature > 0,
+        do: "Avg Temp: #{round(merchant.avg_temperature)}° 🔥",
+        else: nil
+      ),
+      "Trust: #{String.capitalize(merchant.trust_level || "unverified")}"
+    ]
+
+    parts |> Enum.reject(&is_nil/1) |> Enum.join(" | ")
   end
 
   defp merchant_icon("verified"), do: "hero-check-badge"

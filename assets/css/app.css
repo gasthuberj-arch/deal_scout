@@ -27,32 +27,32 @@
   default: false;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: oklch(4% 0.005 260);
-  --color-base-200: oklch(11% 0.008 260);
-  --color-base-300: oklch(18% 0.012 260);
-  --color-base-content: oklch(98% 0.003 260);
-  --color-primary: oklch(68% 0.23 275);
-  --color-primary-content: oklch(98% 0.01 275);
-  --color-secondary: oklch(62% 0.18 290);
-  --color-secondary-content: oklch(98% 0.01 290);
-  --color-accent: oklch(72% 0.19 180);
-  --color-accent-content: oklch(14% 0.02 180);
-  --color-neutral: oklch(16% 0.01 260);
-  --color-neutral-content: oklch(96% 0.005 260);
-  --color-info: oklch(68% 0.19 240);
-  --color-info-content: oklch(98% 0.01 240);
-  --color-success: oklch(70% 0.17 155);
-  --color-success-content: oklch(14% 0.02 155);
-  --color-warning: oklch(76% 0.18 75);
-  --color-warning-content: oklch(16% 0.03 75);
-  --color-error: oklch(64% 0.23 25);
-  --color-error-content: oklch(98% 0.01 25);
-  --radius-selector: 0.5rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
+  --color-base-100: oklch(30.33% 0.016 252.42);
+  --color-base-200: oklch(25.26% 0.014 253.1);
+  --color-base-300: oklch(20.15% 0.012 254.09);
+  --color-base-content: oklch(98.5% 0.003 260);
+  --color-primary: oklch(58% 0.233 277.117);
+  --color-primary-content: oklch(96% 0.018 272.314);
+  --color-secondary: oklch(58% 0.233 277.117);
+  --color-secondary-content: oklch(96% 0.018 272.314);
+  --color-accent: oklch(60% 0.25 292.717);
+  --color-accent-content: oklch(96% 0.016 293.756);
+  --color-neutral: oklch(37% 0.044 257.287);
+  --color-neutral-content: oklch(98% 0.003 247.858);
+  --color-info: oklch(58% 0.158 241.966);
+  --color-info-content: oklch(97% 0.013 236.62);
+  --color-success: oklch(60% 0.118 184.704);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
   --depth: 1;
   --noise: 0;
 }
@@ -99,28 +99,6 @@
 
 /* Use the data attribute for dark mode */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
-
-/* Obsidian OLED dark theme styling */
-[data-theme="dark"] {
-  color-scheme: dark !important;
-  --color-base-100: oklch(4% 0.005 260) !important;
-  --color-base-200: oklch(11% 0.008 260) !important;
-  --color-base-300: oklch(18% 0.012 260) !important;
-  --color-base-content: oklch(98% 0.003 260) !important;
-  --color-primary: oklch(68% 0.23 275) !important;
-  --color-primary-content: oklch(98% 0.01 275) !important;
-  --color-secondary: oklch(62% 0.18 290) !important;
-  --color-secondary-content: oklch(98% 0.01 290) !important;
-  background-color: var(--color-base-100);
-  color: var(--color-base-content);
-}
-
-/* Card elevation in dark mode for premium OLED / mobile contrast */
-[data-theme="dark"] .card {
-  background-color: var(--color-base-200) !important;
-  border-color: var(--color-base-300) !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
-}
 
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
