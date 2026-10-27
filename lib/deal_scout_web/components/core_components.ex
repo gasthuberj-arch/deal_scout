@@ -488,10 +488,12 @@ defmodule DealScoutWeb.CoreComponents do
   attr :img_class, :string, default: "size-20 object-cover"
 
   def deal_image(assigns) do
+    has_image? = is_binary(assigns[:src]) and assigns[:src] != ""
+
     primary_src =
       cond do
-        assigns[:deal_id] -> "/deals/#{assigns[:deal_id]}/image"
-        assigns[:src] && assigns[:src] != "" -> assigns[:src]
+        assigns[:deal_id] && has_image? -> "/deals/#{assigns[:deal_id]}/image"
+        has_image? -> assigns[:src]
         true -> nil
       end
 

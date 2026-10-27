@@ -40,15 +40,13 @@ defmodule DealScout.Deals.ImageCache do
   Looks up a cached image by deal ID.
   Returns `{:ok, content_type, body}` or `:miss`.
   """
-  def get(deal_id) when is_binary(deal_id) do
-    case Integer.parse(deal_id) do
-      {int_id, ""} -> get_raw(int_id)
-      _ -> get_raw(deal_id)
-    end
+  def get(deal_id) do
+    deal_id
+    |> normalize_id()
+    |> get_raw()
   end
 
-  def get(deal_id) when is_integer(deal_id), do: get_raw(deal_id)
-  def get(_), do: :miss
+  defp get_raw(nil), do: :miss
 
   defp get_raw(deal_id) do
     now = System.monotonic_time(:second)
@@ -73,17 +71,25 @@ defmodule DealScout.Deals.ImageCache do
   Stores a thumbnail image in the cache if it meets the size constraints.
   Returns `:ok` or `{:error, :too_large}`.
   """
-  def put(deal_id, content_type, body) when is_binary(deal_id) do
-    case Integer.parse(deal_id) do
-      {int_id, ""} -> put_raw(int_id, content_type, body)
-      _ -> put_raw(deal_id, content_type, body)
+  def put(deal_id, content_type, body) when is_binary(body) do
+    case normalize_id(deal_id) do
+      nil -> {:error, :invalid_id}
+      id -> put_raw(id, content_type, body)
     end
   end
 
-  def put(deal_id, content_type, body) when is_integer(deal_id),
-    do: put_raw(deal_id, content_type, body)
+  def put(_, _, _), do: {:error, :invalid_body}
 
-  def put(_, _, _), do: {:error, :invalid_id}
+  defp normalize_id(id) when is_integer(id), do: id
+
+  defp normalize_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {int_id, ""} -> int_id
+      _ -> id
+    end
+  end
+
+  defp normalize_id(_), do: nil
 
   defp put_raw(deal_id, content_type, body) when is_binary(body) do
     if byte_size(body) > @max_item_bytes do
@@ -101,8 +107,6 @@ defmodule DealScout.Deals.ImageCache do
       end
     end
   end
-
-  defp put_raw(_, _, _), do: {:error, :invalid_body}
 
   @doc """
   Returns the current number of cached entries.
