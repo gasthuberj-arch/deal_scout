@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <.live_title default="DealScout" suffix=" · Phoenix Framework" phx-no-format>{assigns[:page_title]}</.live_title>
     <link rel="manifest" href={~p"/manifest.webmanifest"} />
@@ -13,28 +14,94 @@
     </script>
     <script>
       (() => {
+        const VALID_THEMES = ["dark", "light"];
         const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
-        const setTheme = (theme) => {
+        window.setAppTheme = function(theme) {
+          if (!theme || theme === "undefined" || theme === "null") return;
           if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.setAttribute("data-theme", systemTheme());
+            try { localStorage.removeItem("phx:theme"); } catch(e){}
+            const sys = systemTheme();
+            document.documentElement.setAttribute("data-theme", sys);
             document.documentElement.setAttribute("data-theme-source", "system");
-          } else {
-            localStorage.setItem("phx:theme", theme);
+            updateActiveIndicators(sys, "system");
+          } else if (VALID_THEMES.includes(theme)) {
+            try { localStorage.setItem("phx:theme", theme); } catch(e){}
             document.documentElement.setAttribute("data-theme", theme);
             document.documentElement.setAttribute("data-theme-source", "user");
+            updateActiveIndicators(theme, "user");
           }
         };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
+
+        function updateActiveIndicators(theme, source) {
+          document.querySelectorAll("[data-phx-theme]").forEach(el => {
+            const btnTheme = el.getAttribute("data-phx-theme");
+            const isActive = source === "system" ? btnTheme === "system" : (btnTheme === theme);
+            if (isActive) {
+              el.classList.add("ring-2", "ring-primary", "font-bold");
+            } else {
+              el.classList.remove("ring-2", "ring-primary", "font-bold");
+            }
+          });
         }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+
+        // Clean up any corrupted "undefined" or invalid localStorage values
+        try {
+          const raw = localStorage.getItem("phx:theme");
+          if (raw === "undefined" || raw === "null" || (raw && raw !== "system" && !VALID_THEMES.includes(raw))) {
+            localStorage.removeItem("phx:theme");
+          }
+        } catch(e){}
+
+        // Initial theme application
+        try {
+          const stored = localStorage.getItem("phx:theme");
+          if (stored && VALID_THEMES.includes(stored)) {
+            document.documentElement.setAttribute("data-theme", stored);
+            document.documentElement.setAttribute("data-theme-source", "user");
+          } else {
+            const initial = systemTheme();
+            document.documentElement.setAttribute("data-theme", initial);
+            document.documentElement.setAttribute("data-theme-source", "system");
+          }
+        } catch(e){
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+          const current = document.documentElement.getAttribute("data-theme") || "dark";
+          const source = document.documentElement.getAttribute("data-theme-source") || "user";
+          updateActiveIndicators(current, source);
+        });
+
+        window.addEventListener("phx:update", () => {
+          const current = document.documentElement.getAttribute("data-theme") || "dark";
+          const source = document.documentElement.getAttribute("data-theme-source") || "user";
+          updateActiveIndicators(current, source);
+        });
+
+        window.addEventListener("storage", (e) => {
+          if (e.key === "phx:theme") {
+            const val = e.newValue;
+            if (val && VALID_THEMES.includes(val)) {
+              window.setAppTheme(val);
+            } else {
+              window.setAppTheme("system");
+            }
+          }
+        });
+
+        window.addEventListener("phx:set-theme", (e) => {
+          const target = e.target.closest ? e.target.closest("[data-phx-theme]") : e.target;
+          const theme = e.detail?.theme || target?.getAttribute?.("data-phx-theme") || target?.dataset?.phxTheme;
+          if (theme && (VALID_THEMES.includes(theme) || theme === "system")) {
+            window.setAppTheme(theme);
+          }
+        });
 
         matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
           if (document.documentElement.getAttribute("data-theme-source") === "system") {
-            document.documentElement.setAttribute("data-theme", systemTheme());
+            window.setAppTheme("system");
           }
         });
       })();

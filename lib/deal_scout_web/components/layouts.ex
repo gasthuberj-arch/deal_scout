@@ -136,24 +136,16 @@ defmodule DealScoutWeb.Layouts do
           </div>
 
           <div class="navbar-end flex items-center gap-2">
-            <button
-              type="button"
-              phx-click={SupportModal.show_coffee_modal()}
-              class="btn btn-ghost btn-xs sm:btn-sm gap-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-full font-medium cursor-pointer"
-              title="Support this project"
-            >
-              <span class="text-sm sm:text-base">☕</span>
-              <span class="hidden sm:inline text-xs">Buy a coffee</span>
-            </button>
             <.theme_toggle />
             <%= if @current_scope && @current_scope.user do %>
               <div class="dropdown dropdown-end">
-                <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
-                  <div class="bg-primary text-primary-content rounded-full w-9">
-                    <span class="text-xs uppercase font-bold">{String.slice(
-                      @current_scope.user.email,
-                      0..1
-                    )}</span>
+                <div
+                  tabindex="0"
+                  role="button"
+                  class="btn btn-ghost btn-circle avatar placeholder min-h-0 size-9 p-0 flex items-center justify-center cursor-pointer"
+                >
+                  <div class="bg-primary text-primary-content rounded-full size-9 flex items-center justify-center text-center font-bold text-xs uppercase leading-none shadow-sm select-none">
+                    <span>{String.slice(@current_scope.user.email, 0..1)}</span>
                   </div>
                 </div>
                 <ul
@@ -274,25 +266,34 @@ defmodule DealScoutWeb.Layouts do
       <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 [[data-theme-source=system]_&]:!left-0 transition-[left]" />
 
       <button
+        type="button"
         class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
+        onclick="window.setAppTheme('system')"
+        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "system"})}
         data-phx-theme="system"
+        title="System Theme"
       >
         <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
       </button>
 
       <button
+        type="button"
         class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
+        onclick="window.setAppTheme('light')"
+        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "light"})}
         data-phx-theme="light"
+        title="Light Mode"
       >
         <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
       </button>
 
       <button
+        type="button"
         class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
+        onclick="window.setAppTheme('dark')"
+        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "dark"})}
         data-phx-theme="dark"
+        title="Dark Mode"
       >
         <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
       </button>

@@ -506,8 +506,10 @@ defmodule DealScoutWeb.CoreComponents do
             @img_class
           ]}
           loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
           onload="this.classList.remove('opacity-0')"
-          onerror="this.remove()"
+          onerror="this.style.display='none'"
         />
       <% end %>
     </div>
