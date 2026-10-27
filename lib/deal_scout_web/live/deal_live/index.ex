@@ -434,6 +434,7 @@ defmodule DealScoutWeb.DealLive.Index do
                 <div class="flex gap-4">
                   <.deal_image
                     src={deal.image_url}
+                    deal_id={deal.id}
                     alt={deal.title}
                     class="size-20 shrink-0"
                     img_class="group-hover:scale-105 transition-transform"

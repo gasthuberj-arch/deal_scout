@@ -478,13 +478,25 @@ defmodule DealScoutWeb.CoreComponents do
   @doc """
   Renders a deal or product image with graceful fallback placeholder when
   loading fails or no image is provided.
+  Supports an optional deal_id for server-side image proxying, which guarantees
+  images load reliably on mobile devices with strict adblockers or Private DNS.
   """
   attr :src, :string, default: nil
+  attr :deal_id, :any, default: nil
   attr :alt, :string, default: ""
   attr :class, :string, default: "size-20"
   attr :img_class, :string, default: "size-20 object-cover"
 
   def deal_image(assigns) do
+    image_src =
+      cond do
+        assigns.deal_id -> "/deals/#{assigns.deal_id}/image"
+        assigns.src && assigns.src != "" -> assigns.src
+        true -> nil
+      end
+
+    assigns = assign(assigns, :image_src, image_src)
+
     ~H"""
     <div class={[
       "relative shrink-0 overflow-hidden rounded-xl border border-base-200/80 bg-base-200/50 dark:bg-base-200/30 flex items-center justify-center select-none",
@@ -497,19 +509,20 @@ defmodule DealScoutWeb.CoreComponents do
         </div>
       </div>
 
-      <%= if @src && @src != "" do %>
+      <%= if @image_src do %>
         <img
-          src={@src}
+          src={@image_src}
           alt={@alt}
+          width="80"
+          height="80"
           class={[
             "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
             @img_class
           ]}
-          loading="lazy"
           decoding="async"
           referrerpolicy="no-referrer"
-          onload="this.classList.remove('opacity-0')"
-          onerror="this.style.display='none'"
+          data-fallback={@src}
+          onerror="if(this.dataset.fallback && this.src !== this.dataset.fallback){this.src=this.dataset.fallback;}else{this.style.display='none';}"
         />
       <% end %>
     </div>

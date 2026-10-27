@@ -12,6 +12,7 @@ defmodule DealScout.Application do
         DealScoutWeb.Telemetry,
         DealScout.Repo,
         DealScout.Deals.Cache,
+        DealScout.Deals.ImageCache,
         DealScout.KeywordEngine.Server,
         {Ecto.Migrator,
          repos: Application.fetch_env!(:deal_scout, :ecto_repos), skip: skip_migrations?()},
