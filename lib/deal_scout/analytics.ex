@@ -8,19 +8,22 @@ defmodule DealScout.Analytics do
   alias DealScout.Deals.Deal
   alias DealScout.Feeds.Feed
   alias DealScout.Accounts.User
+  alias DealScout.Analytics.Server
 
   @table :deal_scout_analytics_cache
   @default_analytics_ttl_ms 60_000
 
+  defdelegate warm_now(), to: Server
+  defdelegate refresh_now(), to: Server
+
   @doc """
   Computes aggregated deal intelligence metrics for the `/analytics` dashboard.
-  Uses an in-memory ETS cache with a 60-second TTL to avoid heavy recalculations.
+  Uses an in-memory ETS cache snapshot with background warming to ensure web requests
+  remain instant and never trigger database stampedes under high concurrency.
   """
   def get_deal_intelligence_stats do
-    now = System.monotonic_time(:millisecond)
-
     case lookup_cached_stats() do
-      {:ok, stats, expires_at} when expires_at > now ->
+      {:ok, stats} ->
         stats
 
       _ ->
@@ -34,37 +37,31 @@ defmodule DealScout.Analytics do
   Stores computed deal intelligence stats in the analytics ETS cache.
   """
   def put_cached_stats(stats) do
-    if :ets.whereis(@table) != :undefined do
+    try do
       now = System.monotonic_time(:millisecond)
       :ets.insert(@table, {:deal_intelligence_stats, stats, now + @default_analytics_ttl_ms})
+      :ok
+    rescue
+      _ -> :ok
     end
-
-    :ok
-  rescue
-    _ -> :ok
   end
 
   @doc """
   Invalidates the analytics ETS cache.
   """
   def invalidate_analytics_cache do
-    if :ets.whereis(@table) != :undefined do
+    try do
       :ets.delete(@table, :deal_intelligence_stats)
+      :ok
+    rescue
+      _ -> :ok
     end
-
-    :ok
-  rescue
-    _ -> :ok
   end
 
   defp lookup_cached_stats do
-    if :ets.whereis(@table) != :undefined do
-      case :ets.lookup(@table, :deal_intelligence_stats) do
-        [{:deal_intelligence_stats, stats, expires_at}] -> {:ok, stats, expires_at}
-        _ -> :error
-      end
-    else
-      :error
+    case :ets.lookup(@table, :deal_intelligence_stats) do
+      [{:deal_intelligence_stats, stats, _expires_at}] -> {:ok, stats}
+      _ -> :error
     end
   rescue
     _ -> :error

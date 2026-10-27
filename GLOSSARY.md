@@ -132,3 +132,7 @@ _Avoid_: Exposing raw `:persistent_term` maps or rule tuples across seams
 **Replica sync**:
 The real-time Litestream WAL/snapshot replication and atomic SQLite snapshot subsystem (`DealScout.Backup`) that authenticates backup clients, validates and streams missing replica frames, creates hot database snapshots, and reports replication lag.
 _Avoid_: Scattering filesystem and snapshot SQL across web channels and controllers
+
+**Deal thumbnail proxy**:
+The media gateway (`DealScout.Media.ImageProxy`) that safely proxies and caches remote deal images for mobile and ad-blocked clients, encapsulating single-flight request coalescing, HTTP retrieval, Content-Type negotiation, and bounded memory caching behind a unified fetch interface.
+_Avoid_: Exposing raw ETS tables or network fetching loops across controller seams

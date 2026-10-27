@@ -4,7 +4,7 @@ defmodule DealScoutWeb.DealImageControllerTest do
   alias DealScout.Repo
   alias DealScout.Feeds.Feed
   alias DealScout.Deals
-  alias DealScout.Deals.ImageCache
+  alias DealScout.Media.ImageProxy
 
   setup do
     feed =
@@ -30,9 +30,9 @@ defmodule DealScoutWeb.DealImageControllerTest do
     assert response(conn, 404)
   end
 
-  test "returns cached image from ImageCache if present", %{conn: conn, deal: deal} do
+  test "returns cached image from ImageProxy if present", %{conn: conn, deal: deal} do
     sample_png = <<137, 80, 78, 71, 13, 10, 26, 10>>
-    ImageCache.put(deal.id, "image/png", sample_png)
+    ImageProxy.put_cached_image(deal.id, "image/png", sample_png)
 
     conn = get(conn, ~p"/deals/#{deal.id}/image")
     assert response(conn, 200) == sample_png

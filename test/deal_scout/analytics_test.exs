@@ -2,14 +2,11 @@ defmodule DealScout.AnalyticsTest do
   use DealScout.DataCase
 
   alias DealScout.Analytics
-  alias DealScout.Analytics.Warmer
   alias DealScout.Repo
   alias DealScout.Deals
   alias DealScout.Feeds.Feed
 
   setup do
-    start_supervised!({Warmer, interval_ms: 60_000})
-
     feed =
       Repo.insert!(%Feed{name: "MyDealz", slug: "mydealz", url: "https://www.mydealz.de/rss"})
 
@@ -80,11 +77,10 @@ defmodule DealScout.AnalyticsTest do
     assert stats3.total_deals == stats1.total_deals + 1
   end
 
-  test "Analytics.Warmer refreshes cache in background" do
+  test "Analytics refreshes cache on demand" do
     Analytics.invalidate_analytics_cache()
 
-    Warmer.warm_now()
-    _ = :sys.get_state(Warmer)
+    Analytics.refresh_now()
 
     stats = Analytics.get_deal_intelligence_stats()
     assert is_map(stats)

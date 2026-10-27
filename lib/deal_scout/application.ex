@@ -11,9 +11,10 @@ defmodule DealScout.Application do
       [
         DealScoutWeb.Telemetry,
         DealScout.Repo,
-        DealScout.Deals.Cache,
-        DealScout.Deals.ImageCache,
+        DealScout.Deals.StreamCache,
+        DealScout.Media.ImageProxy,
         DealScout.KeywordEngine.Server,
+        DealScout.Analytics.Server,
         {Ecto.Migrator,
          repos: Application.fetch_env!(:deal_scout, :ecto_repos), skip: skip_migrations?()},
         {DNSCluster, query: Application.get_env(:deal_scout, :dns_cluster_query) || :ignore},
@@ -60,8 +61,7 @@ defmodule DealScout.Application do
       [
         {DealScout.Feeds.Poller, []},
         {DealScout.Maintenance.Pruner, []},
-        {DealScout.Notifications.DigestWorker, []},
-        {DealScout.Analytics.Warmer, []}
+        {DealScout.Notifications.DigestWorker, []}
       ]
     else
       []

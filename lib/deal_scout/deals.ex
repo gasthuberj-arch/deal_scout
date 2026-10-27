@@ -8,7 +8,6 @@ defmodule DealScout.Deals do
   alias DealScout.Repo
 
   alias DealScout.Deals.{
-    Cache,
     Deal,
     Deduplicator,
     Ingestion,
@@ -20,19 +19,21 @@ defmodule DealScout.Deals do
 
   @pubsub DealScout.PubSub
   @topic "deals:feed"
+  @stream_cache_table :deal_scout_stream_cache
+  @stream_cache_ttl_ms 5_000
 
   def subscribe do
     Phoenix.PubSub.subscribe(@pubsub, @topic)
   end
 
   def broadcast_deal({:ok, %Deal{} = deal} = result) do
-    Cache.invalidate_deals()
+    invalidate_stream_cache(feed_id: deal.feed_id)
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     result
   end
 
   def broadcast_deal(%Deal{} = deal) do
-    Cache.invalidate_deals()
+    invalidate_stream_cache(feed_id: deal.feed_id)
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     {:ok, deal}
   end
@@ -51,9 +52,86 @@ defmodule DealScout.Deals do
   - `:offset` - pagination offset
   """
   def list_deals(opts \\ []) do
-    Cache.fetch_deals(opts, fn ->
+    if stream_cacheable?(opts) do
+      lookup_or_fetch_deals(opts)
+    else
       fetch_deals_from_db(opts)
-    end)
+    end
+  end
+
+  @doc """
+  Invalidates cached deal streams. If a feed_id is provided, invalidates streams
+  matching that feed and the global 'all' stream. If no filter is provided, clears all cached streams.
+  """
+  def invalidate_stream_cache(opts \\ []) do
+    feed_id = Keyword.get(opts, :feed_id)
+
+    try do
+      if feed_id do
+        :ets.match_delete(@stream_cache_table, {{:deals, feed_id, :_, :_, :_, :_, :_}, :_, :_})
+        :ets.match_delete(@stream_cache_table, {{:deals, "all", :_, :_, :_, :_, :_}, :_, :_})
+      else
+        :ets.match_delete(@stream_cache_table, {{:deals, :_, :_, :_, :_, :_, :_}, :_, :_})
+      end
+
+      :ok
+    rescue
+      _ -> :ok
+    end
+  end
+
+  defp stream_cacheable?(opts) do
+    search = Keyword.get(opts, :search)
+    min_temp = Keyword.get(opts, :min_temperature)
+    offset = Keyword.get(opts, :offset, 0)
+
+    (is_nil(search) or search == "") and is_nil(min_temp) and offset == 0
+  end
+
+  defp stream_cache_key(opts) do
+    feed_key = Keyword.get(opts, :feed) || Keyword.get(opts, :feed_id) || "all"
+    merchant_key = Keyword.get(opts, :merchant) || "all"
+
+    {
+      :deals,
+      feed_key,
+      merchant_key,
+      Keyword.get(opts, :exclude_dropshippers, false),
+      Keyword.get(opts, :group_deals, true),
+      Keyword.get(opts, :limit, 60),
+      Keyword.get(opts, :offset, 0)
+    }
+  end
+
+  defp lookup_or_fetch_deals(opts) do
+    key = stream_cache_key(opts)
+    now = System.monotonic_time(:millisecond)
+
+    case lookup_stream_cache(key) do
+      {:ok, deals, expires_at} when expires_at > now ->
+        deals
+
+      _ ->
+        deals = fetch_deals_from_db(opts)
+        insert_stream_cache(key, deals, now + @stream_cache_ttl_ms)
+        deals
+    end
+  end
+
+  defp lookup_stream_cache(key) do
+    case :ets.lookup(@stream_cache_table, key) do
+      [{^key, data, expires_at}] -> {:ok, data, expires_at}
+      _ -> :miss
+    end
+  rescue
+    _ -> :miss
+  end
+
+  defp insert_stream_cache(key, data, expires_at) do
+    :ets.insert(@stream_cache_table, {key, data, expires_at})
+    :ok
+  rescue
+    _ -> :ok
   end
 
   @doc """
@@ -355,7 +433,7 @@ defmodule DealScout.Deals do
       |> Repo.delete_all()
 
     if count > 0 do
-      Cache.invalidate_deals()
+      invalidate_stream_cache()
     end
 
     result
