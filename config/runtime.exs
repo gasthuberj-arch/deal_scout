@@ -37,6 +37,11 @@ config :deal_scout,
   alert_auto_pause_enabled: System.get_env("ALERT_AUTO_PAUSE_ENABLED", "false") == "true",
   alert_eval_log_path: System.get_env("ALERT_EVAL_LOG_PATH", "log/alert_evaluations.log")
 
+config :deal_scout, DealScout.Legal,
+  operator_name: System.get_env("LEGAL_OPERATOR_NAME", "DealScout Maintainer"),
+  operator_email: System.get_env("LEGAL_OPERATOR_EMAIL", "support@example.com"),
+  operator_address: System.get_env("LEGAL_OPERATOR_ADDRESS", "Privates Open-Source-Projekt")
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :deal_scout, DealScoutWeb.Endpoint,

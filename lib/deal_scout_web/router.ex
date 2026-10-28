@@ -95,6 +95,8 @@ defmodule DealScoutWeb.Router do
       on_mount: [{DealScoutWeb.UserAuth, :mount_current_scope}] do
       live "/", DealLive.Index, :index
       live "/analytics", AnalyticsLive.Index, :index
+      live "/impressum", LegalLive.Impressum, :index
+      live "/privacy", LegalLive.Privacy, :index
 
       live "/users/register", UserLive.Registration, :new
       live "/users/log-in", UserLive.Login, :new

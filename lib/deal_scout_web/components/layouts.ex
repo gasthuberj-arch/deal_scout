@@ -314,6 +314,21 @@ defmodule DealScoutWeb.Layouts do
           <span>Private deal monitor for German &amp; EU portals</span>
         </div>
         <div class="flex items-center gap-4">
+          <div class="flex items-center gap-3">
+            <.link
+              navigate={~p"/impressum"}
+              class="hover:underline hover:text-base-content transition-colors"
+            >
+              Impressum
+            </.link>
+            <span>•</span>
+            <.link
+              navigate={~p"/privacy"}
+              class="hover:underline hover:text-base-content transition-colors"
+            >
+              Datenschutz
+            </.link>
+          </div>
           <button
             type="button"
             phx-click={SupportModal.show_coffee_modal()}
