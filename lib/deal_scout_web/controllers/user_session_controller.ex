@@ -81,7 +81,7 @@ defmodule DealScoutWeb.UserSessionController do
 
         conn
         |> put_flash(:info, "Your account and all associated data have been permanently deleted.")
-        |> UserAuth.log_out_user()
+        |> UserAuth.log_out_user(to: ~p"/users/log-in")
     end
   end
 end

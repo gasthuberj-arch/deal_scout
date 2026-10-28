@@ -140,7 +140,7 @@ defmodule DealScoutWeb.UserSessionControllerTest do
           "user" => %{"current_password" => valid_user_password()}
         })
 
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/users/log-in"
       refute get_session(conn, :user_token)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "permanently deleted"
       refute Accounts.get_user_by_email(user.email)
@@ -172,7 +172,7 @@ defmodule DealScoutWeb.UserSessionControllerTest do
         |> log_in_user(user)
         |> delete(~p"/users/settings/delete-account", %{})
 
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/users/log-in"
       refute get_session(conn, :user_token)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "permanently deleted"
       refute Accounts.get_user_by_email(user.email)

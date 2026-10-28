@@ -8,12 +8,12 @@ defmodule DealScoutWeb.UserDataController do
   alert rules, match history, and registered devices for GDPR Art. 15 and Art. 20 data portability.
   """
   def export(conn, _params) do
-    user = conn.assigns.current_scope.user
-    export_payload = Accounts.export_user_data(user)
+    scope = conn.assigns.current_scope
+    export_payload = Accounts.export_user_data(scope)
     json = Jason.encode!(export_payload, pretty: true)
 
     timestamp = Calendar.strftime(DateTime.utc_now(), "%Y%m%d_%H%M%S")
-    filename = "deal_scout_data_export_#{timestamp}.json"
+    filename = "deal_scout_export_#{timestamp}.json"
 
     conn
     |> put_resp_content_type("application/json")

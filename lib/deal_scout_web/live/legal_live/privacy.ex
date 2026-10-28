@@ -20,7 +20,7 @@ defmodule DealScoutWeb.LegalLive.Privacy do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-4xl mx-auto space-y-8 py-4">
-        <!-- Header -->
+        <%!-- Header --%>
         <div class="bg-base-200/50 p-6 sm:p-8 rounded-2xl border border-base-300">
           <div class="flex items-center gap-3">
             <span class="p-2.5 rounded-xl bg-primary/10 text-primary">
@@ -35,8 +35,11 @@ defmodule DealScoutWeb.LegalLive.Privacy do
           </div>
         </div>
 
-        <!-- Privacy-by-Design Highlights -->
-        <div class="alert alert-info border border-info/30 bg-info/10 text-base-content rounded-2xl">
+        <%!-- Privacy-by-Design Highlights --%>
+        <div
+          id="privacy-by-design"
+          class="alert alert-info border border-info/30 bg-info/10 text-base-content rounded-2xl"
+        >
           <.icon name="hero-check-badge" class="size-6 text-info shrink-0" />
           <div class="text-xs sm:text-sm space-y-1">
             <h2 class="font-bold text-sm">Privatsphäre by Design</h2>
@@ -51,18 +54,19 @@ defmodule DealScoutWeb.LegalLive.Privacy do
           </div>
         </div>
 
-        <!-- 1. Verantwortliche Stelle -->
+        <%!-- 1. Verantwortliche Stelle --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-3">
           <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
             <.icon name="hero-user" class="size-5 text-primary" />
             <span>1. Verantwortliche Stelle</span>
           </h2>
           <div class="text-sm text-base-content/80 space-y-1">
-            <p class="font-semibold text-base-content">{@operator_name}</p>
-            <p>{@operator_address}</p>
+            <p id="operator-name" class="font-semibold text-base-content">{@operator_name}</p>
+            <p id="operator-address">{@operator_address}</p>
             <p class="pt-1">
               E-Mail:
               <a
+                id="operator-email"
                 href={"mailto:#{@operator_email}"}
                 class="link link-primary font-mono text-xs sm:text-sm"
               >
@@ -72,7 +76,7 @@ defmodule DealScoutWeb.LegalLive.Privacy do
           </div>
         </div>
 
-        <!-- 2. Welche Daten verarbeitet werden -->
+        <%!-- 2. Welche Daten verarbeitet werden --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-6">
           <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
             <.icon name="hero-document-text" class="size-5 text-primary" />
@@ -130,7 +134,7 @@ defmodule DealScoutWeb.LegalLive.Privacy do
           </div>
         </div>
 
-        <!-- 3. Cookies & TDDDG -->
+        <%!-- 3. Cookies & TDDDG --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-3">
           <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
             <.icon name="hero-circle-stack" class="size-5 text-primary" />
@@ -148,7 +152,7 @@ defmodule DealScoutWeb.LegalLive.Privacy do
           </p>
         </div>
 
-        <!-- 4. Speicherdauer & Kaskadierende Löschung -->
+        <%!-- 4. Speicherdauer & Kaskadierende Löschung --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-3">
           <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
             <.icon name="hero-clock" class="size-5 text-primary" />
@@ -167,7 +171,7 @@ defmodule DealScoutWeb.LegalLive.Privacy do
           </ul>
         </div>
 
-        <!-- 5. Ihre Rechte -->
+        <%!-- 5. Ihre Rechte --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-3">
           <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
             <.icon name="hero-shield-exclamation" class="size-5 text-primary" />

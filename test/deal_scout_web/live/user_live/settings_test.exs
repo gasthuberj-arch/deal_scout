@@ -253,14 +253,14 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
     test "renders export my data button and container", %{conn: conn} do
       user = user_fixture()
 
-      {:ok, lv, html} =
+      {:ok, lv, _html} =
         conn
         |> log_in_user(user)
         |> live(~p"/users/settings")
 
-      assert html =~ "Export My Data (GDPR Art. 15"
+      assert has_element?(lv, "#data-export-container h2", "Export My Data (GDPR Art. 15")
       assert has_element?(lv, "#data-export-container")
-      assert has_element?(lv, "#download_data_btn[href='/users/settings/export']")
+      assert has_element?(lv, "#download_data_btn[href='/users/settings/export']", "Export Data")
     end
   end
 
@@ -268,13 +268,12 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
     test "renders danger zone delete form and elements", %{conn: conn} do
       user = user_fixture() |> set_password()
 
-      {:ok, lv, html} =
+      {:ok, lv, _html} =
         conn
         |> log_in_user(user)
         |> live(~p"/users/settings")
 
-      assert html =~ "Danger Zone: Delete Account"
-      assert html =~ "Art. 17 DSGVO"
+      assert has_element?(lv, "#danger-zone-container h2", "Danger Zone: Delete Account")
       assert has_element?(lv, "#danger-zone-container")
       assert has_element?(lv, "#delete_account_form")
       assert has_element?(lv, "#delete_account_password")

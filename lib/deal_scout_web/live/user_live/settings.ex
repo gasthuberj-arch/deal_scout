@@ -160,7 +160,7 @@ defmodule DealScoutWeb.UserLive.Settings do
 
       <div class="divider my-8" />
 
-      <!-- Data Portability: Export My Data -->
+      <%!-- Data Portability: Export My Data --%>
       <div
         id="data-export-container"
         class="bg-base-200/50 border border-base-300 rounded-2xl p-6 sm:p-8 space-y-4"
@@ -187,14 +187,14 @@ defmodule DealScoutWeb.UserLive.Settings do
             download
           >
             <.icon name="hero-arrow-down-tray" class="size-4" />
-            <span>Download Data (.json)</span>
+            <span>Export Data</span>
           </a>
         </div>
       </div>
 
       <div class="divider my-8" />
 
-      <!-- Danger Zone: Delete Account -->
+      <%!-- Danger Zone: Delete Account --%>
       <div
         id="danger-zone-container"
         class="bg-error/5 border border-error/30 rounded-2xl p-6 sm:p-8 space-y-4"

@@ -20,7 +20,7 @@ defmodule DealScoutWeb.LegalLive.Impressum do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-4xl mx-auto space-y-8 py-4">
-        <!-- Header -->
+        <%!-- Header --%>
         <div class="bg-base-200/50 p-6 sm:p-8 rounded-2xl border border-base-300">
           <div class="flex items-center gap-3">
             <span class="p-2.5 rounded-xl bg-primary/10 text-primary">
@@ -35,15 +35,15 @@ defmodule DealScoutWeb.LegalLive.Impressum do
           </div>
         </div>
 
-        <!-- Betreiber / Diensteanbieter -->
+        <%!-- Betreiber / Diensteanbieter --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-4">
           <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
             <.icon name="hero-user" class="size-5 text-primary" />
             <span>Diensteanbieter / Betreiber</span>
           </h2>
           <div class="text-sm text-base-content/80 space-y-1">
-            <p class="font-semibold text-base-content">{@operator_name}</p>
-            <p>{@operator_address}</p>
+            <p id="operator-name" class="font-semibold text-base-content">{@operator_name}</p>
+            <p id="operator-address">{@operator_address}</p>
           </div>
 
           <div class="divider my-2"></div>
@@ -54,6 +54,7 @@ defmodule DealScoutWeb.LegalLive.Impressum do
           <p class="text-sm text-base-content/80 flex items-center gap-2">
             <.icon name="hero-envelope" class="size-4 text-base-content/60" />
             <a
+              id="operator-email"
               href={"mailto:#{@operator_email}"}
               class="link link-primary font-mono text-xs sm:text-sm"
             >
@@ -62,7 +63,7 @@ defmodule DealScoutWeb.LegalLive.Impressum do
           </p>
         </div>
 
-        <!-- Zweck & Haftungsausschluss -->
+        <%!-- Zweck & Haftungsausschluss --%>
         <div class="card bg-base-100 border border-base-300 p-6 sm:p-8 rounded-2xl shadow-sm space-y-6">
           <div>
             <h2 class="text-lg font-bold text-base-content flex items-center gap-2">

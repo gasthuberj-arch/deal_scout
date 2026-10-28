@@ -29,7 +29,7 @@ defmodule DealScoutWeb.UserDataControllerTest do
       assert response(conn, 200)
       assert get_resp_header(conn, "content-type") == ["application/json; charset=utf-8"]
       [disposition] = get_resp_header(conn, "content-disposition")
-      assert disposition =~ "attachment; filename=\"deal_scout_data_export_"
+      assert disposition =~ "attachment; filename=\"deal_scout_export_"
 
       {:ok, decoded} = Jason.decode(response(conn, 200))
       assert decoded["service"] == "DealScout"

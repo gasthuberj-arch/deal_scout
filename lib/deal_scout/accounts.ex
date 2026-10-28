@@ -6,7 +6,7 @@ defmodule DealScout.Accounts do
   import Ecto.Query, warn: false
   alias DealScout.Repo
 
-  alias DealScout.Accounts.{User, UserToken, UserNotifier}
+  alias DealScout.Accounts.{User, UserToken, UserNotifier, Scope}
 
   ## Database getters
 
@@ -307,6 +307,8 @@ defmodule DealScout.Accounts do
   @doc """
   Exports all personal and configuration data for a user in accordance with Art. 15 and Art. 20 GDPR.
   """
+  def export_user_data(%Scope{user: %User{} = user}), do: export_user_data(user)
+
   def export_user_data(%User{} = user) do
     alert_rules =
       DealScout.Alerts.list_alert_rules_for_user(user.id)
