@@ -93,6 +93,43 @@ defmodule DealScout.Feeds.Ebay.MatcherTest do
     assert match.alert_rule_id == rule.id
   end
 
+  test "matches rules with country_filter: de_only", %{user: user} do
+    {:ok, rule} =
+      Alerts.create_alert_rule(user, %{
+        name: "DE Only Sniper",
+        keywords: "ThinkPad",
+        country_filter: "de_only",
+        source_filter: "ebay"
+      })
+
+    item = %{
+      guid: "ebay-v1|3001|0",
+      title: "Lenovo ThinkPad T14 Gen 4",
+      url: "https://www.ebay.de/itm/3001",
+      price: Decimal.new("599.00"),
+      clean_text: "Lenovo ThinkPad T14 Gen 4",
+      description: "Zustand: Gebraucht",
+      temperature: 100,
+      country: %{
+        code: "DE",
+        country_code: "DE",
+        flag: "🇩🇪",
+        name: "Deutschland",
+        is_germany: true,
+        is_eu: true
+      },
+      published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+
+    assert {:ok, result} = Matcher.evaluate_and_persist([item])
+    assert length(result.matched_deals) == 1
+    [deal] = result.matched_deals
+    assert deal.guid == "ebay-v1|3001|0"
+
+    [match] = Alerts.list_user_matches(user.id)
+    assert match.alert_rule_id == rule.id
+  end
+
   test "returns empty when no active rules exist" do
     item = %{
       guid: "ebay-v1|2001|0",

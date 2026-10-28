@@ -185,11 +185,12 @@ defmodule DealScout.Feeds.Ebay.Client do
       description: description,
       clean_text: clean_text,
       country: %{
+        code: "DE",
         country_code: "DE",
+        flag: "🇩🇪",
+        name: "Deutschland",
         is_germany: true,
-        is_eu: true,
-        flags: "🇩🇪",
-        requires_action: false
+        is_eu: true
       },
       keyboard_warning: nil
     }

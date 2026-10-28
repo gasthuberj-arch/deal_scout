@@ -41,6 +41,7 @@ defmodule DealScout.Feeds.Ebay.ClientTest do
     assert deal.price == Decimal.new("799.50")
     assert deal.raw_merchant == "eBay"
     assert deal.temperature == 100
+    assert deal.country.code == "DE"
     assert deal.country.country_code == "DE"
     assert deal.country.is_germany == true
 

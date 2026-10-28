@@ -390,11 +390,7 @@ defmodule DealScoutWeb.DealLive.Index do
                       "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md border tracking-tight shadow-xs",
                       feed_badge_classes(deal.feed && deal.feed.slug)
                     ]}>
-                      {cond do
-                        deal.feed && deal.feed.slug == "ebay" -> "🛒 eBay Sofort-Kauf"
-                        deal.feed -> deal.feed.name
-                        true -> "Deal"
-                      end}
+                      {DealScout.Feeds.Feed.display_name(deal.feed)}
                     </span>
 
                     <%= if deal.temperature do %>

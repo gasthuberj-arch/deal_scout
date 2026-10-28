@@ -230,17 +230,13 @@ defmodule DealScoutWeb.MatchLive.Index do
                         <span class="badge badge-primary badge-sm font-semibold">
                           Rule: {match.alert_rule.name}
                         </span>
+                        <% feed_slug = match.deal.feed && match.deal.feed.slug %>
                         <span class={[
                           "badge badge-sm font-semibold",
-                          match.deal.feed && match.deal.feed.slug == "ebay" &&
-                            "badge-info border-info/40 font-bold",
-                          (!match.deal.feed or match.deal.feed.slug != "ebay") && "badge-ghost"
+                          feed_slug == "ebay" && "badge-info border-info/40 font-bold",
+                          feed_slug != "ebay" && "badge-ghost"
                         ]}>
-                          {cond do
-                            match.deal.feed && match.deal.feed.slug == "ebay" -> "🛒 eBay Sofort-Kauf"
-                            match.deal.feed -> match.deal.feed.name
-                            true -> "Deal"
-                          end}
+                          {DealScout.Feeds.Feed.display_name(match.deal.feed)}
                         </span>
                         <%= if match.deal.country do %>
                           <% country_name = match.deal.country[:name] || match.deal.country["name"]

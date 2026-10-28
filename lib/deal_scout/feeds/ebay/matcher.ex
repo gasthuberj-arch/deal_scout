@@ -30,7 +30,7 @@ defmodule DealScout.Feeds.Ebay.Matcher do
         nil -> Alerts.list_active_rules()
         explicit_rules -> explicit_rules
       end
-      |> Enum.filter(&ebay_eligible?/1)
+      |> Enum.filter(&AlertRule.ebay_eligible?/1)
 
     if rules == [] do
       {:ok, %{matched_deals: [], discarded_count: length(items)}}
@@ -71,12 +71,6 @@ defmodule DealScout.Feeds.Ebay.Matcher do
     end
   end
 
-  defp ebay_eligible?(%AlertRule{is_active: false}), do: false
-
-  defp ebay_eligible?(%AlertRule{source_filter: filter}) do
-    is_nil(filter) or filter in ["", "all", "ebay"]
-  end
-
   defp build_in_memory_deal(item, ebay_feed) do
     %Deal{
       guid: item.guid,
@@ -91,7 +85,14 @@ defmodule DealScout.Feeds.Ebay.Matcher do
       published_at: item[:published_at] || DateTime.utc_now() |> DateTime.truncate(:second),
       country:
         item[:country] ||
-          %{country_code: "DE", is_germany: true, is_eu: true, flags: "🇩🇪", requires_action: false},
+          %{
+            code: "DE",
+            country_code: "DE",
+            flag: "🇩🇪",
+            name: "Deutschland",
+            is_germany: true,
+            is_eu: true
+          },
       keyboard_warning: item[:keyboard_warning],
       feed_id: ebay_feed.id,
       feed: ebay_feed,

@@ -151,12 +151,13 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     assert html =~ "In-Memory Seen Cache"
     assert html =~ "EBAY_DE"
 
-    # Clicking trigger_ebay_poll when unconfigured shows flash notice
-    rendered =
-      view
-      |> element("button[phx-click='trigger_ebay_poll']")
-      |> render_click()
+    assert has_element?(view, "#trigger-ebay-poll-btn")
 
-    assert rendered =~ "eBay"
+    # Clicking trigger_ebay_poll when unconfigured shows flash notice
+    view
+    |> element("#trigger-ebay-poll-btn")
+    |> render_click()
+
+    assert has_element?(view, ".alert-error", "eBay integration is not configured")
   end
 end

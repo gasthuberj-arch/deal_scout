@@ -47,17 +47,11 @@ defmodule DealScout.Feeds.Ebay.QueryAggregator do
   """
   def extract_keywords_from_rules(rules) when is_list(rules) do
     rules
-    |> Enum.filter(&ebay_eligible_rule?/1)
+    |> Enum.filter(&AlertRule.ebay_eligible?/1)
     |> Enum.flat_map(fn rule ->
       parse_keyword_string(rule.keywords)
     end)
     |> deduplicate_keywords()
-  end
-
-  defp ebay_eligible_rule?(%AlertRule{is_active: false}), do: false
-
-  defp ebay_eligible_rule?(%AlertRule{source_filter: filter}) do
-    is_nil(filter) or filter in ["", "all", "ebay"]
   end
 
   defp parse_keyword_string(nil), do: []

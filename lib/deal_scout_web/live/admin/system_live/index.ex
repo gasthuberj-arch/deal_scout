@@ -58,7 +58,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("trigger_ebay_poll", _params, socket) do
-    if DealScout.Feeds.Ebay.Config.enabled?() do
+    if DealScout.Feeds.Ebay.Config.configured?() and DealScout.Feeds.Ebay.Config.enabled?() do
       DealScout.Feeds.Ebay.Poller.poll_now()
       {:noreply, put_flash(socket, :info, "Triggered immediate eBay Sofort-Kauf poll.")}
     else
@@ -126,6 +126,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
           <div class="flex items-center gap-2">
             <button
+              id="trigger-ebay-poll-btn"
               phx-click="trigger_ebay_poll"
               class="btn btn-secondary btn-sm flex items-center gap-2"
             >

@@ -42,4 +42,11 @@ defmodule DealScout.Feeds.Feed do
     |> validate_number(:poll_interval_seconds, greater_than_or_equal_to: 10)
     |> unique_constraint(:slug)
   end
+
+  @doc """
+  Returns a user-friendly display name for a feed or deal source.
+  """
+  def display_name(%{slug: "ebay"}), do: "🛒 eBay Sofort-Kauf"
+  def display_name(%{name: name}) when is_binary(name), do: name
+  def display_name(_), do: "Deal"
 end

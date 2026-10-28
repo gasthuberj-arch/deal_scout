@@ -91,6 +91,7 @@ Now visit [`http://localhost:4000`](http://localhost:4000) in your browser.
 | `EBAY_CLIENT_SECRET` | *(optional)* | eBay Developer App Cert (Client Secret) for OAuth2 authentication |
 | `EBAY_MARKETPLACE_ID` | `EBAY_DE` | eBay Marketplace identifier (e.g., `EBAY_DE`, `EBAY_AT`, `EBAY_US`) |
 | `EBAY_POLL_INTERVAL_SECONDS` | `60` | Polling interval in seconds for the eBay sniper worker |
+| `EBAY_ENABLED` | `true` | Set to `false` to disable the eBay background poller worker |
 | `SECRET_KEY_BASE` | *(generated in dev)* | Secret key for cookies and tokens (required in prod) |
 | `PHX_SERVER` | `true` | Enables HTTP server in production releases |
 

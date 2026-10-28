@@ -48,6 +48,18 @@ defmodule DealScout.Alerts.AlertRule do
 
   def in_cooldown?(_rule), do: false
 
+  @doc """
+  Checks if the alert rule is active and eligible for eBay deals.
+  Qualifies if active and source_filter is unset, "all", or "ebay".
+  """
+  def ebay_eligible?(%__MODULE__{is_active: false}), do: false
+
+  def ebay_eligible?(%__MODULE__{source_filter: filter}) do
+    is_nil(filter) or filter in ["", "all", "ebay"]
+  end
+
+  def ebay_eligible?(_), do: false
+
   @doc false
   def changeset(alert_rule, attrs) do
     alert_rule
