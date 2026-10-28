@@ -249,6 +249,21 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
     end
   end
 
+  describe "data export: gdpr data portability" do
+    test "renders export my data button and container", %{conn: conn} do
+      user = user_fixture()
+
+      {:ok, lv, html} =
+        conn
+        |> log_in_user(user)
+        |> live(~p"/users/settings")
+
+      assert html =~ "Export My Data (GDPR Art. 15"
+      assert has_element?(lv, "#data-export-container")
+      assert has_element?(lv, "#download_data_btn[href='/users/settings/export']")
+    end
+  end
+
   describe "danger zone: delete account" do
     test "renders danger zone delete form and elements", %{conn: conn} do
       user = user_fixture() |> set_password()

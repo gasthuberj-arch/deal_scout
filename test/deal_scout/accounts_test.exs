@@ -444,6 +444,68 @@ defmodule DealScout.AccountsTest do
     end
   end
 
+  describe "export_user_data/1" do
+    test "exports full account, alert rules, matches, and subscriptions payload" do
+      user = user_fixture()
+
+      {:ok, rule} =
+        DealScout.Alerts.create_alert_rule(user, %{
+          name: "Export Test Rule",
+          keywords: "rtx 5090",
+          delivery_mode: "instant"
+        })
+
+      feed =
+        Repo.insert!(%DealScout.Feeds.Feed{
+          name: "MyDealz",
+          slug: "mydealz-exp",
+          url: "https://mydealz.de/exp"
+        })
+
+      {:ok, _deal} =
+        DealScout.Deals.insert_deal(%{
+          feed_id: feed.id,
+          guid: "deal-export-test",
+          title: "RTX 5090 Launch Deal",
+          url: "https://example.com/rtx5090",
+          price: Decimal.new("1999.00"),
+          merchant: "Mindfactory",
+          published_at: DateTime.utc_now()
+        })
+
+      {:ok, _sub} =
+        DealScout.Notifications.create_or_update_push_subscription(Scope.for_user(user), %{
+          "endpoint" => "https://push.example.com/export-device",
+          "p256dh" => "mock_p256",
+          "auth" => "mock_auth",
+          "device_name" => "Firefox Desktop"
+        })
+
+      export = Accounts.export_user_data(user)
+
+      assert export.version == "1.0"
+      assert export.service == "DealScout"
+      assert export.account.email == user.email
+      assert export.account.id == user.id
+
+      # Verify alert rules
+      [exported_rule] = export.alert_rules
+      assert exported_rule.id == rule.id
+      assert exported_rule.keywords == "rtx 5090"
+
+      # Verify matched deals
+      [exported_match] = export.matched_deals
+      assert exported_match.deal.title == "RTX 5090 Launch Deal"
+      assert exported_match.deal.merchant == "Mindfactory"
+      assert exported_match.deal.price == "1999"
+
+      # Verify push subscriptions
+      [exported_sub] = export.push_subscriptions
+      assert exported_sub.device_name == "Firefox Desktop"
+      assert exported_sub.endpoint == "https://push.example.com/export-device"
+    end
+  end
+
   describe "inspect/2 for the User module" do
     test "does not include password" do
       refute inspect(%User{password: "123456"}) =~ "password: \"123456\""

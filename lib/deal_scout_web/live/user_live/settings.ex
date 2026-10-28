@@ -160,6 +160,40 @@ defmodule DealScoutWeb.UserLive.Settings do
 
       <div class="divider my-8" />
 
+      <!-- Data Portability: Export My Data -->
+      <div
+        id="data-export-container"
+        class="bg-base-200/50 border border-base-300 rounded-2xl p-6 sm:p-8 space-y-4"
+      >
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <.icon name="hero-arrow-down-tray" class="size-6" />
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-base-content">
+                Export My Data (GDPR Art. 15 &amp; 20)
+              </h2>
+              <p class="text-xs sm:text-sm text-base-content/70">
+                Download a machine-readable JSON copy of all your account settings, keyword alert rules, and deal match history.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href={~p"/users/settings/export"}
+            class="btn btn-primary btn-sm gap-2 shrink-0 self-start sm:self-auto"
+            id="download_data_btn"
+            download
+          >
+            <.icon name="hero-arrow-down-tray" class="size-4" />
+            <span>Download Data (.json)</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="divider my-8" />
+
       <!-- Danger Zone: Delete Account -->
       <div
         id="danger-zone-container"

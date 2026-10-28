@@ -304,6 +304,102 @@ defmodule DealScout.Accounts do
     end
   end
 
+  @doc """
+  Exports all personal and configuration data for a user in accordance with Art. 15 and Art. 20 GDPR.
+  """
+  def export_user_data(%User{} = user) do
+    alert_rules =
+      DealScout.Alerts.list_alert_rules_for_user(user.id)
+      |> Enum.map(fn rule ->
+        %{
+          id: rule.id,
+          name: rule.name,
+          keywords: rule.keywords,
+          negative_keywords: rule.negative_keywords,
+          max_price: (rule.max_price && Decimal.to_string(rule.max_price)) || nil,
+          min_temperature: rule.min_temperature,
+          delivery_mode: rule.delivery_mode,
+          source_filter: rule.source_filter,
+          country_filter: rule.country_filter,
+          merchant_filter: rule.merchant_filter,
+          exclude_dropshippers: rule.exclude_dropshippers,
+          exclude_foreign_keyboards: rule.exclude_foreign_keyboards,
+          notify_push: rule.notify_push,
+          notify_email: rule.notify_email,
+          cooldown_minutes: rule.cooldown_minutes,
+          is_active: rule.is_active,
+          inserted_at: DateTime.to_iso8601(rule.inserted_at),
+          updated_at: DateTime.to_iso8601(rule.updated_at)
+        }
+      end)
+
+    push_subscriptions =
+      DealScout.Notifications.list_push_subscriptions_for_user(user.id)
+      |> Enum.map(fn sub ->
+        %{
+          id: sub.id,
+          device_name: sub.device_name,
+          endpoint: sub.endpoint,
+          user_agent: sub.user_agent,
+          last_used_at: (sub.last_used_at && DateTime.to_iso8601(sub.last_used_at)) || nil,
+          inserted_at: DateTime.to_iso8601(sub.inserted_at)
+        }
+      end)
+
+    matches =
+      Repo.all(
+        from m in DealScout.Alerts.UserMatch,
+          where: m.user_id == ^user.id,
+          preload: [[deal: :merchant], :alert_rule],
+          order_by: [desc: m.inserted_at]
+      )
+      |> Enum.map(fn match ->
+        %{
+          id: match.id,
+          is_read: match.is_read,
+          notified_via_push: match.notified_via_push,
+          notified_via_email: match.notified_via_email,
+          matched_at: DateTime.to_iso8601(match.inserted_at),
+          alert_rule_name: (match.alert_rule && match.alert_rule.name) || nil,
+          deal:
+            if match.deal do
+              merchant_name =
+                case match.deal.merchant do
+                  %DealScout.Deals.Merchant{name: name} -> name
+                  _ -> match.deal.raw_merchant
+                end
+
+              %{
+                title: match.deal.title,
+                url: match.deal.url,
+                price: (match.deal.price && Decimal.to_string(match.deal.price)) || nil,
+                merchant: merchant_name
+              }
+            else
+              nil
+            end
+        }
+      end)
+
+    %{
+      version: "1.0",
+      service: "DealScout",
+      exported_at: DateTime.to_iso8601(DateTime.utc_now()),
+      gdpr_notice:
+        "This export contains all personal and configuration data associated with your account in accordance with Art. 15 and Art. 20 GDPR.",
+      account: %{
+        id: user.id,
+        email: user.email,
+        confirmed_at: (user.confirmed_at && DateTime.to_iso8601(user.confirmed_at)) || nil,
+        is_admin: user.is_admin,
+        inserted_at: DateTime.to_iso8601(user.inserted_at)
+      },
+      alert_rules: alert_rules,
+      push_subscriptions: push_subscriptions,
+      matched_deals: matches
+    }
+  end
+
   ## Token helper
 
   defp update_user_and_delete_all_tokens(changeset) do
