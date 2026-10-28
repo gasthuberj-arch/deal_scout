@@ -87,6 +87,10 @@ Now visit [`http://localhost:4000`](http://localhost:4000) in your browser.
 | `LEGAL_OPERATOR_NAME` | `DealScout Maintainer` | Name displayed on `/impressum` and `/privacy` |
 | `LEGAL_OPERATOR_EMAIL` | `support@example.com` | Public contact email displayed on `/impressum` and `/privacy` |
 | `LEGAL_OPERATOR_ADDRESS` | `Privates Open-Source-Projekt` | Postal address or project note displayed on `/impressum` |
+| `EBAY_CLIENT_ID` | *(optional)* | eBay Developer App ID (Client ID) for the Browse API sniper |
+| `EBAY_CLIENT_SECRET` | *(optional)* | eBay Developer App Cert (Client Secret) for OAuth2 authentication |
+| `EBAY_MARKETPLACE_ID` | `EBAY_DE` | eBay Marketplace identifier (e.g., `EBAY_DE`, `EBAY_AT`, `EBAY_US`) |
+| `EBAY_POLL_INTERVAL_SECONDS` | `60` | Polling interval in seconds for the eBay sniper worker |
 | `SECRET_KEY_BASE` | *(generated in dev)* | Secret key for cookies and tokens (required in prod) |
 | `PHX_SERVER` | `true` | Enables HTTP server in production releases |
 

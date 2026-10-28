@@ -54,4 +54,35 @@ defmodule DealScout.Feeds do
     |> Feed.changeset(attrs)
     |> Repo.update()
   end
+
+  @doc """
+  Ensures the eBay feed record exists in the database with slug "ebay".
+  Marked is_active: false so the generic RSS poller skips it, while
+  allowing deal foreign keys and source filtering to reference it.
+  """
+  def ensure_ebay_feed do
+    case get_feed_by_slug("ebay") do
+      %Feed{} = feed ->
+        feed
+
+      nil ->
+        %Feed{}
+        |> Feed.changeset(%{
+          name: "eBay",
+          slug: "ebay",
+          url: "https://www.ebay.de",
+          poll_interval_seconds: 60,
+          is_active: false
+        })
+        |> Repo.insert(
+          on_conflict: :nothing,
+          conflict_target: :slug
+        )
+        |> case do
+          {:ok, %Feed{id: nil}} -> get_feed_by_slug("ebay")
+          {:ok, feed} -> feed
+          {:error, _} -> get_feed_by_slug("ebay")
+        end
+    end
+  end
 end

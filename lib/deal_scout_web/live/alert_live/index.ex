@@ -457,8 +457,13 @@ defmodule DealScoutWeb.AlertLive.Index do
                           </span>
                         <% end %>
 
-                        <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/70 uppercase text-[10px] font-mono">
-                          {rule.source_filter}
+                        <span class={[
+                          "px-2 py-0.5 rounded text-[10px] font-mono",
+                          rule.source_filter == "ebay" &&
+                            "bg-blue-500/20 text-blue-700 dark:text-blue-300 font-semibold",
+                          rule.source_filter != "ebay" && "bg-base-200 text-base-content/70 uppercase"
+                        ]}>
+                          {if rule.source_filter == "ebay", do: "🛒 eBay", else: rule.source_filter}
                         </span>
                       </div>
                     </div>
@@ -684,7 +689,11 @@ defmodule DealScoutWeb.AlertLive.Index do
                       id="alert-rule-source-filter-select"
                       type="select"
                       label="Source Portal"
-                      options={[{"All Portals", "all"} | Enum.map(@feeds, &{&1.name, &1.slug})]}
+                      options={[
+                        {"All Portals (incl. eBay)", "all"},
+                        {"🛒 eBay Sofort-Kauf Only", "ebay"}
+                        | Enum.map(@feeds, &{&1.name, &1.slug})
+                      ]}
                     />
                   </div>
 

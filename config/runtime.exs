@@ -42,6 +42,13 @@ config :deal_scout, DealScout.Legal,
   operator_email: System.get_env("LEGAL_OPERATOR_EMAIL", "support@example.com"),
   operator_address: System.get_env("LEGAL_OPERATOR_ADDRESS", "Privates Open-Source-Projekt")
 
+config :deal_scout, DealScout.Feeds.Ebay,
+  client_id: System.get_env("EBAY_CLIENT_ID"),
+  client_secret: System.get_env("EBAY_CLIENT_SECRET"),
+  marketplace_id: System.get_env("EBAY_MARKETPLACE_ID", "EBAY_DE"),
+  poll_interval_seconds: String.to_integer(System.get_env("EBAY_POLL_INTERVAL_SECONDS", "60")),
+  enabled: System.get_env("EBAY_ENABLED", "true") == "true"
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :deal_scout, DealScoutWeb.Endpoint,

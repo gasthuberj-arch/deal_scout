@@ -24,6 +24,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
       |> assign(:backup, backup_status)
       |> assign(:auto_paused_rules, auto_paused_rules)
       |> assign(:slowest_rules, slowest_rules)
+      |> assign(:ebay_status, get_ebay_status())
 
     {:ok, socket}
   end
@@ -51,7 +52,23 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
      |> assign(:backup, backup_status)
      |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
      |> assign(:slowest_rules, Alerts.list_slowest_rules(10))
+     |> assign(:ebay_status, get_ebay_status())
      |> put_flash(:info, "System operations metrics updated.")}
+  end
+
+  @impl true
+  def handle_event("trigger_ebay_poll", _params, socket) do
+    if DealScout.Feeds.Ebay.Config.enabled?() do
+      DealScout.Feeds.Ebay.Poller.poll_now()
+      {:noreply, put_flash(socket, :info, "Triggered immediate eBay Sofort-Kauf poll.")}
+    else
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "eBay integration is not configured. Set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
+       )}
+    end
   end
 
   @impl true
@@ -108,6 +125,12 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
           </div>
 
           <div class="flex items-center gap-2">
+            <button
+              phx-click="trigger_ebay_poll"
+              class="btn btn-secondary btn-sm flex items-center gap-2"
+            >
+              <.icon name="hero-shopping-bag" class="size-4" /> Poll eBay
+            </button>
             <button
               phx-click="trigger_poll"
               class="btn btn-warning btn-sm flex items-center gap-2"
@@ -351,6 +374,77 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                 <% end %>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- eBay Sofort-Kauf Sniper Health Card -->
+        <div class="card bg-base-100 border border-base-300 rounded-2xl p-6 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-bold flex items-center gap-2">
+                <.icon name="hero-shopping-bag" class="size-5 text-secondary" />
+                <span>eBay Sofort-Kauf Sniper Health</span>
+              </h2>
+              <p class="text-xs text-base-content/70 mt-0.5">
+                Demand-driven eBay Browse REST API polling with in-memory filter-first matching (zero SQLite disk bloat).
+              </p>
+            </div>
+            <div>
+              <%= cond do %>
+                <% not @ebay_status.configured -> %>
+                  <span class="badge badge-warning badge-sm gap-1">
+                    <.icon name="hero-exclamation-triangle" class="size-3" /> Credentials Missing
+                  </span>
+                <% not @ebay_status.enabled -> %>
+                  <span class="badge badge-ghost badge-sm">Disabled via Config</span>
+                <% true -> %>
+                  <span class="badge badge-success badge-sm text-white gap-1">
+                    <span class="size-1.5 rounded-full bg-white animate-pulse"></span> Active
+                  </span>
+              <% end %>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <div class="bg-base-200/50 p-4 rounded-xl border border-base-300/60">
+              <div class="text-xs text-base-content/60 font-medium">Marketplace Target</div>
+              <div class="text-sm font-bold font-mono mt-1 text-base-content">
+                {@ebay_status.marketplace}
+              </div>
+              <div class="text-[11px] text-base-content/50 mt-0.5">
+                eBay Germany Browse API
+              </div>
+            </div>
+
+            <div class="bg-base-200/50 p-4 rounded-xl border border-base-300/60">
+              <div class="text-xs text-base-content/60 font-medium">In-Memory Seen Cache</div>
+              <div class="text-sm font-bold mt-1 text-secondary">
+                {@ebay_status.seen_items} items in RAM
+              </div>
+              <div class="text-[11px] text-base-content/50 mt-0.5">
+                ETS deduplication (~300 KB)
+              </div>
+            </div>
+
+            <div class="bg-base-200/50 p-4 rounded-xl border border-base-300/60">
+              <div class="text-xs text-base-content/60 font-medium">Poll Cycle Interval</div>
+              <div class="text-sm font-bold mt-1 text-base-content">
+                {@ebay_status.poll_interval}s
+              </div>
+              <div class="text-[11px] text-base-content/50 mt-0.5">
+                Demand-driven (active rules only)
+              </div>
+            </div>
+
+            <div class="bg-base-200/50 p-4 rounded-xl border border-base-300/60">
+              <div class="text-xs text-base-content/60 font-medium">Persistence Mode</div>
+              <div class="text-sm font-bold mt-1 text-emerald-600 dark:text-emerald-400">
+                Match-Only
+              </div>
+              <div class="text-[11px] text-base-content/50 mt-0.5">
+                Non-matching items discarded
+              </div>
+            </div>
           </div>
         </div>
 
@@ -605,4 +699,14 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
   defp format_bytes(bytes), do: "#{Float.round(bytes / (1024 * 1024), 2)} MB"
+
+  defp get_ebay_status do
+    %{
+      configured: DealScout.Feeds.Ebay.Config.configured?(),
+      enabled: DealScout.Feeds.Ebay.Config.enabled?(),
+      marketplace: DealScout.Feeds.Ebay.Config.marketplace_id(),
+      seen_items: DealScout.Feeds.Ebay.SeenCache.size(),
+      poll_interval: DealScout.Feeds.Ebay.Config.poll_interval_seconds()
+    }
+  end
 end

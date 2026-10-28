@@ -390,7 +390,11 @@ defmodule DealScoutWeb.DealLive.Index do
                       "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md border tracking-tight shadow-xs",
                       feed_badge_classes(deal.feed && deal.feed.slug)
                     ]}>
-                      {if deal.feed, do: deal.feed.name, else: "Deal"}
+                      {cond do
+                        deal.feed && deal.feed.slug == "ebay" -> "🛒 eBay Sofort-Kauf"
+                        deal.feed -> deal.feed.name
+                        true -> "Deal"
+                      end}
                     </span>
 
                     <%= if deal.temperature do %>
@@ -676,6 +680,9 @@ defmodule DealScoutWeb.DealLive.Index do
     </Layouts.app>
     """
   end
+
+  defp feed_badge_classes("ebay"),
+    do: "bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-600/40 font-semibold"
 
   defp feed_badge_classes("mydealz"),
     do: "bg-sky-500/20 text-sky-700 dark:text-sky-200 border-sky-500/40"

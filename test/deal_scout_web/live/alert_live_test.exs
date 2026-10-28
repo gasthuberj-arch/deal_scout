@@ -89,6 +89,33 @@ defmodule DealScoutWeb.AlertLiveTest do
     assert rule.exclude_foreign_keyboards == true
   end
 
+  test "creates eBay Sofort-Kauf alert rule with source_filter: ebay", %{
+    conn: conn,
+    user: user
+  } do
+    {:ok, index_live, _} = live(conn, ~p"/alerts/new")
+
+    {:ok, redirect_live, html} =
+      index_live
+      |> form("#alert-rule-form", %{
+        "alert_rule" => %{
+          "name" => "eBay ThinkPad Sniper",
+          "keywords" => "ThinkPad T14",
+          "max_price" => "400.00",
+          "source_filter" => "ebay"
+        }
+      })
+      |> render_submit()
+      |> follow_redirect(conn, ~p"/alerts")
+
+    assert html =~ "Alert rule created successfully."
+    assert has_element?(redirect_live, "#rules", "eBay ThinkPad Sniper")
+    assert has_element?(redirect_live, "#rules", "🛒 eBay")
+
+    [rule] = Alerts.list_alert_rules_for_user(user.id)
+    assert rule.source_filter == "ebay"
+  end
+
   test "renders modal with autofill protection, explicit IDs, and sticky footer button", %{
     conn: conn
   } do

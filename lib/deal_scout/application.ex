@@ -60,6 +60,7 @@ defmodule DealScout.Application do
     if Application.get_env(:deal_scout, :start_feed_poller, true) do
       [
         {DealScout.Feeds.Poller, []},
+        {DealScout.Feeds.Ebay.Poller, []},
         {DealScout.Maintenance.Pruner, []},
         {DealScout.Notifications.DigestWorker, []}
       ]

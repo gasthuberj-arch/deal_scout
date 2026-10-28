@@ -70,6 +70,13 @@ feeds = [
     slug: "ggdeals-news",
     url: "https://gg.deals/eu/news/feed/",
     poll_interval_seconds: 300
+  },
+  %{
+    name: "eBay",
+    slug: "ebay",
+    url: "https://www.ebay.de",
+    poll_interval_seconds: 60,
+    is_active: false
   }
 ]
 

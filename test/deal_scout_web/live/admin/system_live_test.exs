@@ -139,4 +139,24 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     assert reloaded.is_active == false
     assert reloaded.pause_reason == "Manually paused by administrator"
   end
+
+  test "admin views eBay Sofort-Kauf sniper status card and triggers poll", %{
+    conn: conn,
+    admin: admin
+  } do
+    conn = log_in_user(conn, admin)
+    {:ok, view, html} = live(conn, ~p"/admin/system")
+
+    assert html =~ "eBay Sofort-Kauf Sniper Health"
+    assert html =~ "In-Memory Seen Cache"
+    assert html =~ "EBAY_DE"
+
+    # Clicking trigger_ebay_poll when unconfigured shows flash notice
+    rendered =
+      view
+      |> element("button[phx-click='trigger_ebay_poll']")
+      |> render_click()
+
+    assert rendered =~ "eBay"
+  end
 end
