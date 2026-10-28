@@ -7,6 +7,6 @@ dbs:
     replicas:
       - type: file
         path: "/data/litestream"
-        retention: 48h
-        retention-check-interval: 1h
-        snapshot-interval: 24h
+        retention: 12h
+        retention-check-interval: 30m
+        snapshot-interval: 6h

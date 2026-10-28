@@ -28,8 +28,12 @@ defmodule DealScout.Backup.Watcher do
 
   @doc """
   Scans the replica directory directly and returns a list of all files.
+  Supports optional `:cache` keyword option mapping `path => meta` to avoid
+  re-reading and recalculating SHA-256 for unchanged files.
   """
-  def scan_replica(replica_dir) do
+  def scan_replica(replica_dir, opts \\ []) do
+    cache = Keyword.get(opts, :cache, %{})
+
     if File.dir?(replica_dir) do
       replica_dir
       |> Path.join("**/*")
@@ -38,12 +42,21 @@ defmodule DealScout.Backup.Watcher do
       |> Enum.map(fn full_path ->
         rel_path = Path.relative_to(full_path, replica_dir)
         stat = File.stat!(full_path)
-        sha256 = calculate_sha256(full_path)
 
         mtime_iso =
           case NaiveDateTime.from_erl(stat.mtime) do
             {:ok, ndt} -> NaiveDateTime.to_iso8601(ndt)
             _ -> nil
+          end
+
+        sha256 =
+          case Map.get(cache, rel_path) do
+            %{size: prev_size, mtime: prev_mtime, sha256: prev_sha}
+            when prev_size == stat.size and prev_mtime == mtime_iso and is_binary(prev_sha) ->
+              prev_sha
+
+            _ ->
+              calculate_sha256(full_path)
           end
 
         %{
@@ -118,20 +131,23 @@ defmodule DealScout.Backup.Watcher do
       known_files: %{}
     }
 
-    initial_known =
-      if enabled do
-        scan_and_index(replica_dir)
-      else
-        %{}
-      end
+    if enabled do
+      {:ok, state, {:continue, :initial_scan}}
+    else
+      {:ok, state}
+    end
+  end
 
-    state = %{state | known_files: initial_known}
+  @impl true
+  def handle_continue(:initial_scan, state) do
+    current_indexed = scan_and_index(state.replica_dir, state.known_files)
+    state = %{state | known_files: current_indexed}
 
-    if enabled and poll_interval > 0 do
-      schedule_poll(poll_interval)
+    if state.enabled and state.poll_interval_ms > 0 do
+      schedule_poll(state.poll_interval_ms)
     end
 
-    {:ok, state}
+    {:noreply, state}
   end
 
   @impl true
@@ -147,7 +163,7 @@ defmodule DealScout.Backup.Watcher do
   @impl true
   def handle_info(:poll, state) do
     if state.enabled do
-      current_indexed = scan_and_index(state.replica_dir)
+      current_indexed = scan_and_index(state.replica_dir, state.known_files)
 
       Enum.each(current_indexed, fn {path, meta} ->
         case Map.get(state.known_files, path) do
@@ -175,8 +191,8 @@ defmodule DealScout.Backup.Watcher do
 
   defp schedule_poll(_), do: :ok
 
-  defp scan_and_index(dir) do
-    scan_replica(dir)
+  defp scan_and_index(dir, cache) do
+    scan_replica(dir, cache: cache)
     |> Map.new(fn meta -> {meta.path, meta} end)
   end
 
