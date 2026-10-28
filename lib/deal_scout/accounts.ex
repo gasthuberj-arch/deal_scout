@@ -274,11 +274,34 @@ defmodule DealScout.Accounts do
   end
 
   @doc """
+  Verifies the password.
+  """
+  defdelegate valid_password?(user, password), to: User
+
+  @doc """
   Deletes the signed token with the given context.
   """
   def delete_user_session_token(token) do
     Repo.delete_all(from(UserToken, where: [token: ^token, context: "session"]))
     :ok
+  end
+
+  @doc """
+  Deletes a user account and returns `{:ok, {deleted_user, tokens_to_disconnect}}`.
+
+  All associated alert rules, deal matches, push subscriptions, and tokens
+  are deleted via database foreign key cascading. Feedback records are nilified.
+  """
+  def delete_user(%User{} = user) do
+    tokens_to_disconnect = Repo.all_by(UserToken, user_id: user.id)
+
+    case Repo.delete(user) do
+      {:ok, deleted_user} ->
+        {:ok, {deleted_user, tokens_to_disconnect}}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   ## Token helper

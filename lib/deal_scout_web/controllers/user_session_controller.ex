@@ -64,4 +64,24 @@ defmodule DealScoutWeb.UserSessionController do
     |> put_flash(:info, "Logged out successfully.")
     |> UserAuth.log_out_user()
   end
+
+  def delete_account(conn, params) do
+    user = conn.assigns.current_scope.user
+    password = get_in(params, ["user", "current_password"])
+
+    cond do
+      user.hashed_password && !Accounts.valid_password?(user, password || "") ->
+        conn
+        |> put_flash(:error, "Incorrect password. Account deletion was cancelled.")
+        |> redirect(to: ~p"/users/settings")
+
+      true ->
+        {:ok, {_deleted_user, tokens_to_disconnect}} = Accounts.delete_user(user)
+        UserAuth.disconnect_sessions(tokens_to_disconnect)
+
+        conn
+        |> put_flash(:info, "Your account and all associated data have been permanently deleted.")
+        |> UserAuth.log_out_user()
+    end
+  end
 end

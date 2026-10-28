@@ -129,19 +129,53 @@ defmodule DealScoutWeb.UserSessionControllerTest do
     end
   end
 
-  describe "DELETE /users/log-out" do
-    test "logs the user out", %{conn: conn, user: user} do
-      conn = conn |> log_in_user(user) |> delete(~p"/users/log-out")
+  describe "DELETE /users/settings/delete-account" do
+    test "deletes user when password is correct", %{conn: conn, user: user} do
+      user = set_password(user)
+
+      conn =
+        conn
+        |> log_in_user(user)
+        |> delete(~p"/users/settings/delete-account", %{
+          "user" => %{"current_password" => valid_user_password()}
+        })
+
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :user_token)
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Logged out successfully"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "permanently deleted"
+      refute Accounts.get_user_by_email(user.email)
     end
 
-    test "succeeds even if the user is not logged in", %{conn: conn} do
-      conn = delete(conn, ~p"/users/log-out")
+    test "refuses deletion when password is wrong", %{conn: conn, user: user} do
+      user = set_password(user)
+
+      conn =
+        conn
+        |> log_in_user(user)
+        |> delete(~p"/users/settings/delete-account", %{
+          "user" => %{"current_password" => "wrong_password"}
+        })
+
+      assert redirected_to(conn) == ~p"/users/settings"
+      assert get_session(conn, :user_token)
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Incorrect password"
+      assert Accounts.get_user_by_email(user.email)
+    end
+
+    test "deletes user without password check if account has no password set", %{
+      conn: conn,
+      user: user
+    } do
+      # User without password (magic-link only)
+      conn =
+        conn
+        |> log_in_user(user)
+        |> delete(~p"/users/settings/delete-account", %{})
+
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :user_token)
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Logged out successfully"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "permanently deleted"
+      refute Accounts.get_user_by_email(user.email)
     end
   end
 end

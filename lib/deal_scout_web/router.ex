@@ -71,6 +71,7 @@ defmodule DealScoutWeb.Router do
     end
 
     post "/users/update-password", UserSessionController, :update_password
+    delete "/users/settings/delete-account", UserSessionController, :delete_account
   end
 
   scope "/admin", DealScoutWeb.Admin do

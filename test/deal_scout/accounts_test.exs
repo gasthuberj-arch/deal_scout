@@ -4,7 +4,7 @@ defmodule DealScout.AccountsTest do
   alias DealScout.Accounts
 
   import DealScout.AccountsFixtures
-  alias DealScout.Accounts.{User, UserToken}
+  alias DealScout.Accounts.{User, UserToken, Scope}
 
   describe "get_user_by_email/1" do
     test "does not return the user if the email does not exist" do
@@ -386,6 +386,61 @@ defmodule DealScout.AccountsTest do
       assert user_token.user_id == user.id
       assert user_token.sent_to == user.email
       assert user_token.context == "login"
+    end
+  end
+
+  describe "delete_user/1" do
+    test "deletes the user and cascades to tokens, alert rules, matches, and push subscriptions" do
+      user = user_fixture()
+      _token = Accounts.generate_user_session_token(user)
+
+      {:ok, rule} =
+        DealScout.Alerts.create_alert_rule(user, %{
+          name: "Test Rule",
+          keywords: "rtx 4090",
+          delivery_mode: "instant"
+        })
+
+      feed =
+        Repo.insert!(%DealScout.Feeds.Feed{
+          name: "MyDealz",
+          slug: "mydealz-del",
+          url: "https://mydealz.de/del"
+        })
+
+      {:ok, deal} =
+        DealScout.Deals.insert_deal(%{
+          feed_id: feed.id,
+          guid: "deal-delete-test",
+          title: "RTX 4090 Deal",
+          url: "https://example.com/rtx4090",
+          price: Decimal.new("1500.00"),
+          published_at: DateTime.utc_now()
+        })
+
+      # Ingestion automatically matched and created the UserMatch!
+      [match] = Repo.all_by(DealScout.Alerts.UserMatch, user_id: user.id)
+      assert match.deal_id == deal.id
+      assert match.alert_rule_id == rule.id
+
+      {:ok, sub} =
+        DealScout.Notifications.create_or_update_push_subscription(Scope.for_user(user), %{
+          "endpoint" => "https://push.example.com/delete-test",
+          "p256dh" => "mock_p256",
+          "auth" => "mock_auth"
+        })
+
+      assert {:ok, {_deleted_user, tokens_to_disconnect}} = Accounts.delete_user(user)
+      assert length(tokens_to_disconnect) >= 1
+
+      # User is gone
+      refute Accounts.get_user_by_email(user.email)
+
+      # Cascaded child rows are gone
+      assert Repo.all_by(UserToken, user_id: user.id) == []
+      assert Repo.get(DealScout.Alerts.AlertRule, rule.id) == nil
+      assert Repo.get(DealScout.Alerts.UserMatch, match.id) == nil
+      assert Repo.get(DealScout.Notifications.PushSubscription, sub.id) == nil
     end
   end
 

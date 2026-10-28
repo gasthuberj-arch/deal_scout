@@ -248,4 +248,22 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
       assert DealScout.Notifications.list_push_subscriptions_for_user(user.id) == []
     end
   end
+
+  describe "danger zone: delete account" do
+    test "renders danger zone delete form and elements", %{conn: conn} do
+      user = user_fixture() |> set_password()
+
+      {:ok, lv, html} =
+        conn
+        |> log_in_user(user)
+        |> live(~p"/users/settings")
+
+      assert html =~ "Danger Zone: Delete Account"
+      assert html =~ "Art. 17 DSGVO"
+      assert has_element?(lv, "#danger-zone-container")
+      assert has_element?(lv, "#delete_account_form")
+      assert has_element?(lv, "#delete_account_password")
+      assert has_element?(lv, "#delete_account_btn")
+    end
+  end
 end

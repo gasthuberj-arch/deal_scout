@@ -157,6 +157,65 @@ defmodule DealScoutWeb.UserLive.Settings do
           Save Password
         </.button>
       </.form>
+
+      <div class="divider my-8" />
+
+      <!-- Danger Zone: Delete Account -->
+      <div
+        id="danger-zone-container"
+        class="bg-error/5 border border-error/30 rounded-2xl p-6 sm:p-8 space-y-4"
+      >
+        <div class="flex items-center gap-3">
+          <div class="size-10 rounded-xl bg-error/10 text-error flex items-center justify-center shrink-0">
+            <.icon name="hero-exclamation-triangle" class="size-6" />
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-error">Danger Zone: Delete Account</h2>
+            <p class="text-xs sm:text-sm text-base-content/70">
+              Permanently delete your account and all associated data in accordance with Art. 17 DSGVO.
+            </p>
+          </div>
+        </div>
+
+        <p class="text-xs sm:text-sm text-base-content/80 leading-relaxed">
+          Deleting your account will immediately and permanently erase your user profile, all saved keyword alert rules,
+          matched deal history, and registered push notification devices.
+          <strong>This action is irreversible.</strong>
+        </p>
+
+        <div class="pt-2">
+          <.form
+            for={@delete_account_form}
+            id="delete_account_form"
+            action={~p"/users/settings/delete-account"}
+            method="post"
+            data-confirm="Are you sure you want to permanently delete your account and all your alert rules? This cannot be undone."
+          >
+            <input type="hidden" name="_method" value="delete" />
+            <%= if @current_user_has_password? do %>
+              <div class="max-w-md mb-4">
+                <.input
+                  field={@delete_account_form[:current_password]}
+                  type="password"
+                  label="Confirm your password to proceed"
+                  name="user[current_password]"
+                  id="delete_account_password"
+                  placeholder="Enter your current password"
+                  required
+                />
+              </div>
+            <% end %>
+            <.button
+              type="submit"
+              class="btn btn-error btn-sm gap-2 text-white"
+              id="delete_account_btn"
+            >
+              <.icon name="hero-trash" class="size-4" />
+              <span>Permanently Delete My Account</span>
+            </.button>
+          </.form>
+        </div>
+      </div>
     </Layouts.app>
     """
   end
@@ -181,12 +240,15 @@ defmodule DealScoutWeb.UserLive.Settings do
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
     subscriptions = Notifications.list_push_subscriptions(scope)
+    has_password? = is_binary(user.hashed_password) and byte_size(user.hashed_password) > 0
 
     socket =
       socket
       |> assign(:current_email, user.email)
       |> assign(:email_form, to_form(email_changeset))
       |> assign(:password_form, to_form(password_changeset))
+      |> assign(:delete_account_form, to_form(%{}, as: "user"))
+      |> assign(:current_user_has_password?, has_password?)
       |> assign(:trigger_submit, false)
       |> assign(:has_subscriptions, subscriptions != [])
       |> stream(:subscriptions, subscriptions)
