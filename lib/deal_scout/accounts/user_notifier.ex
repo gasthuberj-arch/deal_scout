@@ -4,12 +4,25 @@ defmodule DealScout.Accounts.UserNotifier do
   alias DealScout.Mailer
   alias DealScout.Accounts.User
 
+  defp from_address do
+    default_from =
+      if Application.get_env(:deal_scout, DealScout.Mailer)[:adapter] == Swoosh.Adapters.Resend do
+        "onboarding@resend.dev"
+      else
+        "contact@example.com"
+      end
+
+    System.get_env("RESEND_FROM_EMAIL") ||
+      System.get_env("MAILER_FROM_EMAIL") ||
+      default_from
+  end
+
   # Delivers the email using the application mailer.
   defp deliver(recipient, subject, body) do
     email =
       new()
       |> to(recipient)
-      |> from({"DealScout", "contact@example.com"})
+      |> from({"DealScout", from_address()})
       |> subject(subject)
       |> text_body(body)
 
