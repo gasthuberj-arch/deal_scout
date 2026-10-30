@@ -8,6 +8,10 @@ defmodule DealScoutWeb.UserSessionController do
     create(conn, params, "User confirmed successfully.")
   end
 
+  def create(conn, %{"_action" => "registered"} = params) do
+    create(conn, params, "Account created successfully!")
+  end
+
   def create(conn, params) do
     create(conn, params, "Welcome back!")
   end

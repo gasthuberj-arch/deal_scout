@@ -85,6 +85,16 @@ defmodule DealScout.AccountsTest do
       assert is_nil(user.confirmed_at)
       assert is_nil(user.password)
     end
+
+    test "registers users with password and auto-confirms" do
+      email = unique_user_email()
+      password = valid_user_password()
+      {:ok, user} = Accounts.register_user(%{"email" => email, "password" => password})
+      assert user.email == email
+      assert user.hashed_password
+      assert DealScout.Accounts.User.valid_password?(user, password)
+      assert user.confirmed_at
+    end
   end
 
   describe "sudo_mode?/2" do

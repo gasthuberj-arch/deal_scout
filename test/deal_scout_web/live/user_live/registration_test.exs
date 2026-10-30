@@ -28,31 +28,33 @@ defmodule DealScoutWeb.UserLive.RegistrationTest do
       result =
         lv
         |> element("#registration_form")
-        |> render_change(user: %{"email" => "with spaces"})
+        |> render_change(user: %{"email" => "with spaces", "password" => "short"})
 
       assert result =~ "Register"
       assert result =~ "must have the @ sign and no spaces"
+      assert result =~ "should be at least 12 character(s)"
     end
   end
 
   describe "register user" do
-    test "creates account but does not log in when valid invite code is provided", %{conn: conn} do
+    test "creates account and logs in when valid invite code and password are provided", %{
+      conn: conn
+    } do
       {:ok, lv, _html} = live(conn, ~p"/users/register")
 
       email = unique_user_email()
 
       form =
         form(lv, "#registration_form",
-          user: valid_user_attributes(email: email),
+          user: %{"email" => email, "password" => valid_user_password()},
           invite_code: "dealscout2026"
         )
 
-      {:ok, _lv, html} =
-        render_submit(form)
-        |> follow_redirect(conn, ~p"/users/log-in")
+      render_submit(form)
+      conn = follow_trigger_action(form, conn)
 
-      assert html =~
-               ~r/An email was sent to .*, please access it to confirm your account/
+      assert redirected_to(conn) == ~p"/"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Account created successfully!"
     end
 
     test "rejects registration with invalid invite code", %{conn: conn} do
@@ -62,7 +64,7 @@ defmodule DealScoutWeb.UserLive.RegistrationTest do
 
       form =
         form(lv, "#registration_form",
-          user: valid_user_attributes(email: email),
+          user: %{"email" => email, "password" => valid_user_password()},
           invite_code: "wrongcode"
         )
 
@@ -78,7 +80,7 @@ defmodule DealScoutWeb.UserLive.RegistrationTest do
       result =
         lv
         |> form("#registration_form",
-          user: %{"email" => user.email},
+          user: %{"email" => user.email, "password" => valid_user_password()},
           invite_code: "dealscout2026"
         )
         |> render_submit()

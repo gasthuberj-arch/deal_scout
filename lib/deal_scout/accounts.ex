@@ -75,9 +75,25 @@ defmodule DealScout.Accounts do
 
   """
   def register_user(attrs) do
-    %User{}
-    |> User.email_changeset(attrs)
-    |> Repo.insert()
+    changeset =
+      if Map.has_key?(attrs, :password) or Map.has_key?(attrs, "password") do
+        %User{}
+        |> User.registration_changeset(attrs)
+        |> User.confirm_changeset()
+      else
+        %User{}
+        |> User.email_changeset(attrs)
+      end
+
+    Repo.insert(changeset)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking user registration changes.
+  """
+  def change_user_registration(user, attrs \\ %{}, opts \\ []) do
+    opts = Keyword.put_new(opts, :hash_password, false)
+    User.registration_changeset(user, attrs, opts)
   end
 
   ## Settings
