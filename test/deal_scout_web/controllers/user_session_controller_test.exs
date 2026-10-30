@@ -163,10 +163,11 @@ defmodule DealScoutWeb.UserSessionControllerTest do
     end
 
     test "deletes user without password check if account has no password set", %{
-      conn: conn,
-      user: user
+      conn: conn
     } do
       # User without password (magic-link only)
+      user = passwordless_user_fixture()
+
       conn =
         conn
         |> log_in_user(user)

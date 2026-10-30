@@ -25,14 +25,12 @@ defmodule DealScoutWeb.UserLive.RegistrationTest do
     test "renders errors for invalid data", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/register")
 
-      result =
-        lv
-        |> element("#registration_form")
-        |> render_change(user: %{"email" => "with spaces", "password" => "short"})
+      lv
+      |> element("#registration_form")
+      |> render_change(user: %{"email" => "with spaces", "password" => "short"})
 
-      assert result =~ "Register"
-      assert result =~ "must have the @ sign and no spaces"
-      assert result =~ "should be at least 12 character(s)"
+      assert has_element?(lv, "p.text-error", "must have the @ sign and no spaces")
+      assert has_element?(lv, "p.text-error", "should be at least 12 character(s)")
     end
   end
 
@@ -68,8 +66,8 @@ defmodule DealScoutWeb.UserLive.RegistrationTest do
           invite_code: "wrongcode"
         )
 
-      result = render_submit(form)
-      assert result =~ "Invalid invite code"
+      render_submit(form)
+      assert has_element?(lv, "[role=alert]", "Invalid invite code")
     end
 
     test "renders errors for duplicated email", %{conn: conn} do
@@ -77,15 +75,14 @@ defmodule DealScoutWeb.UserLive.RegistrationTest do
 
       user = user_fixture(%{email: "test@email.com"})
 
-      result =
-        lv
-        |> form("#registration_form",
-          user: %{"email" => user.email, "password" => valid_user_password()},
-          invite_code: "dealscout2026"
-        )
-        |> render_submit()
+      lv
+      |> form("#registration_form",
+        user: %{"email" => user.email, "password" => valid_user_password()},
+        invite_code: "dealscout2026"
+      )
+      |> render_submit()
 
-      assert result =~ "has already been taken"
+      assert has_element?(lv, "p.text-error", "has already been taken")
     end
   end
 

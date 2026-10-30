@@ -30,8 +30,6 @@ defmodule DealScoutWeb.UserLive.Registration do
           phx-change="validate"
           phx-trigger-action={@trigger_submit}
         >
-          <input type="hidden" name="user[remember_me]" value="true" />
-
           <.input
             field={@form[:email]}
             type="email"
@@ -58,6 +56,12 @@ defmodule DealScoutWeb.UserLive.Registration do
             label="Invite Code"
             placeholder="Enter invite code"
             required
+          />
+
+          <.input
+            field={@form[:remember_me]}
+            type="checkbox"
+            label="Keep me logged in"
           />
 
           <.button phx-disable-with="Creating account..." class="btn btn-primary w-full">
@@ -87,7 +91,7 @@ defmodule DealScoutWeb.UserLive.Registration do
 
   @impl true
   def handle_event("validate", %{"user" => user_params} = params, socket) do
-    invite_code = Map.get(params, "invite_code", socket.assigns.invite_code)
+    invite_code = extract_invite_code(params, socket)
 
     changeset =
       %User{}
@@ -101,7 +105,7 @@ defmodule DealScoutWeb.UserLive.Registration do
   end
 
   def handle_event("save", %{"user" => user_params} = params, socket) do
-    invite_code = Map.get(params, "invite_code", socket.assigns.invite_code)
+    invite_code = extract_invite_code(params, socket)
     expected_code = System.get_env("INVITE_CODE", "dealscout2026")
 
     if String.trim(invite_code || "") != expected_code do
@@ -126,6 +130,10 @@ defmodule DealScoutWeb.UserLive.Registration do
            |> assign_form(changeset)}
       end
     end
+  end
+
+  defp extract_invite_code(params, socket) do
+    Map.get(params, "invite_code", socket.assigns.invite_code)
   end
 
   defp assign_form(socket, %Ecto.Changeset{} = changeset) do

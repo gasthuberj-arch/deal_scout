@@ -14,11 +14,27 @@ defmodule DealScout.AccountsFixtures do
 
   def valid_user_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
-      email: unique_user_email()
+      email: unique_user_email(),
+      password: valid_user_password()
     })
   end
 
   def unconfirmed_user_fixture(attrs \\ %{}) do
+    {:ok, user} =
+      attrs
+      |> valid_user_attributes()
+      |> Map.delete(:password)
+      |> Map.delete("password")
+      |> then(fn attrs ->
+        %DealScout.Accounts.User{}
+        |> DealScout.Accounts.User.email_changeset(attrs)
+        |> DealScout.Repo.insert()
+      end)
+
+    user
+  end
+
+  def user_fixture(attrs \\ %{}) do
     {:ok, user} =
       attrs
       |> valid_user_attributes()
@@ -27,16 +43,14 @@ defmodule DealScout.AccountsFixtures do
     user
   end
 
-  def user_fixture(attrs \\ %{}) do
-    user = unconfirmed_user_fixture(attrs)
+  def passwordless_user_fixture(attrs \\ %{}) do
+    email = Map.get(attrs, :email) || unique_user_email()
 
-    token =
-      extract_user_token(fn url ->
-        Accounts.deliver_login_instructions(user, url)
-      end)
-
-    {:ok, {user, _expired_tokens}} =
-      Accounts.login_user_by_magic_link(token)
+    {:ok, user} =
+      %DealScout.Accounts.User{}
+      |> DealScout.Accounts.User.email_changeset(%{email: email})
+      |> DealScout.Accounts.User.confirm_changeset()
+      |> DealScout.Repo.insert()
 
     user
   end

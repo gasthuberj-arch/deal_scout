@@ -63,7 +63,7 @@ defmodule DealScout.Accounts do
   ## User registration
 
   @doc """
-  Registers a user.
+  Registers a user with email and password, auto-confirming their account.
 
   ## Examples
 
@@ -75,17 +75,10 @@ defmodule DealScout.Accounts do
 
   """
   def register_user(attrs) do
-    changeset =
-      if Map.has_key?(attrs, :password) or Map.has_key?(attrs, "password") do
-        %User{}
-        |> User.registration_changeset(attrs)
-        |> User.confirm_changeset()
-      else
-        %User{}
-        |> User.email_changeset(attrs)
-      end
-
-    Repo.insert(changeset)
+    %User{}
+    |> User.registration_changeset(attrs)
+    |> User.confirm_changeset()
+    |> Repo.insert()
   end
 
   @doc """
