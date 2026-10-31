@@ -25,7 +25,7 @@ defmodule DealScout.Repo.Migrations.AddDealsFts do
     """)
 
     execute("""
-    CREATE TRIGGER IF NOT EXISTS deals_au AFTER UPDATE OF title, clean_text, merchant ON deals BEGIN
+    CREATE TRIGGER IF NOT EXISTS deals_au AFTER UPDATE ON deals BEGIN
       DELETE FROM deals_fts WHERE rowid = old.id;
       INSERT INTO deals_fts(rowid, title, clean_text, merchant)
       VALUES (new.id, coalesce(new.title, ''), coalesce(new.clean_text, ''), coalesce(new.merchant, ''));
