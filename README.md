@@ -83,7 +83,7 @@ Now visit [`http://localhost:4000`](http://localhost:4000) in your browser.
 | `ADMIN_BACKUP_TOKEN` | *(required in prod)* | Bearer token for accessing `/api/admin/backup` |
 | `ADMIN_PASSWORD` | `dealscout2026!` (dev default) | Initial admin password used by `mix run priv/repo/seeds.exs` |
 | `DATABASE_PATH` | `deal_scout_dev.db` (dev) / `/data/deal_scout.db` (prod) | Path to SQLite database file |
-| `COFFEE_URL` | `https://ko-fi.com` | Optional link for the "Buy me a coffee" button (Ko-fi, BMC, etc.) |
+| `COFFEE_URL` | `https://ko-fi.com` | Optional Ko-fi profile URL for the support modal |
 | `LEGAL_OPERATOR_NAME` | `DealScout Maintainer` | Name displayed on `/impressum` and `/privacy` |
 | `LEGAL_OPERATOR_EMAIL` | `support@example.com` | Public contact email displayed on `/impressum` and `/privacy` |
 | `LEGAL_OPERATOR_ADDRESS` | `Privates Open-Source-Projekt` | Postal address or project note displayed on `/impressum` |

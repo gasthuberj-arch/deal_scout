@@ -27,16 +27,11 @@ defmodule DealScoutWeb.Components.SupportModal do
   end
 
   @doc """
-  Resolves the coffee / support URL. If COFFEE_URL is set, it overrides all rails.
-  Otherwise, falls back to the canonical URL for each rail.
+  Resolves the Ko-fi support URL from `COFFEE_URL`, falling back to `https://ko-fi.com`.
   """
-  def coffee_url(rail \\ :default) do
-    case {System.get_env("COFFEE_URL"), rail} do
-      {url, _} when is_binary(url) and url != "" -> url
-      {_, :kofi} -> "https://ko-fi.com"
-      {_, :buymeacoffee} -> "https://buymeacoffee.com"
-      {_, :paypal} -> "https://paypal.me"
-      {_, :github} -> "https://github.com/sponsors"
+  def coffee_url do
+    case System.get_env("COFFEE_URL") do
+      url when is_binary(url) and url != "" -> url
       _ -> "https://ko-fi.com"
     end
   end
@@ -65,7 +60,7 @@ defmodule DealScoutWeb.Components.SupportModal do
   end
 
   @doc """
-  Renders an interactive support modal letting users choose their preferred tip / donation rail.
+  Renders an interactive support modal linking to Ko-fi.
   Built with custom Tailwind styling and Phoenix JS commands (zero DaisyUI modal dependencies).
   """
   def coffee_modal(assigns) do
@@ -102,91 +97,32 @@ defmodule DealScoutWeb.Components.SupportModal do
             </h3>
             <p class="text-xs text-base-content/70 leading-relaxed max-w-xs mx-auto">
               DealScout is an independent, private tool with <strong>zero ads, zero trackers, and zero affiliate hijacking</strong>.
-              If DealScout just saved you money on a deal, choose your preferred rail:
+              If DealScout just saved you money on a deal, you can support the project on Ko-fi:
             </p>
           </div>
 
-          <div class="space-y-2">
+          <div class="space-y-2.5 pt-1">
             <a
-              href={coffee_url(:kofi)}
+              id="kofi-support-link"
+              href={coffee_url()}
               target="_blank"
               rel="noopener noreferrer"
-              class="flex items-center justify-between p-3 rounded-xl border border-base-200 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group"
+              class="flex items-center justify-center gap-2.5 w-full py-3 px-5 rounded-xl bg-[#72a4f2] hover:bg-[#5e92e6] text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all group"
             >
-              <div class="flex items-center gap-3">
-                <span class="text-xl">☕</span>
-                <div>
-                  <div class="font-semibold text-sm flex items-center gap-1.5">
-                    <span>Ko-fi</span>
-                    <span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">0% fee</span>
-                  </div>
-                  <div class="text-xs text-base-content/60">
-                    Apple Pay, Google Pay, Card &amp; PayPal
-                  </div>
-                </div>
-              </div>
+              <span class="text-lg leading-none group-hover:scale-110 transition-transform">☕</span>
+              <span>Support DealScout on Ko-fi</span>
               <.icon
                 name="hero-arrow-top-right-on-square"
-                class="size-4 text-base-content/40 group-hover:text-amber-500 transition-colors"
+                class="size-4 text-white/80 group-hover:text-white transition-colors"
               />
             </a>
-
-            <a
-              href={coffee_url(:buymeacoffee)}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="flex items-center justify-between p-3 rounded-xl border border-base-200 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group"
-            >
-              <div class="flex items-center gap-3">
-                <span class="text-xl">🟡</span>
-                <div>
-                  <div class="font-semibold text-sm">Buy Me a Coffee</div>
-                  <div class="text-xs text-base-content/60">Classic one-click coffee tip</div>
-                </div>
-              </div>
-              <.icon
-                name="hero-arrow-top-right-on-square"
-                class="size-4 text-base-content/40 group-hover:text-amber-500 transition-colors"
-              />
-            </a>
-
-            <a
-              href={coffee_url(:paypal)}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="flex items-center justify-between p-3 rounded-xl border border-base-200 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all group"
-            >
-              <div class="flex items-center gap-3">
-                <span class="text-xl">🅿️</span>
-                <div>
-                  <div class="font-semibold text-sm">PayPal.me</div>
-                  <div class="text-xs text-base-content/60">Direct Friends &amp; Family transfer</div>
-                </div>
-              </div>
-              <.icon
-                name="hero-arrow-top-right-on-square"
-                class="size-4 text-base-content/40 group-hover:text-blue-500 transition-colors"
-              />
-            </a>
-
-            <a
-              href={coffee_url(:github)}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="flex items-center justify-between p-3 rounded-xl border border-base-200 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group"
-            >
-              <div class="flex items-center gap-3">
-                <span class="text-xl">🐙</span>
-                <div>
-                  <div class="font-semibold text-sm">GitHub Sponsors</div>
-                  <div class="text-xs text-base-content/60">0% fee for open source developers</div>
-                </div>
-              </div>
-              <.icon
-                name="hero-arrow-top-right-on-square"
-                class="size-4 text-base-content/40 group-hover:text-purple-500 transition-colors"
-              />
-            </a>
+            <div class="flex items-center justify-center gap-2 text-[11px] text-base-content/60">
+              <span class="font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                0% platform fee
+              </span>
+              <span>•</span>
+              <span>Apple Pay, Google Pay, Card &amp; PayPal</span>
+            </div>
           </div>
 
           <div class="pt-2 text-center">
