@@ -102,6 +102,28 @@ defmodule DealScout.Deals.StreamCacheTest do
       StreamCache.invalidate()
       assert StreamCache.size() == 0
     end
+
+    test "refresh/3 overwrites matching cached entries in-place without evicting them" do
+      StreamCache.fetch([feed_id: 10], fn -> [:feed_10_v1] end)
+      StreamCache.fetch([feed_id: 20], fn -> [:feed_20_v1] end)
+      StreamCache.fetch([], fn -> [:all_feeds_v1] end)
+
+      assert StreamCache.size() == 3
+
+      StreamCache.refresh([feed_id: 10], fn opts ->
+        case Keyword.get(opts, :feed) do
+          10 -> [:feed_10_v2]
+          "all" -> [:all_feeds_v2]
+          other -> [other]
+        end
+      end)
+
+      # Size stays 3 (entries overwritten in-place, never dropped)
+      assert StreamCache.size() == 3
+      assert [:feed_10_v2] = StreamCache.fetch([feed_id: 10], fn -> [:recomputed] end)
+      assert [:all_feeds_v2] = StreamCache.fetch([], fn -> [:recomputed] end)
+      assert [:feed_20_v1] = StreamCache.fetch([feed_id: 20], fn -> [:recomputed] end)
+    end
   end
 
   describe "Deals.list_deals integration" do

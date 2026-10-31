@@ -26,18 +26,28 @@ defmodule DealScout.Deals do
   end
 
   def broadcast_deal({:ok, %Deal{} = deal} = result) do
-    invalidate_stream_cache(feed_id: deal.feed_id)
+    refresh_stream_cache(deal)
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     result
   end
 
   def broadcast_deal(%Deal{} = deal) do
-    invalidate_stream_cache(feed_id: deal.feed_id)
+    refresh_stream_cache(deal)
     Phoenix.PubSub.broadcast(@pubsub, @topic, {:new_deal, deal})
     {:ok, deal}
   end
 
   def broadcast_deal(error), do: error
+
+  defp refresh_stream_cache(%Deal{} = deal) do
+    feed_slug =
+      case deal.feed do
+        %{slug: slug} when is_binary(slug) -> slug
+        _ -> nil
+      end
+
+    StreamCache.refresh([feed_id: deal.feed_id, feed_slug: feed_slug], &fetch_deals_from_db/1)
+  end
 
   @doc """
   Lists deals with optional **Deal stream filter** options:
@@ -361,7 +371,7 @@ defmodule DealScout.Deals do
       |> Repo.delete_all()
 
     if count > 0 do
-      invalidate_stream_cache()
+      StreamCache.refresh([], &fetch_deals_from_db/1)
     end
 
     result

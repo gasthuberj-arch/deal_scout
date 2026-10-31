@@ -76,13 +76,21 @@ defmodule DealScout.Analytics do
     total_deals = max(feed_deals_sum, deals_last_30d)
 
     duplicates_last_30d =
-      Repo.one(from d in Deal, where: not is_nil(d.canonical_deal_id), select: count(d.id)) || 0
+      Repo.one(
+        from d in Deal,
+          where: fragment("? IS NOT NULL", d.canonical_deal_id),
+          select: count(d.id)
+      ) || 0
 
     feed_duplicates_sum = Repo.aggregate(Feed, :sum, :total_duplicates_ingested) || 0
     total_duplicates = max(feed_duplicates_sum, duplicates_last_30d)
 
     avg_temp =
-      case Repo.one(from d in Deal, where: not is_nil(d.temperature), select: avg(d.temperature)) do
+      case Repo.one(
+             from d in Deal,
+               where: fragment("? IS NOT NULL", d.temperature),
+               select: avg(d.temperature)
+           ) do
         nil -> 0.0
         %Decimal{} = dec -> Decimal.to_float(dec) |> Float.round(1)
         float when is_float(float) -> Float.round(float, 1)
@@ -96,14 +104,14 @@ defmodule DealScout.Analytics do
     deals_last_24h =
       Repo.one(
         from d in Deal,
-          where: d.published_at >= ^since_24h or d.inserted_at >= ^since_24h,
+          where: d.published_at >= ^since_24h,
           select: count(d.id)
       ) || 0
 
     deals_last_hour =
       Repo.one(
         from d in Deal,
-          where: d.published_at >= ^since_1h or d.inserted_at >= ^since_1h,
+          where: d.published_at >= ^since_1h,
           select: count(d.id)
       ) || 0
 
@@ -153,10 +161,18 @@ defmodule DealScout.Analytics do
       |> Repo.all()
 
     cross_border_count =
-      Repo.one(from d in Deal, where: not is_nil(d.country), select: count(d.id)) || 0
+      Repo.one(
+        from d in Deal,
+          where: fragment("? IS NOT NULL", d.country),
+          select: count(d.id)
+      ) || 0
 
     foreign_kb_count =
-      Repo.one(from d in Deal, where: not is_nil(d.keyboard_warning), select: count(d.id)) || 0
+      Repo.one(
+        from d in Deal,
+          where: fragment("? IS NOT NULL", d.keyboard_warning),
+          select: count(d.id)
+      ) || 0
 
     %{
       total_deals: total_deals,

@@ -10,14 +10,14 @@ defmodule DealScout.Deals.StreamCache do
   - In-memory ETS table management with `read_concurrency: true`.
   - Filter option eligibility checks (only un-offset, non-search queries are cached).
   - Cache key serialization across feed, merchant, and grouping filters.
-  - Read-through caching with TTL expiry (`@default_ttl_ms 5_000`).
-  - Selective pattern-based invalidation (`:feed_id` match-delete or global clear).
+  - Read-through caching with TTL expiry (`@default_ttl_ms 300_000`).
+  - In-place refresh (`refresh/3`) and selective pattern-based invalidation (`:feed_id` match-delete or global clear).
   """
 
   use GenServer
 
   @table :deal_scout_stream_cache
-  @default_ttl_ms 5_000
+  @default_ttl_ms 300_000
 
   # ============================================================================
   # Public Interface
@@ -47,6 +47,35 @@ defmodule DealScout.Deals.StreamCache do
   end
 
   @doc """
+  Refreshes and overwrites existing cached deal streams in-place without deleting
+  them first, so concurrent readers never experience a cold cache miss.
+  - If `feed_id: id` is given, refreshes cached entries for that feed, its slug, and `"all"`.
+  - If no filter is given, refreshes all currently cached stream entries.
+  """
+  @spec refresh(keyword(), (keyword() -> list()), pos_integer()) :: :ok
+  def refresh(opts \\ [], compute_for_opts_fn, ttl_ms \\ @default_ttl_ms)
+      when is_list(opts) and is_function(compute_for_opts_fn, 1) do
+    feed_id = Keyword.get(opts, :feed_id)
+    feed_slug = Keyword.get(opts, :feed_slug)
+
+    try do
+      keys = matching_keys(feed_id, feed_slug)
+      now = System.monotonic_time(:millisecond)
+
+      Enum.each(keys, fn key ->
+        key_opts = key_to_opts(key)
+        fresh_data = compute_for_opts_fn.(key_opts)
+        insert(key, fresh_data, now + ttl_ms)
+      end)
+
+      :ok
+    rescue
+      _ ->
+        invalidate(opts)
+    end
+  end
+
+  @doc """
   Invalidates cached deal streams.
   - If `feed_id: id` is given, selectively deletes cache entries matching that feed
     and the global 'all' feed.
@@ -55,11 +84,14 @@ defmodule DealScout.Deals.StreamCache do
   @spec invalidate(keyword()) :: :ok
   def invalidate(opts \\ []) do
     feed_id = Keyword.get(opts, :feed_id)
+    feed_slug = Keyword.get(opts, :feed_slug)
 
     try do
-      if feed_id do
-        :ets.match_delete(@table, {{:deals, feed_id, :_, :_, :_, :_, :_}, :_, :_})
-        :ets.match_delete(@table, {{:deals, "all", :_, :_, :_, :_, :_}, :_, :_})
+      if feed_id || feed_slug do
+        for target <- ["all", feed_id, if(feed_id, do: to_string(feed_id)), feed_slug],
+            not is_nil(target) do
+          :ets.match_delete(@table, {{:deals, target, :_, :_, :_, :_, :_}, :_, :_})
+        end
       else
         :ets.match_delete(@table, {{:deals, :_, :_, :_, :_, :_, :_}, :_, :_})
       end
@@ -110,6 +142,36 @@ defmodule DealScout.Deals.StreamCache do
       Keyword.get(opts, :limit, 60),
       Keyword.get(opts, :offset, 0)
     }
+  end
+
+  defp key_to_opts(
+         {:deals, feed_key, merchant_key, exclude_dropshippers, group_deals, limit, offset}
+       ) do
+    [
+      feed: feed_key,
+      merchant: merchant_key,
+      exclude_dropshippers: exclude_dropshippers,
+      group_deals: group_deals,
+      limit: limit,
+      offset: offset
+    ]
+  end
+
+  defp matching_keys(nil, nil), do: all_cached_keys()
+
+  defp matching_keys(feed_id, feed_slug) do
+    target_feeds =
+      ["all", feed_id, if(feed_id, do: to_string(feed_id)), feed_slug]
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
+    all_cached_keys()
+    |> Enum.filter(fn {:deals, f, _m, _ed, _gd, _l, _o} -> MapSet.member?(target_feeds, f) end)
+  end
+
+  defp all_cached_keys do
+    :ets.match(@table, {{:deals, :"$1", :"$2", :"$3", :"$4", :"$5", :"$6"}, :_, :_})
+    |> Enum.map(fn [f, m, ed, gd, l, o] -> {:deals, f, m, ed, gd, l, o} end)
   end
 
   # ============================================================================

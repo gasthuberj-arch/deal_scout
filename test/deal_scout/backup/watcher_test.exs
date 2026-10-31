@@ -73,6 +73,9 @@ defmodule DealScout.Backup.WatcherTest do
         {BackupWatcher, [replica_dir: tmp_dir, poll_interval_ms: 50, name: :test_watcher]}
       )
 
+    # Ensure handle_continue(:initial_scan, ...) completes before creating the new file
+    _ = :sys.get_state(watcher)
+
     # Now create a new file
     wal_dir = Path.join(tmp_dir, "generations/gen_pubsub/wal")
     File.mkdir_p!(wal_dir)

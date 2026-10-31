@@ -55,9 +55,35 @@ defmodule DealScout.Analytics.Server do
       Keyword.get(opts, :auto_warm, Application.get_env(:deal_scout, :start_feed_poller, true))
 
     if auto_warm? do
+      seed_empty_snapshot_if_needed()
       {:ok, %{table: table, interval_ms: interval}, {:continue, :initial_warm}}
     else
       {:ok, %{table: table, interval_ms: interval}}
+    end
+  end
+
+  defp seed_empty_snapshot_if_needed do
+    case :ets.lookup(@table, :deal_intelligence_stats) do
+      [] ->
+        Analytics.put_cached_stats(%{
+          total_deals: 0,
+          deals_last_30d: 0,
+          total_duplicates: 0,
+          duplicates_last_30d: 0,
+          canonical_deals: 0,
+          avg_temperature: 0.0,
+          deals_last_24h: 0,
+          deals_last_hour: 0,
+          deals_per_hour: 0.0,
+          deals_per_min: 0.0,
+          deals_by_feed: [],
+          recent_duplicate_clusters: [],
+          cross_border_count: 0,
+          foreign_kb_count: 0
+        })
+
+      _ ->
+        :ok
     end
   end
 
