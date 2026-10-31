@@ -121,7 +121,204 @@ defmodule DealScout.RepoMigrationTest do
                  String.contains?(content, "create unique_index("),
                "Migration #{filename} references another table but may be missing an index"
       end
+
+      ast = Code.string_to_quoted!(content, file: filename)
+      lint_migration_ast!(ast, content, filename)
     end
+  end
+
+  test "latest migration executes within time and WAL budget on a seeded dataset", %{
+    repo: repo,
+    migrations_path: migrations_path
+  } do
+    migration_files =
+      migrations_path
+      |> Path.join("*_*.exs")
+      |> Path.wildcard()
+      |> Enum.sort()
+
+    versions =
+      Enum.map(migration_files, fn file ->
+        file |> Path.basename() |> String.split("_") |> hd() |> String.to_integer()
+      end)
+
+    {prior_versions, [latest_version]} = Enum.split(versions, length(versions) - 1)
+
+    # 1. Migrate up to N - 1 (simulating production state prior to latest migration)
+    for v <- prior_versions do
+      Ecto.Migrator.up(repo, v, load_migration_module(migrations_path, v), log: false)
+    end
+
+    # 2. Seed 1,000 realistic deals (~1.5 KB description + clean_text each)
+    seed_deals_for_migration_benchmark(repo, 1_000)
+
+    # Checkpoint WAL so we measure only the latest migration's WAL footprint and runtime
+    Ecto.Adapters.SQL.query!(repo, "PRAGMA wal_checkpoint(TRUNCATE);", [])
+
+    # 3. Run latest migration N and assert execution time and WAL size stay within budget
+    latest_mod = load_migration_module(migrations_path, latest_version)
+
+    {duration_us, _} =
+      :timer.tc(fn ->
+        Ecto.Migrator.up(repo, latest_version, latest_mod, log: false)
+      end)
+
+    duration_ms = div(duration_us, 1000)
+
+    assert duration_ms < 750,
+           "Latest migration #{latest_version} took #{duration_ms}ms on 1,000 deals (budget: 750ms). " <>
+             "Check for full-table rewrites or triggers firing during bulk UPDATE/DELETE."
+
+    db_file = Application.get_env(:deal_scout, repo)[:database]
+    wal_file = "#{db_file}-wal"
+    wal_bytes = if File.exists?(wal_file), do: File.stat!(wal_file).size, else: 0
+    wal_mb = Float.round(wal_bytes / (1024 * 1024), 2)
+
+    assert wal_bytes < 12 * 1024 * 1024,
+           "Latest migration #{latest_version} generated #{wal_mb} MB of WAL for 1,000 deals (budget: 12 MB). " <>
+             "Drop triggers before bulk updates or move data backfills out of synchronous boot migrations."
+  end
+
+  defp lint_migration_ast!(ast, content, filename) do
+    allow_table_rewrite? = String.contains?(content, "migration-lint: allow-table-rewrite")
+
+    # 1. Inspect `def change` blocks for irreversible 1-arg `execute/1` calls
+    Macro.prewalk(ast, fn
+      {:def, _, [{:change, _, _}, [do: change_body]]} = node ->
+        Macro.prewalk(change_body, fn
+          {:execute, meta, [_single_sql]} ->
+            flunk(
+              "Migration #{filename}:#{meta[:line]} calls 1-arg `execute/1` inside `def change`, " <>
+                "which cannot roll back. Use `execute(up_sql, down_sql)` or `def up` / `def down`."
+            )
+
+          inner ->
+            inner
+        end)
+
+        node
+
+      {:modify, meta, [col | _]} = node ->
+        unless allow_table_rewrite? do
+          flunk(
+            "Migration #{filename}:#{meta[:line]} calls `modify #{inspect(col)}`, which triggers " <>
+              "a full 12-step table copy rewrite in SQLite."
+          )
+        end
+
+        node
+
+      node ->
+        node
+    end)
+
+    # 2. Extract raw SQL strings executed in `up` / `change` in order
+    sql_statements = extract_executed_sql(ast)
+
+    for {sql, line} <- sql_statements do
+      normalized = String.upcase(sql)
+
+      # Forbid VACUUM inside Ecto migrations
+      if Regex.match?(~r/\bVACUUM\b/, normalized) do
+        flunk(
+          "Migration #{filename}:#{line} executes `VACUUM` inside a migration. " <>
+            "SQLite cannot VACUUM inside a transaction and it blocks boot."
+        )
+      end
+
+      # Forbid unscoped AFTER UPDATE ON triggers (must use AFTER UPDATE OF col1, col2 ON)
+      if Regex.match?(~r/CREATE\s+TRIGGER\b.*\bAFTER\s+UPDATE\s+ON\b/s, normalized) do
+        flunk(
+          "Migration #{filename}:#{line} creates an unscoped `AFTER UPDATE ON` trigger. " <>
+            "Use `AFTER UPDATE OF col1, col2 ON <table>` so unrelated column updates do not fire triggers."
+        )
+      end
+    end
+
+    # 3. Forbid bulk UPDATE/DELETE before DROP TRIGGER in the same migration
+    first_bulk_mutation_line =
+      Enum.find_value(sql_statements, fn {sql, line} ->
+        norm = String.upcase(sql)
+
+        if Regex.match?(~r/^\s*(UPDATE|DELETE\s+FROM)\s+DEALS\b/, norm),
+          do: line,
+          else: nil
+      end)
+
+    last_drop_trigger_line =
+      sql_statements
+      |> Enum.filter(fn {sql, _line} ->
+        Regex.match?(~r/\bDROP\s+TRIGGER\b/i, sql)
+      end)
+      |> List.last()
+      |> case do
+        {_sql, line} -> line
+        nil -> nil
+      end
+
+    if first_bulk_mutation_line && last_drop_trigger_line &&
+         first_bulk_mutation_line < last_drop_trigger_line do
+      flunk(
+        "Migration #{filename}:#{first_bulk_mutation_line} runs a bulk UPDATE/DELETE on `deals` " <>
+          "before `DROP TRIGGER` at line #{last_drop_trigger_line}. Drop triggers first so " <>
+          "SQLite does not fire row-by-row trigger updates on a table being rebuilt."
+      )
+    end
+  end
+
+  defp extract_executed_sql(ast) do
+    {_ast, acc} =
+      Macro.prewalk(ast, [], fn
+        {:def, _, [{:down, _, _}, _]} = _node, acc ->
+          # Skip `down` blocks for forward-migration order checks, but still lint trigger syntax
+          {:ok, acc}
+
+        {:execute, meta, [sql | _]} = node, acc when is_binary(sql) ->
+          {node, [{sql, meta[:line] || 0} | acc]}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    Enum.reverse(acc)
+  end
+
+  defp load_migration_module(migrations_path, version) do
+    [file] = Path.wildcard(Path.join(migrations_path, "#{version}_*.exs"))
+    [{mod, _}] = Code.compile_file(file)
+    mod
+  end
+
+  defp seed_deals_for_migration_benchmark(repo, count) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+    Ecto.Adapters.SQL.query!(
+      repo,
+      "INSERT INTO feeds (name, slug, url, is_active, inserted_at, updated_at) VALUES ('Test', 'test', 'https://example.com/rss', 1, ?1, ?1)",
+      [now]
+    )
+
+    {:ok, %{rows: [[feed_id]]}} =
+      Ecto.Adapters.SQL.query(repo, "SELECT id FROM feeds LIMIT 1", [])
+
+    body_html = String.duplicate("<p>Top Deal Angebot mit Rabatt und Gratis Versand!</p>", 25)
+    clean_body = String.duplicate("Top Deal Angebot mit Rabatt und Gratis Versand! ", 20)
+
+    # Use a single recursive CTE insert for fast setup (< 50ms)
+    Ecto.Adapters.SQL.query!(
+      repo,
+      """
+      WITH RECURSIVE cnt(x) AS (
+        SELECT 1
+        UNION ALL
+        SELECT x + 1 FROM cnt WHERE x < ?1
+      )
+      INSERT INTO deals (feed_id, guid, title, url, description, clean_text, merchant, published_at, inserted_at, updated_at)
+      SELECT ?2, 'guid-' || x, 'Deal Title ' || x, 'https://example.com/' || x, ?3, ?4, 'Amazon', ?5, ?5, ?5
+      FROM cnt;
+      """,
+      [count, feed_id, body_html, clean_body, now]
+    )
   end
 
   defp get_table_names(repo) do

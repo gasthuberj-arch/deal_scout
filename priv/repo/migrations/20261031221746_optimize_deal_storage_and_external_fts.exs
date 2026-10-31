@@ -2,13 +2,14 @@ defmodule DealScout.Repo.Migrations.OptimizeDealStorageAndExternalFts do
   use Ecto.Migration
 
   def up do
-    # Clear redundant raw HTML descriptions now that clean_text and metadata are extracted at parse time
-    execute("UPDATE deals SET description = NULL WHERE description IS NOT NULL;")
-
+    # Drop old FTS triggers and table first so clearing `description` doesn't fire 1-by-1 FTS updates
     execute("DROP TRIGGER IF EXISTS deals_ai;")
     execute("DROP TRIGGER IF EXISTS deals_ad;")
     execute("DROP TRIGGER IF EXISTS deals_au;")
     execute("DROP TABLE IF EXISTS deals_fts;")
+
+    # Clear redundant raw HTML descriptions now that clean_text and metadata are extracted at parse time
+    execute("UPDATE deals SET description = NULL WHERE description IS NOT NULL;")
 
     # External-content FTS5 table backed directly by `deals` to avoid duplicating text in `deals_fts_content`
     execute("""
@@ -37,7 +38,7 @@ defmodule DealScout.Repo.Migrations.OptimizeDealStorageAndExternalFts do
     """)
 
     execute("""
-    CREATE TRIGGER deals_au AFTER UPDATE ON deals BEGIN
+    CREATE TRIGGER deals_au AFTER UPDATE OF title, clean_text, merchant ON deals BEGIN
       INSERT INTO deals_fts(deals_fts, rowid, title, clean_text, merchant)
       VALUES ('delete', old.id, old.title, old.clean_text, old.merchant);
       INSERT INTO deals_fts(rowid, title, clean_text, merchant)
@@ -77,7 +78,7 @@ defmodule DealScout.Repo.Migrations.OptimizeDealStorageAndExternalFts do
     """)
 
     execute("""
-    CREATE TRIGGER IF NOT EXISTS deals_au AFTER UPDATE ON deals BEGIN
+    CREATE TRIGGER IF NOT EXISTS deals_au AFTER UPDATE OF title, clean_text, merchant ON deals BEGIN
       DELETE FROM deals_fts WHERE rowid = old.id;
       INSERT INTO deals_fts(rowid, title, clean_text, merchant)
       VALUES (new.id, coalesce(new.title, ''), coalesce(new.clean_text, ''), coalesce(new.merchant, ''));
