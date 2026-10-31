@@ -197,7 +197,7 @@ defmodule DealScout.Feeds.Parser do
     |> String.trim()
   end
 
-  defp clean_html(html) when is_binary(html) do
+  def clean_html(html) when is_binary(html) do
     case Floki.parse_fragment(html) do
       {:ok, fragment} ->
         fragment
@@ -213,7 +213,7 @@ defmodule DealScout.Feeds.Parser do
     end
   end
 
-  defp clean_html(_), do: ""
+  def clean_html(_), do: ""
 
   def clean_text_string(text) when is_binary(text) do
     text

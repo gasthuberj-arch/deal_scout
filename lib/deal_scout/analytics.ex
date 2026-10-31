@@ -71,19 +71,38 @@ defmodule DealScout.Analytics do
   Directly computes aggregated deal intelligence metrics without consulting cache.
   """
   def compute_deal_intelligence_stats do
-    deals_last_30d = Repo.aggregate(Deal, :count, :id) || 0
-    feed_deals_sum = Repo.aggregate(Feed, :sum, :total_deals_ingested) || 0
-    total_deals = max(feed_deals_sum, deals_last_30d)
+    now = DateTime.utc_now()
+    since_30d = DateTime.add(now, -30 * 24 * 3600, :second)
+    since_24h = DateTime.add(now, -24 * 3600, :second)
+    since_1h = DateTime.add(now, -3600, :second)
 
-    duplicates_last_30d =
+    stored_deals = Repo.aggregate(Deal, :count, :id) || 0
+    feed_deals_sum = Repo.aggregate(Feed, :sum, :total_deals_ingested) || 0
+    total_deals = max(feed_deals_sum, stored_deals)
+
+    deals_last_30d =
+      Repo.one(
+        from d in Deal,
+          where: d.published_at >= ^since_30d,
+          select: count(d.id)
+      ) || 0
+
+    stored_duplicates =
       Repo.one(
         from d in Deal,
           where: fragment("? IS NOT NULL", d.canonical_deal_id),
           select: count(d.id)
       ) || 0
 
+    duplicates_last_30d =
+      Repo.one(
+        from d in Deal,
+          where: fragment("? IS NOT NULL", d.canonical_deal_id) and d.published_at >= ^since_30d,
+          select: count(d.id)
+      ) || 0
+
     feed_duplicates_sum = Repo.aggregate(Feed, :sum, :total_duplicates_ingested) || 0
-    total_duplicates = max(feed_duplicates_sum, duplicates_last_30d)
+    total_duplicates = max(feed_duplicates_sum, stored_duplicates)
 
     avg_temp =
       case Repo.one(
@@ -96,10 +115,6 @@ defmodule DealScout.Analytics do
         float when is_float(float) -> Float.round(float, 1)
         int when is_integer(int) -> int * 1.0
       end
-
-    now = DateTime.utc_now()
-    since_24h = DateTime.add(now, -24 * 3600, :second)
-    since_1h = DateTime.add(now, -3600, :second)
 
     deals_last_24h =
       Repo.one(
@@ -131,7 +146,8 @@ defmodule DealScout.Analytics do
 
     deals_by_feed =
       from(f in Feed,
-        left_join: d in assoc(f, :deals),
+        left_join: d in Deal,
+        on: d.feed_id == f.id and d.published_at >= ^since_30d,
         group_by: [f.id, f.name, f.total_deals_ingested],
         having: count(d.id) > 0 or f.total_deals_ingested > 0,
         select: %{
@@ -146,7 +162,7 @@ defmodule DealScout.Analytics do
 
     recent_duplicate_clusters =
       from(d in Deal,
-        where: is_nil(d.canonical_deal_id),
+        where: is_nil(d.canonical_deal_id) and d.published_at >= ^since_30d,
         join: dup in assoc(d, :duplicates),
         group_by: [d.id, d.title, d.price],
         select: %{
@@ -204,10 +220,12 @@ defmodule DealScout.Analytics do
       end
 
     total_users_count = Repo.aggregate(User, :count, :id) || 0
+    since_30d = DateTime.add(DateTime.utc_now(), -30 * 24 * 3600, :second)
 
     feeds_status =
       from(f in Feed,
-        left_join: d in assoc(f, :deals),
+        left_join: d in Deal,
+        on: d.feed_id == f.id and d.published_at >= ^since_30d,
         group_by: [
           f.id,
           f.name,

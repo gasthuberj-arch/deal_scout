@@ -25,6 +25,15 @@ config :deal_scout, DealScoutWeb.Endpoint,
 
 config :deal_scout,
   litestream_replica_dir: System.get_env("LITESTREAM_REPLICA_PATH", "/data/litestream"),
+  backup_temp_dir:
+    System.get_env(
+      "BACKUP_TEMP_DIR",
+      if(config_env() == :prod,
+        do: Path.dirname(System.get_env("DATABASE_PATH") || "/data/deal_scout.db"),
+        else: System.tmp_dir!()
+      )
+    ),
+  deal_retention_days: String.to_integer(System.get_env("DEAL_RETENTION_DAYS", "365")),
   image_cache_dir:
     System.get_env(
       "IMAGE_CACHE_DIR",

@@ -1,8 +1,9 @@
 defmodule DealScout.Maintenance.Pruner do
   @moduledoc """
-  Background GenServer that automatically purges deals older than 30 days
-  daily at 03:00 UTC and runs `PRAGMA incremental_vacuum;` to keep the SQLite
-  database file lean and within small hosting/backup footprints.
+  Background GenServer that automatically purges deals older than the configured
+  retention window (default 365 days) daily at 03:00 UTC and runs
+  `PRAGMA incremental_vacuum;` to keep the SQLite database file lean and within
+  small hosting/backup footprints.
   """
 
   use GenServer
@@ -11,7 +12,7 @@ defmodule DealScout.Maintenance.Pruner do
   alias DealScout.Deals
   alias DealScout.Repo
 
-  @retention_days 30
+  @retention_days 365
   @target_hour_utc 3
   @target_minute_utc 0
 
@@ -85,7 +86,7 @@ defmodule DealScout.Maintenance.Pruner do
   @impl true
   def init(opts) do
     interval_ms = Keyword.get(opts, :interval_ms)
-    days = Keyword.get(opts, :retention_days, @retention_days)
+    days = Keyword.get(opts, :retention_days, default_retention_days())
     skip_auto_vacuum_setup = Keyword.get(opts, :skip_auto_vacuum_setup, false)
 
     unless skip_auto_vacuum_setup do
@@ -124,6 +125,10 @@ defmodule DealScout.Maintenance.Pruner do
   rescue
     e ->
       Logger.error("[DealScout.Pruner] Error pruning deals: #{Exception.message(e)}")
+  end
+
+  defp default_retention_days do
+    Application.get_env(:deal_scout, :deal_retention_days, @retention_days)
   end
 
   defp schedule_next(%{interval_ms: interval_ms})

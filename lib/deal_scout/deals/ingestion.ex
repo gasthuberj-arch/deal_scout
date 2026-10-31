@@ -182,7 +182,7 @@ defmodule DealScout.Deals.Ingestion do
       guid: item.guid,
       title: item.title,
       url: item.url,
-      description: item.description,
+      description: nil,
       clean_text: item.clean_text,
       price: item.price,
       raw_merchant: item.raw_merchant || item.merchant_name,
@@ -230,6 +230,14 @@ defmodule DealScout.Deals.Ingestion do
   defp normalize_candidate_attrs(attrs) when is_map(attrs) do
     get = fn key -> Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key)) end
     merchant_name = get.(:merchant) || get.(:merchant_name)
+    description = get.(:description)
+
+    clean_text =
+      case get.(:clean_text) do
+        text when is_binary(text) and text != "" -> text
+        _ when is_binary(description) and description != "" -> Parser.clean_html(description)
+        other -> other
+      end
 
     %{
       feed_id: get.(:feed_id),
@@ -241,8 +249,8 @@ defmodule DealScout.Deals.Ingestion do
       guid: get.(:guid),
       title: get.(:title),
       url: get.(:url),
-      description: get.(:description),
-      clean_text: get.(:clean_text),
+      description: description,
+      clean_text: clean_text,
       price: get.(:price),
       image_url: get.(:image_url),
       idealo_url: get.(:idealo_url),

@@ -87,6 +87,8 @@ defmodule DealScout.Deals.IngestionTest do
       assert deal.guid == "guid-sony-xm5-1"
       assert deal.title =~ "Sony WH-1000XM5"
       assert deal.temperature == 150
+      assert deal.description == nil
+      assert deal.clean_text =~ "Top Angebot!"
 
       merchant = Repo.get_by!(Merchant, slug: "mediamarkt")
       assert merchant.deal_count == 1

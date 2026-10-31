@@ -90,5 +90,71 @@ defmodule DealScout.Maintenance.PrunerTest do
       assert feed_stat.deal_count == 2
       assert feed_stat.deals_last_30d == 1
     end
+
+    test "defaults to 365-day yearly retention while scoping 30d analytics metrics" do
+      feed =
+        Repo.insert!(%Feed{
+          name: "Dealabs",
+          slug: "dealabs-yearly-test",
+          url: "https://www.dealabs.com/rss"
+        })
+
+      over_year_ago = DateTime.utc_now() |> DateTime.add(-370 * 24 * 3600, :second)
+      two_months_ago = DateTime.utc_now() |> DateTime.add(-60 * 24 * 3600, :second)
+      five_days_ago = DateTime.utc_now() |> DateTime.add(-5 * 24 * 3600, :second)
+
+      {:ok, expired_deal} =
+        Deals.insert_deal(%{
+          feed_id: feed.id,
+          guid: "yearly-expired-guid",
+          title: "Expired 2025 Deal",
+          url: "https://example.com/expired",
+          price: Decimal.new("199.00"),
+          merchant: "Amazon",
+          published_at: over_year_ago
+        })
+
+      {:ok, sixty_day_deal} =
+        Deals.insert_deal(%{
+          feed_id: feed.id,
+          guid: "yearly-60d-guid",
+          title: "Sixty Day Old Deal",
+          url: "https://example.com/60d",
+          price: Decimal.new("299.00"),
+          merchant: "Amazon",
+          published_at: two_months_ago
+        })
+
+      {:ok, recent_deal} =
+        Deals.insert_deal(%{
+          feed_id: feed.id,
+          guid: "yearly-5d-guid",
+          title: "Five Day Old Deal",
+          url: "https://example.com/5d",
+          price: Decimal.new("399.00"),
+          merchant: "Amazon",
+          published_at: five_days_ago
+        })
+
+      pid =
+        start_supervised!(
+          {Pruner, name: :yearly_test_pruner, skip_auto_vacuum_setup: true, interval_ms: 60_000}
+        )
+
+      send(pid, :prune)
+      _ = :sys.get_state(pid)
+
+      assert Repo.get(Deals.Deal, expired_deal.id) == nil
+      assert Repo.get(Deals.Deal, sixty_day_deal.id) != nil
+      assert Repo.get(Deals.Deal, recent_deal.id) != nil
+
+      stats = DealScout.Analytics.compute_deal_intelligence_stats()
+      assert stats.total_deals >= 3
+      assert stats.deals_last_30d == 1
+
+      feed_stat = Enum.find(stats.deals_by_feed, &(&1.feed_name == "Dealabs"))
+      assert feed_stat.deal_count == 3
+      assert feed_stat.deals_last_30d == 1
+    end
   end
 end

@@ -145,7 +145,7 @@ defmodule DealScout.Backup do
   end
 
   @doc """
-  Creates an atomic SQLite snapshot in the temporary directory using `VACUUM INTO`
+  Creates an atomic SQLite snapshot in the configured backup temp directory using `VACUUM INTO`
   (falling back to file copy when running inside a test sandbox transaction).
 
   Returns `{:ok, %{path: backup_path, filename: download_filename}}` or `{:error, reason}`.
@@ -153,7 +153,8 @@ defmodule DealScout.Backup do
   @spec create_sqlite_snapshot(keyword()) ::
           {:ok, %{path: Path.t(), filename: String.t()}} | {:error, term()}
   def create_sqlite_snapshot(opts \\ []) do
-    temp_dir = Keyword.get(opts, :temp_dir, System.tmp_dir!())
+    temp_dir = Keyword.get(opts, :temp_dir, snapshot_temp_dir())
+    File.mkdir_p!(temp_dir)
     timestamp = Calendar.strftime(DateTime.utc_now(), "%Y%m%d_%H%M%S")
     backup_path = Path.join(temp_dir, "deal_scout_backup_#{timestamp}.db")
     filename = "deal_scout_#{timestamp}.db"
@@ -227,6 +228,10 @@ defmodule DealScout.Backup do
   end
 
   def extract_bearer_token(_), do: nil
+
+  defp snapshot_temp_dir do
+    Application.get_env(:deal_scout, :backup_temp_dir, System.tmp_dir!())
+  end
 
   defp configured_token(:metrics) do
     raw =
