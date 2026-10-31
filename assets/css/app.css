@@ -111,6 +111,13 @@
   box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4);
 }
 
+/* Prevent buttons and badges from wrapping hyphenated labels across lines */
+.btn,
+.badge {
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 

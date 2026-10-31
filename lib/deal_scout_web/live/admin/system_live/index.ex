@@ -124,25 +124,31 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
             </p>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2.5">
             <button
               id="trigger-ebay-poll-btn"
+              type="button"
               phx-click="trigger_ebay_poll"
-              class="btn btn-secondary btn-sm flex items-center gap-2"
+              class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-secondary text-secondary-content hover:opacity-90 shadow-xs transition-all cursor-pointer"
             >
-              <.icon name="hero-shopping-bag" class="size-4" /> Poll eBay
+              <.icon name="hero-shopping-bag" class="size-4 shrink-0" />
+              <span>Poll eBay</span>
             </button>
             <button
+              type="button"
               phx-click="trigger_poll"
-              class="btn btn-warning btn-sm flex items-center gap-2"
+              class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-all cursor-pointer"
             >
-              <.icon name="hero-arrow-path" class="size-4" /> Poll Feeds Now
+              <.icon name="hero-arrow-path" class="size-4 shrink-0" />
+              <span>Poll Feeds Now</span>
             </button>
             <button
+              type="button"
               phx-click="refresh_metrics"
-              class="btn btn-primary btn-sm flex items-center gap-2"
+              class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-primary text-primary-content hover:opacity-90 shadow-xs transition-all cursor-pointer"
             >
-              <.icon name="hero-arrow-path" class="size-4" /> Refresh Ops
+              <.icon name="hero-arrow-path" class="size-4 shrink-0" />
+              <span>Refresh Ops</span>
             </button>
           </div>
         </div>
@@ -333,20 +339,27 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
               <tbody>
                 <%= for feed <- @ops.feeds_status do %>
                   <tr class="hover:bg-base-200/40">
-                    <td class="font-bold">{feed.name}</td>
-                    <td>
+                    <td class="font-bold whitespace-nowrap">{feed.name}</td>
+                    <td class="whitespace-nowrap">
                       <%= cond do %>
                         <% not feed.is_active -> %>
-                          <span class="badge badge-ghost badge-xs">Disabled</span>
+                          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap bg-base-200 text-base-content/70 border border-base-300">
+                            <span class="size-1.5 rounded-full bg-base-content/40"></span>
+                            <span>Disabled</span>
+                          </span>
                         <% feed.backoff_until && DateTime.compare(feed.backoff_until, DateTime.utc_now()) == :gt -> %>
                           <span
-                            class="badge badge-warning badge-xs"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
                             title={"Blocked with #{feed.last_error_status || "error"}. Backed off until #{feed.backoff_until}"}
                           >
-                            Backoff ({feed.last_error_status || "429"})
+                            <span class="size-1.5 rounded-full bg-amber-500"></span>
+                            <span>Backoff ({feed.last_error_status || "429"})</span>
                           </span>
                         <% true -> %>
-                          <span class="badge badge-success badge-xs text-white">Active</span>
+                          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                            <span class="size-1.5 rounded-full bg-emerald-500"></span>
+                            <span>Active</span>
+                          </span>
                       <% end %>
                     </td>
                     <td class="text-xs text-base-content/70">
@@ -393,14 +406,19 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
             <div>
               <%= cond do %>
                 <% not @ebay_status.configured -> %>
-                  <span class="badge badge-warning badge-sm gap-1">
-                    <.icon name="hero-exclamation-triangle" class="size-3" /> Credentials Missing
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                    <.icon name="hero-exclamation-triangle" class="size-3.5 shrink-0" />
+                    <span>Credentials Missing</span>
                   </span>
                 <% not @ebay_status.enabled -> %>
-                  <span class="badge badge-ghost badge-sm">Disabled via Config</span>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-base-200 text-base-content/70 border border-base-300">
+                    <span class="size-2 rounded-full bg-base-content/40"></span>
+                    <span>Disabled via Config</span>
+                  </span>
                 <% true -> %>
-                  <span class="badge badge-success badge-sm text-white gap-1">
-                    <span class="size-1.5 rounded-full bg-white animate-pulse"></span> Active
+                  <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                    <span class="size-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Active</span>
                   </span>
               <% end %>
             </div>
@@ -469,13 +487,13 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
               </p>
             </div>
 
-            <div class="flex items-center gap-3">
-              <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-base-200 border border-base-300 text-xs">
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-base-200 border border-base-300 text-xs whitespace-nowrap">
                 <span class="text-base-content/70 font-medium">Budget Limit:</span>
                 <span class="font-mono font-bold text-primary">30.0 ms / deal</span>
               </div>
               <div class={[
-                "flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold",
+                "flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold whitespace-nowrap",
                 if(length(@auto_paused_rules) > 0,
                   do: "bg-error/10 border-error/30 text-error",
                   else:
@@ -488,7 +506,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                       do: "hero-exclamation-triangle",
                       else: "hero-check-circle"
                   }
-                  class="size-4"
+                  class="size-4 shrink-0"
                 />
                 <span id="auto-paused-count">{length(@auto_paused_rules)} Auto-Paused</span>
               </div>
@@ -547,7 +565,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                             Keywords: {rule.keywords}
                           </div>
                         </td>
-                        <td>
+                        <td class="whitespace-nowrap">
                           <span class="text-xs font-medium text-base-content/80">
                             {if rule.user, do: rule.user.email, else: "User ##{rule.user_id}"}
                           </span>
@@ -560,14 +578,16 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                         <td class="text-right font-mono text-xs font-bold text-error whitespace-nowrap">
                           {format_duration_ms(rule.last_eval_duration_us)}
                         </td>
-                        <td class="text-right">
+                        <td class="text-right whitespace-nowrap">
                           <button
                             id={"resume-auto-paused-rule-btn-#{rule.id}"}
+                            type="button"
                             phx-click="resume_rule"
                             phx-value-id={rule.id}
-                            class="btn btn-xs btn-success text-white shadow-xs"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 hover:border-emerald-500/40 transition-all cursor-pointer"
                           >
-                            <.icon name="hero-play" class="size-3" /> Re-enable
+                            <.icon name="hero-play" class="size-3.5 shrink-0" />
+                            <span>Re-enable</span>
                           </button>
                         </td>
                       </tr>
@@ -627,19 +647,28 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                             Keywords: {rule.keywords}
                           </div>
                         </td>
-                        <td>
+                        <td class="whitespace-nowrap">
                           <span class="text-xs font-medium text-base-content/80">
                             {if rule.user, do: rule.user.email, else: "User ##{rule.user_id}"}
                           </span>
                         </td>
-                        <td>
+                        <td class="whitespace-nowrap">
                           <%= if rule.is_active do %>
-                            <span class="badge badge-success badge-xs text-white">Active</span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                              <span class="size-1.5 rounded-full bg-emerald-500"></span>
+                              <span>Active</span>
+                            </span>
                           <% else %>
                             <%= if rule.pause_reason do %>
-                              <span class="badge badge-error badge-xs text-white">Auto-Paused</span>
+                              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25">
+                                <span class="size-1.5 rounded-full bg-rose-500"></span>
+                                <span>Auto-Paused</span>
+                              </span>
                             <% else %>
-                              <span class="badge badge-ghost badge-xs">Paused</span>
+                              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap bg-base-200 text-base-content/70 border border-base-300">
+                                <span class="size-1.5 rounded-full bg-base-content/40"></span>
+                                <span>Paused</span>
+                              </span>
                             <% end %>
                           <% end %>
                         </td>
@@ -655,24 +684,28 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                             {format_duration_ms(rule.last_eval_duration_us)}
                           </span>
                         </td>
-                        <td class="text-right">
+                        <td class="text-right whitespace-nowrap">
                           <%= if rule.is_active do %>
                             <button
                               id={"pause-slowest-rule-btn-#{rule.id}"}
+                              type="button"
                               phx-click="pause_rule"
                               phx-value-id={rule.id}
-                              class="btn btn-xs btn-outline btn-error"
+                              class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 hover:border-rose-500/40 transition-all cursor-pointer"
                             >
-                              <.icon name="hero-pause" class="size-3" /> Pause
+                              <.icon name="hero-pause" class="size-3.5 shrink-0" />
+                              <span>Pause</span>
                             </button>
                           <% else %>
                             <button
                               id={"resume-slowest-rule-btn-#{rule.id}"}
+                              type="button"
                               phx-click="resume_rule"
                               phx-value-id={rule.id}
-                              class="btn btn-xs btn-outline btn-success"
+                              class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 hover:border-emerald-500/40 transition-all cursor-pointer"
                             >
-                              <.icon name="hero-play" class="size-3" /> Re-enable
+                              <.icon name="hero-play" class="size-3.5 shrink-0" />
+                              <span>Re-enable</span>
                             </button>
                           <% end %>
                         </td>
