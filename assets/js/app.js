@@ -223,9 +223,15 @@ const AdBlockDetectorHook = {
   },
 }
 
+// Clear any sticky LongPoll fallback flag left in sessionStorage from a deploy restart
+try {
+  window.sessionStorage.removeItem("phx:fallback:LongPoll")
+} catch (_e) {
+  // Ignore storage access errors in restricted contexts
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
-  longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
   hooks: {
     ...colocatedHooks,

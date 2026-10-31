@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dealscout-shell-v3';
+const CACHE_NAME = 'dealscout-shell-v4';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -35,6 +35,23 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
+  // Never intercept non-GET requests (e.g. form POSTs, LiveView longpoll POSTs)
+  if (request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(request.url);
+
+  // Never intercept cross-origin requests or Phoenix LiveView / socket endpoints
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/live') ||
+    url.pathname.startsWith('/socket') ||
+    url.pathname.startsWith('/phoenix')
+  ) {
+    return;
+  }
+
   // Handle navigation requests (page visits)
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -46,22 +63,24 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Network-first for CSS/JS assets so updates and dev changes are never stuck in stale SW cache
-  if (request.url.includes('/assets/')) {
+  if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
       fetch(request).catch(() => caches.match(request))
     );
     return;
   }
 
-  // Handle static icon/manifest caching
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(request);
-    })
-  );
+  // Cache-first only for pre-cached static shell assets (icons, manifest, favicon)
+  if (STATIC_ASSETS.includes(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return fetch(request);
+      })
+    );
+  }
 });
 
 // Push notification received

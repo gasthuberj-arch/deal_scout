@@ -88,13 +88,13 @@ defmodule DealScoutWeb.Layouts do
                 </.link>
               </li>
               <li>
-                <.link navigate={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
+                <.link href={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
                   <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
                 </.link>
               </li>
               <%= if @current_scope && @current_scope.user do %>
                 <li>
-                  <.link navigate={~p"/alerts"} class="rounded-lg">
+                  <.link href={~p"/alerts"} class="rounded-lg">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="size-4"
@@ -113,7 +113,7 @@ defmodule DealScoutWeb.Layouts do
                   </.link>
                 </li>
                 <li>
-                  <.link navigate={~p"/matches"} class="rounded-lg flex items-center gap-1.5">
+                  <.link href={~p"/matches"} class="rounded-lg flex items-center gap-1.5">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="size-4"
@@ -156,22 +156,22 @@ defmodule DealScoutWeb.Layouts do
                     {@current_scope.user.email}
                   </li>
                   <div class="divider my-1"></div>
-                  <li><.link navigate={~p"/analytics"}>Deal Intelligence</.link></li>
-                  <li><.link navigate={~p"/alerts"}>My Alert Keywords</.link></li>
-                  <li><.link navigate={~p"/matches"}>Matched Deals</.link></li>
+                  <li><.link href={~p"/analytics"}>Deal Intelligence</.link></li>
+                  <li><.link href={~p"/alerts"}>My Alert Keywords</.link></li>
+                  <li><.link href={~p"/matches"}>Matched Deals</.link></li>
                   <%= if @current_scope.user.is_admin do %>
                     <li>
-                      <.link navigate={~p"/admin/system"} class="text-error font-medium">
+                      <.link href={~p"/admin/system"} class="text-error font-medium">
                         <.icon name="hero-shield-check" class="size-3.5" /> Admin System Ops
                       </.link>
                     </li>
                     <li>
-                      <.link navigate={~p"/admin/feedback"} class="text-error font-medium">
+                      <.link href={~p"/admin/feedback"} class="text-error font-medium">
                         <.icon name="hero-inbox-stack" class="size-3.5" /> Admin User Feedback
                       </.link>
                     </li>
                   <% end %>
-                  <li><.link navigate={~p"/users/settings"}>Settings</.link></li>
+                  <li><.link href={~p"/users/settings"}>Settings</.link></li>
                   <li>
                     <button
                       type="button"
@@ -198,8 +198,8 @@ defmodule DealScoutWeb.Layouts do
                 </ul>
               </div>
             <% else %>
-              <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">Log in</.link>
-              <.link navigate={~p"/users/register"} class="btn btn-primary btn-sm">Sign up</.link>
+              <.link href={~p"/users/log-in"} class="btn btn-ghost btn-sm">Log in</.link>
+              <.link href={~p"/users/register"} class="btn btn-primary btn-sm">Sign up</.link>
             <% end %>
           </div>
         </header>
@@ -316,14 +316,14 @@ defmodule DealScoutWeb.Layouts do
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-3">
             <.link
-              navigate={~p"/impressum"}
+              href={~p"/impressum"}
               class="hover:underline hover:text-base-content transition-colors"
             >
               Impressum
             </.link>
             <span>•</span>
             <.link
-              navigate={~p"/privacy"}
+              href={~p"/privacy"}
               class="hover:underline hover:text-base-content transition-colors"
             >
               Datenschutz
