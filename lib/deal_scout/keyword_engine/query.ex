@@ -30,9 +30,7 @@ defmodule DealScout.KeywordEngine.Query do
   def parse(input) when is_binary(input) do
     cleaned_input =
       input
-      |> normalize_quotes()
-      |> String.replace(~r/\s+/, " ")
-      |> String.trim()
+      |> clean_input()
 
     if cleaned_input == "" do
       {:error, "Keywords expression cannot be empty"}
@@ -54,10 +52,22 @@ defmodule DealScout.KeywordEngine.Query do
 
   def parse(_), do: {:error, "Keywords expression cannot be empty"}
 
+  defp clean_input(str) when is_binary(str) do
+    str
+    |> strip_invisible()
+    |> normalize_quotes()
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+  end
+
   @doc "Normalizes typographical / language-specific quotes to standard ASCII `\"`."
   @spec normalize_quotes(String.t()) :: String.t()
   def normalize_quotes(str) when is_binary(str) do
     String.replace(str, ["“", "”", "„", "«", "»"], "\"")
+  end
+
+  defp strip_invisible(str) when is_binary(str) do
+    String.replace(str, ~r/[\x{200B}-\x{200D}\x{FEFF}\x{00AD}]/u, "")
   end
 
   @doc "Checks if an AST contains at least one positive literal branch."
@@ -163,14 +173,131 @@ defmodule DealScout.KeywordEngine.Query do
   defp normalize_text(text), do: text |> String.replace(~r/\s+/, " ") |> String.downcase()
 
   defp negative_terms(str) do
-    ~r/"([^"]+)"|[^\s,;"]+/
-    |> Regex.scan(normalize_quotes(str))
+    ~r/"([^"]+)"|[^\s,;"]+/u
+    |> Regex.scan(clean_input(str))
     |> Enum.map(fn
       [_, quoted] -> quoted
       [full] -> full
     end)
     |> Enum.map(&(&1 |> normalize_text() |> String.trim()))
     |> Enum.reject(&(&1 == ""))
+  end
+
+  @doc """
+  Extracts search phrases from a keyword query AST for external APIs
+  (such as eBay Browse API) where OR branches become separate search phrases
+  and AND words within a branch stay joined by space (e.g. `"Laufschuh or Novablast 6 or evo sl"`
+  -> `["laufschuh", "novablast 6", "evo sl"]`).
+  """
+  @spec ebay_phrases(term()) :: [String.t()]
+  def ebay_phrases(keywords) when is_binary(keywords) do
+    case parse(keywords) do
+      {:ok, ast} ->
+        ast
+        |> ast_to_phrases()
+        |> Enum.uniq()
+
+      _ ->
+        []
+    end
+  end
+
+  def ebay_phrases(_), do: []
+
+  defp ast_to_phrases({:lit, w}), do: [w]
+  defp ast_to_phrases({:not, _}), do: []
+  defp ast_to_phrases({:or, children}), do: Enum.flat_map(children, &ast_to_phrases/1)
+
+  defp ast_to_phrases({:and, children}) do
+    child_lists =
+      children
+      |> Enum.map(&ast_to_phrases/1)
+      |> Enum.reject(&(&1 == []))
+
+    case child_lists do
+      [] ->
+        []
+
+      lists ->
+        total_combos = Enum.reduce(lists, 1, fn list, acc -> length(list) * acc end)
+
+        if total_combos <= 4 do
+          Enum.reduce(lists, fn list, acc ->
+            for a <- acc, b <- list, do: "#{a} #{b}"
+          end)
+        else
+          # Avoid combinatorial explosion on large parenthesized OR groups (e.g. CPU model lists):
+          # keep the required literal terms, or take the first branch if all children are OR groups
+          case Enum.filter(lists, &(length(&1) == 1)) do
+            [] -> [lists |> Enum.map(&hd(&1)) |> Enum.join(" ")]
+            singletons -> [singletons |> Enum.map(&hd/1) |> Enum.join(" ")]
+          end
+        end
+    end
+  end
+
+  @doc """
+  Formats a parsed keyword query AST into a list of human-readable OR groups for UI preview.
+  Returns `{:ok, groups}` where each group is a list of `{:pos, term}` or `{:neg, term}` tuples,
+  or `:complex` if deeply nested, or `{:error, reason}` if invalid.
+  """
+  @spec preview_groups(term()) ::
+          {:ok, [[{:pos | :neg, String.t()}]]} | {:complex, String.t()} | {:error, String.t()}
+  def preview_groups(keywords) when is_binary(keywords) do
+    case parse(keywords) do
+      {:ok, {:or, branches}} ->
+        branches
+        |> Enum.reduce_while({:ok, []}, fn branch, {:ok, acc} ->
+          case flatten_and_branch(branch) do
+            {:ok, items} -> {:cont, {:ok, [items | acc]}}
+            :complex -> {:halt, {:complex, format_ast({:or, branches})}}
+          end
+        end)
+        |> case do
+          {:ok, list} -> {:ok, Enum.reverse(list)}
+          other -> other
+        end
+
+      {:ok, branch} ->
+        case flatten_and_branch(branch) do
+          {:ok, items} -> {:ok, [items]}
+          :complex -> {:complex, format_ast(branch)}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def preview_groups(_), do: {:error, "Empty"}
+
+  defp flatten_and_branch({:lit, w}), do: {:ok, [{:pos, w}]}
+  defp flatten_and_branch({:not, {:lit, w}}), do: {:ok, [{:neg, w}]}
+
+  defp flatten_and_branch({:and, children}) do
+    children
+    |> Enum.reduce_while({:ok, []}, fn
+      {:lit, w}, {:ok, acc} -> {:cont, {:ok, [{:pos, w} | acc]}}
+      {:not, {:lit, w}}, {:ok, acc} -> {:cont, {:ok, [{:neg, w} | acc]}}
+      _, _ -> {:halt, :complex}
+    end)
+    |> case do
+      {:ok, list} -> {:ok, Enum.reverse(list)}
+      :complex -> :complex
+    end
+  end
+
+  defp flatten_and_branch(_), do: :complex
+
+  defp format_ast({:lit, w}), do: w
+  defp format_ast({:not, child}), do: "NOT #{format_ast(child)}"
+
+  defp format_ast({:and, children}) do
+    children |> Enum.map(&format_ast/1) |> Enum.join(" + ")
+  end
+
+  defp format_ast({:or, children}) do
+    "(" <> (children |> Enum.map(&format_ast/1) |> Enum.join(" OR ")) <> ")"
   end
 
   # --- Term extraction ---

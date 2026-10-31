@@ -8,6 +8,7 @@ defmodule DealScout.Feeds.Ebay.QueryAggregator do
 
   alias DealScout.Alerts
   alias DealScout.Alerts.AlertRule
+  alias DealScout.KeywordEngine.Query
 
   @max_query_chars 300
   @max_terms_per_batch 8
@@ -35,7 +36,7 @@ defmodule DealScout.Feeds.Ebay.QueryAggregator do
   def build_queries(keywords, opts) when is_list(keywords) do
     cleaned =
       keywords
-      |> Enum.flat_map(&parse_keyword_string/1)
+      |> Enum.flat_map(&Query.ebay_phrases/1)
       |> deduplicate_keywords()
 
     batch_keywords(cleaned, opts)
@@ -49,18 +50,9 @@ defmodule DealScout.Feeds.Ebay.QueryAggregator do
     rules
     |> Enum.filter(&AlertRule.ebay_eligible?/1)
     |> Enum.flat_map(fn rule ->
-      parse_keyword_string(rule.keywords)
+      Query.ebay_phrases(rule.keywords)
     end)
     |> deduplicate_keywords()
-  end
-
-  defp parse_keyword_string(nil), do: []
-
-  defp parse_keyword_string(str) when is_binary(str) do
-    str
-    |> String.split(",")
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
   end
 
   defp deduplicate_keywords(keywords) do

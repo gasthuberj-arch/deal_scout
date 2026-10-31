@@ -84,6 +84,7 @@ defmodule DealScout.Alerts.AlertRule do
       :pause_reason,
       :last_eval_duration_us
     ])
+    |> sanitize_text_fields()
     |> validate_required([:user_id, :name, :keywords])
     |> validate_length(:name, min: 2, max: 100)
     |> validate_length(:keywords, min: 2, max: 255)
@@ -92,6 +93,29 @@ defmodule DealScout.Alerts.AlertRule do
     |> validate_inclusion(:merchant_filter, @merchant_filters)
     |> validate_number(:cooldown_minutes, greater_than_or_equal_to: 0)
     |> validate_keywords_syntax()
+  end
+
+  defp sanitize_text_fields(changeset) do
+    changeset
+    |> clean_change(:name)
+    |> clean_change(:keywords)
+    |> clean_change(:negative_keywords, allow_nil: true)
+  end
+
+  defp clean_change(changeset, field, opts \\ []) do
+    case get_change(changeset, field) do
+      val when is_binary(val) ->
+        cleaned = String.trim(val)
+
+        if cleaned == "" and Keyword.get(opts, :allow_nil, false) do
+          put_change(changeset, field, nil)
+        else
+          put_change(changeset, field, cleaned)
+        end
+
+      _ ->
+        changeset
+    end
   end
 
   defp validate_keywords_syntax(changeset) do

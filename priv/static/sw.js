@@ -1,12 +1,9 @@
-const CACHE_NAME = 'dealscout-shell-v2';
+const CACHE_NAME = 'dealscout-shell-v3';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
-  '/',
   '/offline.html',
   '/manifest.webmanifest',
-  '/assets/css/app.css',
-  '/assets/js/app.js',
   '/images/icon-192.png',
   '/images/icon-512.png',
   '/images/badge-72.png',
@@ -48,7 +45,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static asset caching
+  // Network-first for CSS/JS assets so updates and dev changes are never stuck in stale SW cache
+  if (request.url.includes('/assets/')) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Handle static icon/manifest caching
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {

@@ -5,6 +5,7 @@ defmodule DealScoutWeb.AlertLive.Index do
   alias DealScout.Alerts.AlertRule
   alias DealScout.Alerts.Backtest
   alias DealScout.Feeds
+  alias DealScout.KeywordEngine.Query
   alias DealScoutWeb.PWAComponents
   alias DealScoutWeb.PushNotificationHandler
 
@@ -275,7 +276,7 @@ defmodule DealScoutWeb.AlertLive.Index do
           <div>
             <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Keyword Alert Rules</h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Configure search terms, exact phrases ("quoted"), AND / OR operators, parentheses grouping (e.g. (A OR B) C), and notifications. When hot deals match, you'll be alerted immediately on your phone.
+              Enter product names (e.g. Google Pixel, Novablast 6) and separate alternatives with a comma or OR. When matching deals appear, you'll be alerted immediately on your phone.
             </p>
           </div>
 
@@ -512,7 +513,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                 class="flex flex-col flex-1 min-h-0 overflow-hidden"
               >
                 <!-- Scrollable Body for all inputs -->
-                <div class="overflow-y-auto px-4 sm:px-6 py-4 space-y-4 flex-1">
+                <div class="overflow-y-auto px-4 sm:px-6 py-4 space-y-4 flex-1 min-h-0 max-h-[calc(92dvh-7.5rem)] sm:max-h-[calc(90vh-7.5rem)]">
                   <.input
                     field={@form[:name]}
                     id="alert-rule-name-input"
@@ -531,38 +532,98 @@ defmodule DealScoutWeb.AlertLive.Index do
                       id="alert-rule-keywords-input"
                       type="text"
                       label="Search Keywords"
-                      placeholder={~s[e.g. (RTX 4080 OR RX 7900) 16GB, "Apple Watch", OLED]}
+                      placeholder="e.g. Google Pixel, Novablast 6 or evo sl, RTX 4080"
                       autocomplete="off"
                       data-1p-ignore="true"
                       data-lpignore="true"
                       required
                     />
 
+                    <% current_keywords = to_string(@form[:keywords].value || "") %>
+                    <%= if String.trim(current_keywords) != "" do %>
+                      <%= case Query.preview_groups(current_keywords) do %>
+                        <% {:ok, groups} -> %>
+                          <div
+                            id="keywords-live-preview"
+                            class="mt-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20 text-xs flex flex-wrap items-center gap-1.5"
+                          >
+                            <span class="font-semibold text-base-content/70 shrink-0">
+                              Matches deal if it contains:
+                            </span>
+                            <%= for {group, idx} <- Enum.with_index(groups) do %>
+                              <%= if idx > 0 do %>
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-base-content/50 px-0.5 shrink-0">
+                                  OR
+                                </span>
+                              <% end %>
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-base-200/80 border border-base-300 font-mono text-[11px] whitespace-nowrap">
+                                <%= for {{kind, word}, w_idx} <- Enum.with_index(group) do %>
+                                  <%= if w_idx > 0 do %>
+                                    <span class="text-base-content/40 font-sans font-bold">+</span>
+                                  <% end %>
+                                  <%= if kind == :neg do %>
+                                    <span class="text-error font-bold">NOT {word}</span>
+                                  <% else %>
+                                    <span class="text-primary font-bold">{word}</span>
+                                  <% end %>
+                                <% end %>
+                              </span>
+                            <% end %>
+                          </div>
+                        <% {:complex, formatted} -> %>
+                          <div
+                            id="keywords-live-preview"
+                            class="mt-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20 text-xs flex flex-wrap items-center gap-1.5"
+                          >
+                            <span class="font-semibold text-base-content/70 shrink-0">Matches logic:</span>
+                            <code class="font-mono text-[11px] font-bold text-primary">{formatted}</code>
+                          </div>
+                        <% _ -> %>
+                      <% end %>
+                    <% end %>
+
                     <!-- Syntax & Operator Help -->
-                    <div class="mt-1.5 p-3 rounded-xl bg-base-200/60 border border-base-300 text-xs text-base-content/80 space-y-2">
+                    <div class="mt-2 p-3 rounded-xl bg-base-200/60 border border-base-300 text-xs text-base-content/80 space-y-2">
                       <div class="flex items-center justify-between font-semibold text-base-content">
                         <span class="flex items-center gap-1.5">
-                          <.icon name="hero-information-circle" class="size-4 text-primary" />
+                          <.icon name="hero-information-circle" class="size-4 text-primary shrink-0" />
                           <span>Search Operators & Grouping Syntax</span>
                         </span>
                       </div>
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] leading-relaxed">
-                        <div class="flex items-start gap-1.5">
-                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">AND</span>
-                          <span>Space or <code class="font-mono font-bold text-base-content">AND</code>: all terms must match (e.g. <span class="font-mono font-semibold text-primary">RTX 4080</span>)</span>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] leading-snug">
+                        <div class="flex items-start gap-2">
+                          <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-primary/10 text-primary shrink-0 whitespace-nowrap mt-0.5">
+                            A B
+                          </span>
+                          <span>
+                            Words together match in any order — no quotes needed (e.g. <span class="font-mono font-semibold text-primary">Novablast 6</span>)
+                          </span>
                         </div>
-                        <div class="flex items-start gap-1.5">
-                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">OR</span>
-                          <span>Comma <code class="font-mono font-bold text-base-content">,</code>
-                          or <code class="font-mono font-bold text-base-content">OR</code>: either term matches (e.g. <span class="font-mono font-semibold text-primary">RTX 4080, RX 7900</span>)</span>
+                        <div class="flex items-start gap-2">
+                          <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-primary/10 text-primary shrink-0 whitespace-nowrap mt-0.5">
+                            OR
+                          </span>
+                          <span>
+                            Comma <code class="font-mono font-bold text-base-content">,</code>
+                            or <code class="font-mono font-bold text-base-content">or</code>
+                            for alternatives (e.g. <span class="font-mono font-semibold text-primary">Laufschuh, Novablast 6</span>)
+                          </span>
                         </div>
-                        <div class="flex items-start gap-1.5">
-                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">"..."</span>
-                          <span>Quotes: exact phrase in order (e.g. <span class="font-mono font-semibold text-primary">"Apple Watch Ultra"</span>)</span>
+                        <div class="flex items-start gap-2">
+                          <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-primary/10 text-primary shrink-0 whitespace-nowrap mt-0.5">
+                            ( )
+                          </span>
+                          <span>
+                            Parentheses to combine groups (e.g. <span class="font-mono font-semibold text-primary">(Fernseher or TV) 65</span>)
+                          </span>
                         </div>
-                        <div class="flex items-start gap-1.5">
-                          <span class="badge badge-xs font-mono font-bold bg-primary/10 text-primary">( )</span>
-                          <span>Parentheses: combine & group logic (e.g. <span class="font-mono font-semibold text-primary">(RTX 4080 OR RX 7900) 16GB</span>)</span>
+                        <div class="flex items-start gap-2">
+                          <span class="px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-primary/10 text-primary shrink-0 whitespace-nowrap mt-0.5">
+                            "..."
+                          </span>
+                          <span>
+                            Quotes only for strict adjacent word order (e.g. <span class="font-mono font-semibold text-primary">"Smart TV"</span>)
+                          </span>
                         </div>
                       </div>
                     </div>

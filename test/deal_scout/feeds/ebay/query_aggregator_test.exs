@@ -38,8 +38,8 @@ defmodule DealScout.Feeds.Ebay.QueryAggregatorTest do
 
     assert length(queries) == 1
     [query] = queries
-    assert query.q == "(RTX 4080, RTX 4090, 7900 XTX)"
-    assert query.terms == ["RTX 4080", "RTX 4090", "7900 XTX"]
+    assert query.q == "(rtx 4080, rtx 4090, 7900 xtx)"
+    assert query.terms == ["rtx 4080", "rtx 4090", "7900 xtx"]
   end
 
   test "formats single keyword without parentheses" do
@@ -47,8 +47,8 @@ defmodule DealScout.Feeds.Ebay.QueryAggregatorTest do
 
     assert length(queries) == 1
     [query] = queries
-    assert query.q == "MacBook Air M2"
-    assert query.terms == ["MacBook Air M2"]
+    assert query.q == "macbook air m2"
+    assert query.terms == ["macbook air m2"]
   end
 
   test "splits queries across batches when exceeding max_terms_per_batch" do
@@ -60,5 +60,24 @@ defmodule DealScout.Feeds.Ebay.QueryAggregatorTest do
     assert length(Enum.at(queries, 0).terms) == 4
     assert length(Enum.at(queries, 1).terms) == 4
     assert length(Enum.at(queries, 2).terms) == 2
+  end
+
+  test "splits keywords on case-insensitive OR and strips quotes/whitespace" do
+    rules = [
+      %AlertRule{
+        is_active: true,
+        source_filter: "all",
+        keywords: "Laufschuh or Novablast 6 or evo sl"
+      },
+      %AlertRule{
+        is_active: true,
+        source_filter: "all",
+        keywords: ~s["Google Pixel" ]
+      }
+    ]
+
+    [query] = QueryAggregator.build_queries(rules)
+    assert query.terms == ["laufschuh", "novablast 6", "evo sl", "google pixel"]
+    assert query.q == "(laufschuh, novablast 6, evo sl, google pixel)"
   end
 end

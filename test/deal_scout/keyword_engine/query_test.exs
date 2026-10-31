@@ -35,6 +35,19 @@ defmodule DealScout.KeywordEngine.QueryTest do
       assert matches?("(oled, qled) 55", "Sony QLED 55")
       refute matches?("(oled, qled) 55", "Sony LCD 55")
     end
+
+    test "multi-word OR branches match words in any order or with words in between without quotes" do
+      query = "Laufschuh or Novablast 6 or evo sl"
+      assert matches?(query, "Asics Novablast Herren 6 Laufschuhe")
+      assert matches?(query, "Adidas Adizero EVO Pro SL Sneaker")
+      assert matches?(query, "Nike Pegasus Laufschuh")
+      refute matches?(query, "Asics Novablast 5")
+    end
+
+    test "strips zero-width spaces and trims leading/trailing whitespace" do
+      assert matches?("\u200B(FNIRSI OR Pinecil) (HS-02 OR V2)  ", "Pinecil V2 Lötkolben")
+      assert matches?("  preisfehler or 100% or Rabatt ", "Gratis mit 100% Cashback")
+    end
   end
 
   describe "excluded?/2" do
@@ -89,6 +102,28 @@ defmodule DealScout.KeywordEngine.QueryTest do
     test "nil for blank or invalid input" do
       assert Query.fts_query(nil) == nil
       assert Query.fts_query("") == nil
+    end
+  end
+
+  describe "ebay_phrases/1 and preview_groups/1" do
+    test "ebay_phrases derives phrases from the parsed AST for OR, AND, parentheses, and quotes" do
+      assert Query.ebay_phrases("Laufschuh or Novablast 6 or evo sl") == [
+               "laufschuh",
+               "novablast 6",
+               "evo sl"
+             ]
+
+      assert Query.ebay_phrases(~s["Google Pixel" ]) == ["google pixel"]
+      assert Query.ebay_phrases("(Fernseher or TV) 65") == ["fernseher 65", "tv 65"]
+    end
+
+    test "preview_groups returns structured OR groups of positive and negative terms" do
+      assert {:ok,
+              [
+                [pos: "laufschuh"],
+                [pos: "novablast", pos: "6"],
+                [pos: "evo", pos: "sl"]
+              ]} = Query.preview_groups("Laufschuh or Novablast 6 or evo sl")
     end
   end
 end

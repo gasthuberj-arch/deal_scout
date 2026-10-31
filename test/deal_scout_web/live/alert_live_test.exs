@@ -150,6 +150,19 @@ defmodule DealScoutWeb.AlertLiveTest do
       |> render_change()
 
     assert rendered =~ "should be at least 2 character"
+
+    # Typing a multi-branch query renders the live interpretation preview
+    index_live
+    |> form("#alert-rule-form", %{
+      "alert_rule" => %{
+        "name" => "Laufschuhe",
+        "keywords" => "Laufschuh or Novablast 6 or evo sl"
+      }
+    })
+    |> render_change()
+
+    assert has_element?(index_live, "#keywords-live-preview", "laufschuh")
+    assert has_element?(index_live, "#keywords-live-preview", "novablast")
   end
 
   test "edits existing rule with validation and updates successfully", %{conn: conn, user: user} do
