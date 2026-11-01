@@ -56,6 +56,13 @@ defmodule DealScout.Feeds do
   end
 
   @doc """
+  Resets backoff timestamps and error status on a feed.
+  """
+  def reset_feed_backoff(%Feed{} = feed) do
+    update_feed(feed, %{backoff_until: nil, last_error_status: nil})
+  end
+
+  @doc """
   Ensures the eBay feed record exists in the database with slug "ebay".
   Marked is_active: false so the generic RSS poller skips it, while
   allowing deal foreign keys and source filtering to reference it.

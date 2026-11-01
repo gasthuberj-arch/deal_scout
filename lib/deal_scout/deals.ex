@@ -39,7 +39,13 @@ defmodule DealScout.Deals do
 
   def broadcast_deal(error), do: error
 
-  defp refresh_stream_cache(%Deal{} = deal) do
+  @doc """
+  Refreshes cached deal streams in-place without deleting entries first,
+  preventing read stampedes against SQLite. Accepts either a `%Deal{}` or options keyword list.
+  """
+  def refresh_stream_cache(arg \\ [])
+
+  def refresh_stream_cache(%Deal{} = deal) do
     feed_slug =
       case deal.feed do
         %{slug: slug} when is_binary(slug) -> slug
@@ -47,6 +53,10 @@ defmodule DealScout.Deals do
       end
 
     StreamCache.refresh([feed_id: deal.feed_id, feed_slug: feed_slug], &fetch_deals_from_db/1)
+  end
+
+  def refresh_stream_cache(opts) when is_list(opts) do
+    StreamCache.refresh(opts, &fetch_deals_from_db/1)
   end
 
   @doc """

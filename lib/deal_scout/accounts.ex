@@ -60,6 +60,14 @@ defmodule DealScout.Accounts do
   """
   def get_user!(id), do: Repo.get!(User, id)
 
+  @doc """
+  Lists all administrator accounts.
+  """
+  def list_admin_users do
+    from(u in User, where: u.is_admin == true)
+    |> Repo.all()
+  end
+
   ## User registration
 
   @doc """

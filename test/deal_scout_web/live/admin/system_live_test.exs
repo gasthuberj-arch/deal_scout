@@ -160,4 +160,69 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
 
     assert has_element?(view, ".alert-error", "eBay integration is not configured")
   end
+
+  test "admin views memory, swap, storage metrics and triggers safe recovery actions", %{
+    conn: conn,
+    admin: admin
+  } do
+    conn = log_in_user(conn, admin)
+    {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+    # Key cards exist
+    assert has_element?(view, "#system-memory-gauge-card")
+    assert has_element?(view, "#sqlite-storage-card")
+    assert has_element?(view, "#admin-push-status-card")
+
+    # Safe Checkpoint action
+    assert has_element?(view, "#safe-checkpoint-btn")
+
+    view
+    |> element("#safe-checkpoint-btn")
+    |> render_click()
+
+    assert has_element?(view, ".alert-info", "SQLite WAL safely")
+
+    # Safe Memory Reclamation action
+    assert has_element?(view, "#safe-reclaim-mem-btn")
+
+    view
+    |> element("#safe-reclaim-mem-btn")
+    |> render_click()
+
+    assert has_element?(view, ".alert-info", "Released SQLite idle pager caches")
+
+    # Safe Cache Re-warm action
+    assert has_element?(view, "#safe-refresh-cache-btn")
+
+    view
+    |> element("#safe-refresh-cache-btn")
+    |> render_click()
+
+    assert has_element?(view, ".alert-info", "StreamCache refreshed in-place")
+  end
+
+  test "active alarms banner displays when an anomaly is present", %{
+    conn: conn,
+    admin: admin,
+    regular_user: user
+  } do
+    # Trigger an auto-paused rule
+    DealScout.Repo.insert!(%DealScout.Alerts.AlertRule{
+      user_id: user.id,
+      name: "Pathological Query Rule",
+      keywords: "alarm test query",
+      is_active: false,
+      pause_reason: "Auto-paused: Query took 55.0ms (exceeded 30ms budget)."
+    })
+
+    # Evaluate health monitor state
+    DealScout.Admin.HealthMonitor.check_now()
+
+    conn = log_in_user(conn, admin)
+    {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+    assert has_element?(view, "#active-alarms-banner")
+    assert has_element?(view, "#active_alarms-auto_paused_rules")
+    assert has_element?(view, "#active_alarms-auto_paused_rules", "Alert Rules Auto-Paused")
+  end
 end

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0014: Missing Indexes &amp; Migration Cascades</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Database Architecture &bull; Lesson 0014</div>
+      <h1>The Traps of "Fast Local SQL": Missing Indexes &amp; Migration Cascades</h1>
+      <p class="subtitle">Why embedded databases lull us into false bets, and how to tame trigger cascades, full-table scans, and migration lockups.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>Because SQLite is embedded and runs directly in-process with zero network round-trip latency, small datasets create the illusion of infinite speed. This fosters dangerous architectural bets: that unindexed filter scans don't matter, that bulk updates in migrations are lightweight, and that triggers are free. In production DealScout, these bets caused full-table scan thrashing on analytics dashboards and multi-minute migration freezes. This lesson unpacks the exact failure modes and the physical database principles that solve them.</p>
+    </div>
+
+    <h2>1. The Missing Partial Index &amp; The `OR` Anti-Pattern</h2>
+    <p><strong>The Bet:</strong> <em>"We only have a few tens of thousands of deals. An in-memory scan over local NVMe is so fast we don't need dedicated indexes for analytics queries."</em></p>
+    <p>In DealScout's analytics dashboard, we tracked country-specific imports and foreign keyboard warnings with queries like:</p>
+
+    <pre><code># The unindexed queries in DealScout.Analytics:
+from d in Deal, where: not is_nil(d.country), select: count(d.id)
+from d in Deal, where: not is_nil(d.keyboard_warning), select: count(d.id)</code></pre>
+
+    <p>Out of 20,000 deals, perhaps only 500 have a <code>country</code> set, and only 80 have a <code>keyboard_warning</code>. Yet without an index, SQLite had to execute a <strong>full-table scan</strong> across all 20,000 rows. Every time a background poller ingested a deal or an admin opened the dashboard, SQLite swept through every page on disk, loading pages into the pager cache and displacing active LiveView data.</p>
+
+    <p>To compound the problem, the 24-hour activity query included an <code>OR</code> condition:</p>
+    <pre><code># The OR trap:
+where: d.published_at >= ^since_24h or d.inserted_at >= ^since_24h</code></pre>
+    <p>In relational databases, an index on <code>published_at</code> cannot satisfy an <code>OR</code> across a separate column (<code>inserted_at</code>) without an expensive index-merge or falling back to a full-table scan. By removing the redundant fallback and creating <strong>partial indexes</strong>, the performance profile changed dramatically:</p>
+
+    <pre><code># In priv/repo/migrations/..._add_analytics_partial_indexes_to_deals.exs:
+create index(:deals, [:country],
+  where: "country IS NOT NULL",
+  name: :deals_country_not_null_index
+)
+
+create index(:deals, [:keyboard_warning],
+  where: "keyboard_warning IS NOT NULL",
+  name: :deals_keyboard_warning_not_null_index
+)</code></pre>
+
+    <p><strong>The Enduring Principle:</strong> <em>Index the exception, not the rule.</em> A partial index (<code>WHERE column IS NOT NULL</code>) only stores B-tree entries for rows where the condition holds. For sparse flags (warnings, errors, country tags), a partial index takes mere kilobytes of disk space, remains hot in cache, and turns a 20,000-row table scan into a microscopic B-tree index leaf count.</p>
+
+    <h2>2. The Migration Trigger Cascade (The "Free" UPDATE Trap)</h2>
+    <p><strong>The Bet:</strong> <em>"Clearing out unused column data during a migration is a simple <code>UPDATE deals SET description = NULL</code> statement that finishes in milliseconds."</em></p>
+    <p>When optimizing deal storage, DealScout transitioned from storing raw HTML descriptions to clean parsed text. The migration included this innocent line:</p>
+    <pre><code>execute("UPDATE deals SET description = NULL WHERE description IS NOT NULL;")</code></pre>
+
+    <p>In production or on a populated database, this single line took <strong>tens of seconds to minutes</strong>, locking the database, ballooning the WAL log, and risking deploy timeouts. Why?</p>
+
+    <p>Earlier migrations had created full-text search triggers:</p>
+    <pre><code>CREATE TRIGGER deals_au AFTER UPDATE ON deals BEGIN
+  DELETE FROM deals_fts WHERE rowid = old.id;
+  INSERT INTO deals_fts(rowid, title, clean_text, merchant)
+  VALUES (new.id, new.title, new.clean_text, new.merchant);
+END;</code></pre>
+
+    <p>Notice the flaw: <strong>the trigger was unscoped</strong> (<code>AFTER UPDATE ON deals</code>). It listened to updates on <em>any</em> column in <code>deals</code>, including <code>description</code>! When the migration ran <code>UPDATE deals SET description = NULL</code> on 10,000 deals, SQLite fired the trigger <strong>10,000 individual times</strong>:</p>
+
+    <pre><code>UPDATE deals SET description = NULL
+ ├── Row 1  ──► Fire deals_au ──► DELETE FROM deals_fts ──► INSERT INTO deals_fts (B-tree re-balance)
+ ├── Row 2  ──► Fire deals_au ──► DELETE FROM deals_fts ──► INSERT INTO deals_fts (B-tree re-balance)
+ ├── Row 3  ──► Fire deals_au ──► DELETE FROM deals_fts ──► INSERT INTO deals_fts (B-tree re-balance)
+ └── ... 10,000 times! (Gigabytes of WAL writes, index thrashing, lock contention)</code></pre>
+
+    <p>Each row-by-row FTS update modifies multiple hidden shadow tables (<code>deals_fts_idx</code>, <code>deals_fts_data</code>, <code>deals_fts_docsize</code>). The database spent 99.9% of its time re-indexing the exact same text that hadn't even changed!</p>
+
+    <p><strong>The Resolution:</strong> Two fundamental migration rules:</p>
+    <ol>
+      <li><strong>Drop Triggers Before Bulk Mutations:</strong> Always drop triggers <em>before</em> running bulk data cleanup, and rebuild the index once at the end:
+        <pre><code># Correct migration order:
+execute("DROP TRIGGER IF EXISTS deals_au;")
+execute("DROP TABLE IF EXISTS deals_fts;")
+execute("UPDATE deals SET description = NULL WHERE description IS NOT NULL;")
+# Recreate external FTS and populate in ONE bulk operation:
+execute("INSERT INTO deals_fts(deals_fts) VALUES('rebuild');")</code></pre>
+      </li>
+      <li><strong>Column-Scoped Triggers:</strong> Never use naked <code>AFTER UPDATE ON table</code>. Always scope to the specific columns that affect the index:
+        <pre><code>CREATE TRIGGER deals_au AFTER UPDATE OF title, clean_text, merchant ON deals BEGIN ...</code></pre>
+        Now updates to <code>temperature</code>, <code>description</code>, or <code>canonical_deal_id</code> never touch FTS5.
+      </li>
+    </ol>
+
+    <h2>3. External-Content FTS5: Eliminating Shadow Duplication</h2>
+    <p><strong>The Bet:</strong> <em>"FTS5 is just an index on our table."</em></p>
+    <p>By default, a standard FTS5 virtual table stores a complete, uncompressed duplicate copy of all indexed text in a hidden shadow table (<code>deals_fts_content</code>). If your <code>deals</code> table contains 50&nbsp;MB of titles and descriptions, <code>deals_fts_content</code> stores another 50&nbsp;MB, doubling disk usage and memory churn.</p>
+
+    <p>By specifying <code>content='deals'</code> and <code>content_rowid='id'</code>, SQLite creates an <strong>external-content table</strong>:</p>
+    <pre><code>CREATE VIRTUAL TABLE deals_fts USING fts5(
+  title,
+  clean_text,
+  merchant,
+  content='deals',
+  content_rowid='id',
+  tokenize='unicode61 remove_diacritics 2'
+);</code></pre>
+
+    <p>In external-content mode, SQLite stores <em>only the inverted token index and token offsets</em>. When a search query matches, SQLite fetches the original row text directly from the underlying <code>deals</code> table. This cut DealScout's full-text search disk footprint by more than <strong>60%</strong>.</p>
+
+    <h2>4. The Verification Gate: The Seeded N-1 WAL Gate</h2>
+    <p>How do we ensure that a future developer or AI agent never introduces a slow migration or forgotten trigger? In DealScout, we instituted a migration test in <code>test/deal_scout/repo_migration_test.exs</code>:</p>
+
+    <pre><code># 1. Run migrations up to N - 1
+for v <- prior_versions do
+  Ecto.Migrator.up(repo, v, load_migration_module(migrations_path, v))
+end
+
+# 2. Seed 1,000 realistic records with large text payloads
+seed_deals_for_migration_benchmark(repo, 1_000)
+
+# 3. Execute latest migration N and assert strict budgets:
+{time_us, _} = :timer.tc(fn ->
+  Ecto.Migrator.up(repo, latest_version, load_migration_module(migrations_path, latest_version))
+end)
+
+assert time_us < 2_000_000, "Migration exceeded 2.0s time budget!"
+assert wal_size < 10_000_000, "Migration generated excessive WAL churn!"</code></pre>
+
+    <p>If a migration accidentally triggers row-by-row trigger cascades or full table rewrites, the seeded test fails immediately in CI before the migration can ever hit production.</p>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Test your intuition on database indexing and migration safety:</p>
+
+    <div class="quiz-container">
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why did executing `UPDATE deals SET description = NULL` cause extreme migration slowdowns before the fix?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Schema catalog locking does not perform page checksums during bulk data updates.">
+            SQLite locked the schema catalog while calculating cryptographic checksums for active database pages.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. The migration ran inside a standard transaction, but heap limits were not the bottleneck.">
+            Database migrations ran inside uncommitted transactions exceeding available process heap limits in memory.
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! An unscoped AFTER UPDATE trigger fired 10,000 row-by-row FTS index rebuilds for unchanged text.">
+            Unscoped update triggers fired row-by-row full text search index modifications for every record.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. WAL mode batches fsync calls; file descriptors are not flushed after each column update.">
+            The operating system flushed file descriptors to persistent disk storage after each column update.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. What is the main advantage of SQLite partial indexes like `WHERE country IS NOT NULL`?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly right! Only populated rows exist in the B-tree, keeping disk usage tiny and avoiding full-table scans.">
+            The B-tree only indexes populated rows keeping index footprint and seeks tiny.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Partial indexes do not execute VACUUM commands or background cleanup operations.">
+            Partial indexes automatically execute asynchronous database vacuums during background deal insertion passes.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. All SQLite indexes reside in standard database pages managed by the pager cache.">
+            Index pages bypass operating system page caches directly through raw memory mappings.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Partial indexes do not change the underlying page encoding or compression format.">
+            SQLite compresses string column contents using dictionary encoding before persisting index nodes.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. Why does adding `OR inserted_at >= ^since_24h` to `where: published_at >= ^since_24h` hurt query performance?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Timestamp comparisons in SQLite and Ecto do not preempt Erlang schedulers.">
+            Date comparisons convert timestamp strings into float values causing Erlang scheduler preemption delays.
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! The OR condition forces SQLite to abandon standard single-column B-tree seeks and do a full-table scan.">
+            The OR disjunction across two columns prevents standard single-column B-tree range seek optimization.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ecto compiles queries to single SQL statements executed on a single checked-out connection.">
+            Ecto query planners force raw SQL queries to run on separate database connections.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Read queries acquire SHARED locks and do not require exclusive write locks.">
+            Aggregation functions require exclusive write locks whenever querying multiple timestamps within active transactions.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 4 -->
+      <div class="quiz-question" id="q4">
+        <div class="question-text">4. How does using external-content FTS5 (`content='deals'`) optimize database storage and performance?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. SQLite FTS5 executes in-process via C NIFs and does not use external system daemons.">
+            It offloads text tokenization completely to external system daemons running outside SQLite.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. FTS queries use the SQLite virtual table interface and standard database paging.">
+            Full text search queries bypass the database engine by inspecting cached memory.
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. External FTS still indexes token offsets in B-trees; it doesn't use regex scanners.">
+            External tables eliminate token storage and rely strictly on in-memory regex scanners.
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Exactly! Text is stored only once in the primary table, avoiding redundant shadow table duplication.">
+            It prevents duplicating raw text in shadow tables while indexing token offsets.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 2.5rem;">
+      <h4>Have Questions or Want to Dive Deeper?</h4>
+      <p>Ask me about writing scoped triggers, analyzing query plans with <code>EXPLAIN QUERY PLAN</code>, or structuring seeded migration benchmarks in your test suite!</p>
+    </div>
+
+    <footer style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); font-size: 0.9rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+      <a href="0013-the-cost-of-false-assumptions-micro-vm-and-sqlite-realities.html">&larr; Lesson 0013: False Assumptions &amp; Micro-VMs</a>
+      <a href="../reference/0014-missing-indexes-and-migration-cascades-reference.html">Reference 0014: Missing Indexes &amp; Migration Cascades &rarr;</a>
+    </footer>
+  </div>
+</body>
+</html>
