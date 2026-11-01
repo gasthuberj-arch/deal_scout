@@ -26,7 +26,7 @@ defmodule DealScout.Admin.HealthMonitor do
   # Memory & Storage Invariant Thresholds
   @ram_limit_mb 400.0
   @swap_limit_mb 100.0
-  @wal_limit_bytes 30 * 1024 * 1024
+  @wal_limit_bytes 250 * 1024 * 1024
 
   # ============================================================================
   # Public Client API
@@ -222,7 +222,7 @@ defmodule DealScout.Admin.HealthMonitor do
         anomalies
       end
 
-    # 3. SQLite WAL bloat (> 30 MB uncheckpointed)
+    # 3. SQLite WAL bloat (> 250 MB)
     anomalies =
       if metrics.storage.wal_bytes > @wal_limit_bytes do
         wal_mb = Float.round(metrics.storage.wal_bytes / (1024 * 1024), 1)
@@ -233,7 +233,7 @@ defmodule DealScout.Admin.HealthMonitor do
             severity: :warning,
             title: "SQLite WAL Bloat (#{wal_mb} MB)",
             message:
-              "SQLite WAL file is #{wal_mb} MB (exceeds 30 MB threshold without checkpointing)."
+              "SQLite WAL file is #{wal_mb} MB (exceeds 250 MB threshold without checkpointing)."
           }
           | anomalies
         ]

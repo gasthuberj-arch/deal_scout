@@ -712,16 +712,16 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                 <div class="text-[11px] text-base-content/60 font-medium">WAL Log File</div>
                 <div class={[
                   "text-sm font-bold font-mono mt-0.5",
-                  @system_metrics.storage.wal_bytes > 30 * 1024 * 1024 && "text-error",
-                  @system_metrics.storage.wal_bytes > 15 * 1024 * 1024 &&
-                    @system_metrics.storage.wal_bytes <= 30 * 1024 * 1024 && "text-warning",
-                  @system_metrics.storage.wal_bytes <= 15 * 1024 * 1024 &&
+                  @system_metrics.storage.wal_bytes > 250 * 1024 * 1024 && "text-error",
+                  @system_metrics.storage.wal_bytes > 150 * 1024 * 1024 &&
+                    @system_metrics.storage.wal_bytes <= 250 * 1024 * 1024 && "text-warning",
+                  @system_metrics.storage.wal_bytes <= 150 * 1024 * 1024 &&
                     "text-emerald-600 dark:text-emerald-400"
                 ]}>
                   {format_bytes(@system_metrics.storage.wal_bytes)}
                 </div>
                 <div class="text-[10px] text-base-content/50 mt-0.5">
-                  Uncheckpointed writes
+                  Circular log buffer
                 </div>
               </div>
 
