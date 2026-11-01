@@ -96,4 +96,53 @@ defmodule DealScout.AnalyticsTest do
     assert is_float(ops.beam_memory_mb)
     assert is_integer(ops.uptime_seconds)
   end
+
+  describe "Server disk snapshot persistence" do
+    alias DealScout.Analytics.Server
+
+    @tag :tmp_dir
+    test "persist_snapshot/2 and load_snapshot/1 roundtrip safely", %{tmp_dir: tmp_dir} do
+      snapshot_file = Path.join(tmp_dir, "analytics_snapshot.bin")
+      stats = Analytics.get_deal_intelligence_stats()
+
+      assert :ok = Server.persist_snapshot(snapshot_file, stats)
+      assert File.exists?(snapshot_file)
+
+      assert {:ok, loaded} = Server.load_snapshot(snapshot_file)
+      assert loaded.total_deals == stats.total_deals
+      assert loaded.canonical_deals == stats.canonical_deals
+    end
+
+    @tag :tmp_dir
+    test "load_snapshot/1 returns :error on corrupted or missing file", %{tmp_dir: tmp_dir} do
+      assert Server.load_snapshot(Path.join(tmp_dir, "nonexistent.bin")) == :error
+
+      corrupt_file = Path.join(tmp_dir, "corrupt.bin")
+      File.write!(corrupt_file, "not-a-valid-erlang-binary")
+      assert Server.load_snapshot(corrupt_file) == :error
+    end
+
+    @tag :tmp_dir
+    test "Server restores persisted snapshot into ETS on init", %{tmp_dir: tmp_dir} do
+      snapshot_file = Path.join(tmp_dir, "restore_test.bin")
+      custom_stats = Map.put(Server.empty_snapshot(), :total_deals, 42_420)
+
+      assert :ok = Server.persist_snapshot(snapshot_file, custom_stats)
+
+      # Invalidate ETS first
+      Analytics.invalidate_analytics_cache()
+
+      # Start server with the snapshot file
+      server_name = :"analytics_server_test_#{System.unique_integer([:positive])}"
+
+      _pid =
+        start_supervised!(
+          {Server, [name: server_name, snapshot_path: snapshot_file, auto_warm: false]}
+        )
+
+      # ETS cache should now immediately contain the restored stats
+      cached = Analytics.get_deal_intelligence_stats()
+      assert cached.total_deals == 42_420
+    end
+  end
 end

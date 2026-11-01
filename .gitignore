@@ -40,6 +40,7 @@ npm-debug.log
 # Database files
 *.db
 *.db-*
+*.bin
 
 # Performance logs
 /log/

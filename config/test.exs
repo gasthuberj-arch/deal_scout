@@ -44,6 +44,7 @@ config :phoenix,
 # Disable background feed poller in test
 config :deal_scout, start_feed_poller: false
 config :deal_scout, skip_health_monitor_timer: true
+config :deal_scout, analytics_snapshot_path: false
 
 # Configure a distinct port for internal metrics listener in test
 config :deal_scout, metrics_port: 0
