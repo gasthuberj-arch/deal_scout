@@ -33,6 +33,7 @@ defmodule DealScoutWeb.Router do
   scope "/api", DealScoutWeb do
     pipe_through :api
 
+    post "/push/receipt", PushReceiptController, :create
     get "/admin/backup", BackupController, :download
     get "/admin/backup/status", BackupController, :status
   end

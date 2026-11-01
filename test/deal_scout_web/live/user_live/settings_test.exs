@@ -233,9 +233,11 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
       assert has_element?(lv, "#push-subscriptions", "Apple iPhone 15 Pro")
       assert has_element?(lv, "button[phx-click='send_test_push']")
 
-      # Send test push
+      # Send test push and verify delivery diagnostics update
       lv |> element("button[phx-click='send_test_push']") |> render_click()
       assert has_element?(lv, "button[phx-click='send_test_push']")
+      assert has_element?(lv, "#push-delivery-logs-section")
+      assert has_element?(lv, "#push-delivery-logs")
 
       # Remove device
       [sub] = DealScout.Notifications.list_push_subscriptions_for_user(user.id)

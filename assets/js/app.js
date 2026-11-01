@@ -62,10 +62,30 @@ const PushManagerHook = {
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
           hasExistingSubscription = true;
+          // Auto-resync: ensure DealScout backend has the subscription record
+          const subJson = sub.toJSON();
+          if (subJson && subJson.keys) {
+            this.pushEvent('save-push-subscription', {
+              endpoint: sub.endpoint,
+              p256dh: subJson.keys.p256dh,
+              auth: subJson.keys.auth,
+              user_agent: navigator.userAgent,
+              device_name: detectDeviceName(),
+              silent: true
+            });
+          }
         }
       } catch (e) {
         console.debug('Error checking subscription: ', e);
       }
+    }
+
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+          this.pushEvent('enable_push_notifications', {});
+        }
+      });
     }
 
     this.pushEvent('push-status', {

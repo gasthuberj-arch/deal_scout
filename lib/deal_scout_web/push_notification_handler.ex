@@ -53,10 +53,16 @@ defmodule DealScoutWeb.PushNotificationHandler do
 
     case Notifications.create_or_update_push_subscription(scope, params) do
       {:ok, _sub} ->
-        {:handled,
-         socket
-         |> put_flash(:info, "🎉 Mobile deal alarms enabled for this device!")
-         |> assign(:push_subscribed, true)}
+        socket =
+          if Map.get(params, "silent", false) do
+            assign(socket, :push_subscribed, true)
+          else
+            socket
+            |> put_flash(:info, "🎉 Mobile deal alarms enabled for this device!")
+            |> assign(:push_subscribed, true)
+          end
+
+        {:handled, socket}
 
       {:error, changeset} ->
         {:handled,

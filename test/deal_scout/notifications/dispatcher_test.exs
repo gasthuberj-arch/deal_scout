@@ -126,6 +126,14 @@ defmodule DealScout.Notifications.DispatcherTest do
 
     reloaded_rule = Repo.get!(AlertRule, cooled_rule.id)
     assert DateTime.diff(reloaded_rule.last_notified_at, five_min_ago, :second) == 0
+
+    # Diagnostic audit log records the cooldown suppression reason
+    logs = DealScout.Notifications.list_push_delivery_logs(user)
+    assert length(logs) >= 1
+
+    assert Enum.any?(logs, fn l ->
+             l.status == "skipped_cooldown" and l.user_match_id == match.id
+           end)
   end
 
   test "queues and flushes Digest matches, recording actual delivery flags and clearing digest_at",

@@ -94,6 +94,10 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const receivedAt = Date.now();
+  const sentAt = data.sent_at || receivedAt;
+  const clientDelayMs = Math.max(0, receivedAt - sentAt);
+
   const resolveUrl = (path) => {
     if (!path) return null;
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -119,8 +123,40 @@ self.addEventListener('push', (event) => {
     actions: data.actions || []
   };
 
+  const promises = [self.registration.showNotification(title, options)];
+
+  // Send delivery receipt back to DealScout if tracking_id is present
+  if (data.tracking_id) {
+    const receiptPromise = fetch('/api/push/receipt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tracking_id: data.tracking_id,
+        received_at: receivedAt,
+        client_delay_ms: clientDelayMs
+      })
+    }).catch((err) => {
+      console.debug('[SW] Receipt ping failed:', err);
+    });
+
+    promises.push(receiptPromise);
+  }
+
+  event.waitUntil(Promise.all(promises));
+});
+
+// Handle token rotation / subscription invalidation from browser push service
+self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.pushManager.getSubscription().then((sub) => {
+      if (!sub) return null;
+      // Notify active client windows so PushManagerHook re-registers
+      return clients.matchAll({ type: 'window' }).then((clientList) => {
+        clientList.forEach((client) => {
+          client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+        });
+      });
+    })
   );
 });
 

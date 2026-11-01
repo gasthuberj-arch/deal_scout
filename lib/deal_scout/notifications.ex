@@ -6,7 +6,7 @@ defmodule DealScout.Notifications do
 
   import Ecto.Query, warn: false
   alias DealScout.Repo
-  alias DealScout.Notifications.{PushSubscription, WebPush}
+  alias DealScout.Notifications.{PushDeliveryLog, PushSubscription, WebPush}
   alias DealScout.Accounts.{Scope, User}
 
   def vapid_public_key, do: WebPush.vapid_public_key()
@@ -89,8 +89,9 @@ defmodule DealScout.Notifications do
 
   @doc """
   Delivers a Web Push payload to all active subscriptions registered for the given
-  scope, user, or user_id. Updates `last_used_at` on success and prunes expired
-  (HTTP 410 Gone) subscriptions automatically.
+  scope, user, or user_id. Updates `last_used_at` on success, prunes expired
+  (HTTP 410 Gone) subscriptions automatically, records gateway response latency,
+  and persists an audit trail log for every delivery attempt.
   """
   def deliver_push_to_user(%Scope{user: %User{id: user_id}}, payload) when not is_nil(user_id),
     do: deliver_push_to_user(user_id, payload)
@@ -101,27 +102,128 @@ defmodule DealScout.Notifications do
   def deliver_push_to_user(user_id, payload) when is_integer(user_id) and is_map(payload) do
     subscriptions = list_push_subscriptions(user_id)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now_ms = System.system_time(:millisecond)
 
-    results =
-      Enum.map(subscriptions, fn sub ->
-        case WebPush.send_notification(sub, payload) do
-          {:ok, _} = ok ->
-            sub
-            |> Ecto.Changeset.change(last_used_at: now)
-            |> Repo.update()
+    if subscriptions == [] do
+      tracking_id =
+        Map.get(payload, :tracking_id) ||
+          "push-#{user_id}-none-#{System.system_time(:microsecond)}"
 
-            ok
+      record_push_delivery_log(%{
+        user_id: user_id,
+        user_match_id: Map.get(payload, :user_match_id),
+        tracking_id: tracking_id,
+        endpoint: nil,
+        status: "no_subscriptions",
+        error_message: "User has 0 registered push devices in database."
+      })
 
-          {:error, :subscription_expired} = expired ->
-            Repo.delete(sub)
-            expired
+      {:ok, []}
+    else
+      results =
+        Enum.map(subscriptions, fn sub ->
+          tracking_id =
+            Map.get(payload, :tracking_id) ||
+              "push-#{user_id}-#{sub.id}-#{System.system_time(:microsecond)}"
 
-          error ->
-            error
-        end
-      end)
+          payload_with_meta =
+            payload
+            |> Map.put(:tracking_id, tracking_id)
+            |> Map.put(:sent_at, now_ms)
 
-    {:ok, results}
+          start_mono = System.monotonic_time(:millisecond)
+          send_res = WebPush.send_notification(sub, payload_with_meta)
+          duration_ms = max(1, System.monotonic_time(:millisecond) - start_mono)
+
+          case send_res do
+            {:ok, _} ->
+              sub
+              |> Ecto.Changeset.change(last_used_at: now)
+              |> Repo.update()
+
+              log_push_attempt(
+                user_id,
+                sub,
+                payload,
+                tracking_id,
+                "delivered",
+                201,
+                nil,
+                duration_ms
+              )
+
+              {:ok,
+               %{
+                 status: :delivered,
+                 duration_ms: duration_ms,
+                 tracking_id: tracking_id,
+                 sub_id: sub.id
+               }}
+
+            {:error, :subscription_expired} ->
+              log_push_attempt(
+                user_id,
+                sub,
+                payload,
+                tracking_id,
+                "expired",
+                410,
+                "Push subscription expired or gone (HTTP 410). Device unregistered.",
+                duration_ms
+              )
+
+              Repo.delete(sub)
+
+              {:error,
+               %{
+                 status: :subscription_expired,
+                 duration_ms: duration_ms,
+                 sub_id: sub.id
+               }}
+
+            {:error, {:http_error, status, body}} ->
+              log_push_attempt(
+                user_id,
+                sub,
+                payload,
+                tracking_id,
+                "http_error",
+                status,
+                "Push gateway returned HTTP #{status}: #{inspect(body)}",
+                duration_ms
+              )
+
+              {:error,
+               %{
+                 status: :http_error,
+                 http_status: status,
+                 error: body,
+                 duration_ms: duration_ms
+               }}
+
+            {:error, reason} ->
+              log_push_attempt(
+                user_id,
+                sub,
+                payload,
+                tracking_id,
+                "network_error",
+                nil,
+                inspect(reason),
+                duration_ms
+              )
+
+              {:error,
+               %{
+                 status: :network_error,
+                 error: inspect(reason),
+                 duration_ms: duration_ms
+               }}
+          end
+        end)
+
+      {:ok, results}
+    end
   end
 
   def deliver_push_to_user(_target, _payload), do: {:ok, []}
@@ -140,5 +242,100 @@ defmodule DealScout.Notifications do
     }
 
     deliver_push_to_user(target, payload)
+  end
+
+  @doc """
+  Lists the most recent push delivery logs for a given user or scope.
+  """
+  def list_push_delivery_logs(target, limit \\ 20)
+
+  def list_push_delivery_logs(%Scope{user: %User{id: user_id}}, limit),
+    do: list_push_delivery_logs(user_id, limit)
+
+  def list_push_delivery_logs(%User{id: user_id}, limit),
+    do: list_push_delivery_logs(user_id, limit)
+
+  def list_push_delivery_logs(user_id, limit) when is_integer(user_id) do
+    from(l in PushDeliveryLog,
+      where: l.user_id == ^user_id,
+      order_by: [desc: l.inserted_at, desc: l.id],
+      limit: ^limit,
+      preload: [:user_match]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Records a push delivery attempt log directly (e.g. for skipped cooldown or manual errors).
+  Foreign keys (:user_id, :user_match_id, :push_subscription_id) are explicitly set
+  on the struct to comply with AGENTS.md Ecto guidelines.
+  """
+  def record_push_delivery_log(attrs) when is_map(attrs) do
+    user_id = Map.get(attrs, :user_id)
+    user_match_id = Map.get(attrs, :user_match_id)
+    push_subscription_id = Map.get(attrs, :push_subscription_id)
+
+    %PushDeliveryLog{
+      user_id: user_id,
+      user_match_id: user_match_id,
+      push_subscription_id: push_subscription_id
+    }
+    |> PushDeliveryLog.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Records a delivery receipt ping sent back from the Service Worker on the device.
+  Measures latency on the server against `log.inserted_at` to eliminate client device clock skew.
+  """
+  def record_receipt(tracking_id, received_at_ms, _client_delay_ms)
+      when is_binary(tracking_id) do
+    query = from(l in PushDeliveryLog, where: l.tracking_id == ^tracking_id)
+
+    case Repo.one(query) do
+      nil ->
+        {:error, :not_found}
+
+      %PushDeliveryLog{} = log ->
+        now = DateTime.utc_now()
+        # Roundtrip latency measured on server eliminates device clock skew
+        server_delay_ms = max(0, DateTime.diff(now, log.inserted_at, :millisecond))
+
+        received_at =
+          case DateTime.from_unix(received_at_ms, :millisecond) do
+            {:ok, dt} -> dt
+            _ -> now
+          end
+
+        log
+        |> PushDeliveryLog.receipt_changeset(%{
+          client_received_at: received_at,
+          client_delay_ms: server_delay_ms
+        })
+        |> Repo.update()
+    end
+  end
+
+  defp log_push_attempt(
+         user_id,
+         sub,
+         payload,
+         tracking_id,
+         status,
+         http_status,
+         error_msg,
+         duration_ms
+       ) do
+    record_push_delivery_log(%{
+      user_id: user_id,
+      user_match_id: Map.get(payload, :user_match_id),
+      push_subscription_id: sub.id,
+      tracking_id: tracking_id,
+      endpoint: sub.endpoint,
+      status: status,
+      http_status: http_status,
+      error_message: error_msg,
+      gateway_duration_ms: duration_ms
+    })
   end
 end

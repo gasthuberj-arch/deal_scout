@@ -104,6 +104,83 @@ defmodule DealScoutWeb.UserLive.Settings do
             </button>
           </div>
         </div>
+
+        <%!-- Recent Delivery Diagnostics & Receipt Latency --%>
+        <div id="push-delivery-logs-section" class="mt-4 pt-4 border-t border-base-300/50">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
+              <.icon name="hero-chart-bar" class="size-3.5" />
+              <span>Push Delivery Diagnostics & Receipt Latency</span>
+            </h4>
+            <span class="text-[11px] text-base-content/50">Recent attempts</span>
+          </div>
+
+          <%= if @delivery_logs == [] do %>
+            <p class="text-xs text-base-content/50 italic py-2">No push deliveries attempted yet.</p>
+          <% else %>
+            <div id="push-delivery-logs" class="space-y-2">
+              <div
+                :for={log <- @delivery_logs}
+                id={"push-log-#{log.id}"}
+                class="text-xs p-2.5 rounded-lg border border-base-200 bg-base-200/30 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5"
+              >
+                <div class="flex items-center gap-2 flex-wrap">
+                  <%= case log.status do %>
+                    <% "delivered" -> %>
+                      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <.icon name="hero-check-circle" class="size-3" /> Delivered
+                      </span>
+                    <% "expired" -> %>
+                      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                        <.icon name="hero-x-circle" class="size-3" /> Expired (410)
+                      </span>
+                    <% "no_subscriptions" -> %>
+                      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <.icon name="hero-exclamation-triangle" class="size-3" /> No Devices in DB
+                      </span>
+                    <% "skipped_cooldown" -> %>
+                      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                        <.icon name="hero-clock" class="size-3" /> Cooldown
+                      </span>
+                    <% _ -> %>
+                      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                        <.icon name="hero-exclamation-circle" class="size-3" />
+                        {log.status}
+                      </span>
+                  <% end %>
+
+                  <%= if log.gateway_duration_ms do %>
+                    <span class="text-base-content/70 font-mono text-[11px]">
+                      Gateway: {log.gateway_duration_ms}ms
+                    </span>
+                  <% end %>
+
+                  <%= if log.client_delay_ms do %>
+                    <span class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                      Device confirmed in {log.client_delay_ms}ms
+                    </span>
+                  <% else %>
+                    <%= if log.status == "delivered" do %>
+                      <span class="text-base-content/40 text-[10px]">
+                        (device receipt pending)
+                      </span>
+                    <% end %>
+                  <% end %>
+
+                  <%= if log.error_message do %>
+                    <span class="text-rose-600 dark:text-rose-400 text-[11px] truncate max-w-xs">
+                      {log.error_message}
+                    </span>
+                  <% end %>
+                </div>
+
+                <span class="text-[11px] text-base-content/50 font-mono shrink-0">
+                  {Calendar.strftime(log.inserted_at, "%d.%m %H:%M:%S")}
+                </span>
+              </div>
+            </div>
+          <% end %>
+        </div>
       </div>
 
       <div class="divider" />
@@ -274,6 +351,7 @@ defmodule DealScoutWeb.UserLive.Settings do
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
     subscriptions = Notifications.list_push_subscriptions(scope)
+    delivery_logs = Notifications.list_push_delivery_logs(scope, 8)
     has_password? = is_binary(user.hashed_password) and byte_size(user.hashed_password) > 0
 
     socket =
@@ -285,6 +363,7 @@ defmodule DealScoutWeb.UserLive.Settings do
       |> assign(:current_user_has_password?, has_password?)
       |> assign(:trigger_submit, false)
       |> assign(:has_subscriptions, subscriptions != [])
+      |> assign(:delivery_logs, delivery_logs)
       |> stream(:subscriptions, subscriptions)
 
     {:ok, socket}
@@ -302,11 +381,23 @@ defmodule DealScoutWeb.UserLive.Settings do
 
     case Notifications.create_or_update_push_subscription(scope, params) do
       {:ok, sub} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "🎉 Device registered! Mobile deal alarms will be delivered here.")
-         |> assign(:has_subscriptions, true)
-         |> stream_insert(:subscriptions, sub)}
+        socket =
+          socket
+          |> assign(:has_subscriptions, true)
+          |> stream_insert(:subscriptions, sub)
+
+        socket =
+          if Map.get(params, "silent", false) do
+            socket
+          else
+            put_flash(
+              socket,
+              :info,
+              "🎉 Device registered! Mobile deal alarms will be delivered here."
+            )
+          end
+
+        {:noreply, socket}
 
       {:error, changeset} ->
         {:noreply,
@@ -318,15 +409,66 @@ defmodule DealScoutWeb.UserLive.Settings do
   @impl true
   def handle_event("send_test_push", _params, socket) do
     scope = socket.assigns.current_scope
-    {:ok, _} = Notifications.send_test_notification(scope)
-
     subs = Notifications.list_push_subscriptions(scope)
+
+    socket =
+      if subs == [] do
+        put_flash(
+          socket,
+          :error,
+          "⚠️ No push devices registered. Click 'Register This Device' above first."
+        )
+      else
+        case Notifications.send_test_notification(scope) do
+          {:ok, results} ->
+            delivered = Enum.filter(results, &match?({:ok, _}, &1))
+            errors = Enum.filter(results, &match?({:error, _}, &1))
+
+            cond do
+              delivered != [] and errors == [] ->
+                {:ok, info} = hd(delivered)
+                dur = Map.get(info, :duration_ms, 0)
+
+                put_flash(
+                  socket,
+                  :info,
+                  "🚀 Test push accepted by gateway in #{dur}ms! If your phone doesn't alert within seconds, check OS Battery Optimization."
+                )
+
+              delivered != [] and errors != [] ->
+                put_flash(
+                  socket,
+                  :warning,
+                  "⚠️ Push delivered to #{length(delivered)} device(s), but failed for #{length(errors)} device(s)."
+                )
+
+              true ->
+                err_msg =
+                  case errors do
+                    [{:error, err} | _] -> Map.get(err, :error, inspect(err))
+                    _ -> "Unknown error"
+                  end
+
+                put_flash(
+                  socket,
+                  :error,
+                  "❌ Push gateway rejected test notification: #{inspect(err_msg)}"
+                )
+            end
+
+          {:error, reason} ->
+            put_flash(socket, :error, "❌ Failed to send test push: #{inspect(reason)}")
+        end
+      end
+
+    reloaded_subs = Notifications.list_push_subscriptions(scope)
+    logs = Notifications.list_push_delivery_logs(scope, 8)
 
     {:noreply,
      socket
-     |> put_flash(:info, "🚀 Test deal alarm sent! Check your device notifications.")
-     |> assign(:has_subscriptions, subs != [])
-     |> stream(:subscriptions, subs, reset: true)}
+     |> assign(:has_subscriptions, reloaded_subs != [])
+     |> assign(:delivery_logs, logs)
+     |> stream(:subscriptions, reloaded_subs, reset: true)}
   end
 
   @impl true

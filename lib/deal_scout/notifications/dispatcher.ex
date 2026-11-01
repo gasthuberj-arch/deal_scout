@@ -36,6 +36,7 @@ defmodule DealScout.Notifications.Dispatcher do
 
     cond do
       rule && AlertRule.in_cooldown?(rule) ->
+        record_cooldown_skipped(rule, [match])
         {:ok, match}
 
       rule && rule.delivery_mode in @digest_modes ->
@@ -62,6 +63,7 @@ defmodule DealScout.Notifications.Dispatcher do
         :ok
 
       AlertRule.in_cooldown?(rule) ->
+        record_cooldown_skipped(rule, matches)
         :ok
 
       rule.delivery_mode in @digest_modes ->
@@ -299,7 +301,8 @@ defmodule DealScout.Notifications.Dispatcher do
       idealo_url: deal && deal.idealo_url,
       geizhals_url: deal && deal.geizhals_url,
       actions: actions,
-      tag: "match-#{match.id}"
+      tag: "match-#{match.id}",
+      user_match_id: match.id
     }
 
     {:ok, count} = send_push_to_user(match.user, payload)
@@ -341,9 +344,26 @@ defmodule DealScout.Notifications.Dispatcher do
       badge: "/images/badge-72.png",
       idealo_url: first_match.deal && first_match.deal.idealo_url,
       geizhals_url: first_match.deal && first_match.deal.geizhals_url,
-      tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}"
+      tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}",
+      user_match_id: first_match.id
     }
   end
+
+  defp record_cooldown_skipped(%AlertRule{user_id: user_id} = rule, matches)
+       when is_list(matches) and not is_nil(user_id) do
+    Enum.each(matches, fn m ->
+      Notifications.record_push_delivery_log(%{
+        user_id: user_id,
+        user_match_id: m.id,
+        tracking_id: "skipped-cooldown-#{m.id}-#{System.system_time(:microsecond)}",
+        endpoint: nil,
+        status: "skipped_cooldown",
+        error_message: "Suppressed by #{rule.cooldown_minutes}m rule cooldown window"
+      })
+    end)
+  end
+
+  defp record_cooldown_skipped(_rule, _matches), do: :ok
 
   defp deliver_email_notification(%UserMatch{user: user, deal: deal, alert_rule: rule} = match) do
     case UserNotifier.deliver_deal_alert(user, deal, rule) do
