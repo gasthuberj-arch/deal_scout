@@ -111,6 +111,11 @@ defmodule DealScout.AnalyticsTest do
       assert {:ok, loaded} = Server.load_snapshot(snapshot_file)
       assert loaded.total_deals == stats.total_deals
       assert loaded.canonical_deals == stats.canonical_deals
+
+      # Test invalid arguments return :error
+      assert Server.persist_snapshot(123, stats) == :error
+      assert Server.persist_snapshot(snapshot_file, :not_a_map) == :error
+      assert Server.persist_snapshot(nil, stats) == :ok
     end
 
     @tag :tmp_dir

@@ -21,9 +21,9 @@ defmodule DealScout.Analytics.Server do
   end
 
   @doc "Triggers a synchronous refresh of the cached analytics metrics."
-  def refresh_now(server \\ __MODULE__, timeout \\ 30_000) do
-    if GenServer.whereis(server) do
-      GenServer.call(server, :refresh_now, timeout)
+  def refresh_now(timeout \\ 30_000) do
+    if GenServer.whereis(__MODULE__) do
+      GenServer.call(__MODULE__, :refresh_now, timeout)
     else
       stats = Analytics.compute_deal_intelligence_stats()
       Analytics.put_cached_stats(stats)
@@ -32,9 +32,9 @@ defmodule DealScout.Analytics.Server do
   end
 
   @doc "Triggers an asynchronous background refresh of the cached analytics metrics."
-  def warm_now(server \\ __MODULE__) do
-    if GenServer.whereis(server) do
-      GenServer.cast(server, :refresh)
+  def warm_now do
+    if GenServer.whereis(__MODULE__) do
+      GenServer.cast(__MODULE__, :refresh)
     else
       :ok
     end
@@ -80,37 +80,44 @@ defmodule DealScout.Analytics.Server do
 
   @doc """
   Atomically persists the analytics snapshot to disk using a write-and-rename pattern.
-  Protects against file corruption if the VM or container is terminated mid-write.
+  Protects against file corruption if the VM or container is terminated mid-write,
+  and guarantees cleanup of temporary swap files on unexpected failures.
   """
   def persist_snapshot(path, stats) when is_binary(path) and is_map(stats) do
     tmp_path = path <> ".tmp.#{System.unique_integer([:positive])}"
     dir = Path.dirname(path)
     File.mkdir_p(dir)
 
-    with {:ok, binary} <- safe_term_to_binary(stats),
-         :ok <- File.write(tmp_path, binary),
-         :ok <- File.rename(tmp_path, path) do
-      :ok
-    else
-      error ->
+    try do
+      with {:ok, binary} <- safe_term_to_binary(stats),
+           :ok <- File.write(tmp_path, binary),
+           :ok <- File.rename(tmp_path, path) do
+        :ok
+      else
+        error ->
+          _ = File.rm(tmp_path)
+
+          Logger.warning(
+            "[Analytics.Server] Failed to persist analytics snapshot to #{path}: #{inspect(error)}"
+          )
+
+          :error
+      end
+    rescue
+      e ->
         _ = File.rm(tmp_path)
 
         Logger.warning(
-          "[Analytics.Server] Failed to persist analytics snapshot to #{path}: #{inspect(error)}"
+          "[Analytics.Server] Exception persisting analytics snapshot: #{Exception.message(e)}"
         )
 
         :error
     end
-  rescue
-    e ->
-      Logger.warning(
-        "[Analytics.Server] Exception persisting analytics snapshot: #{Exception.message(e)}"
-      )
-
-      :error
   end
 
-  def persist_snapshot(_path, _stats), do: :ok
+  def persist_snapshot(nil, _stats), do: :ok
+  def persist_snapshot(false, _stats), do: :ok
+  def persist_snapshot(_path, _stats), do: :error
 
   @doc "Returns a baseline empty snapshot map with all expected keys."
   def empty_snapshot do
@@ -240,7 +247,7 @@ defmodule DealScout.Analytics.Server do
   end
 
   defp safe_term_to_binary(term) do
-    {:ok, :erlang.term_to_binary(term, compressed: 6)}
+    {:ok, :erlang.term_to_binary(term)}
   rescue
     _ -> :error
   end
