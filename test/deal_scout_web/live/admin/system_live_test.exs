@@ -5,6 +5,7 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
   alias DealScout.AccountsFixtures
 
   setup do
+    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
     admin = AccountsFixtures.admin_fixture()
     regular_user = AccountsFixtures.user_fixture()
 
@@ -165,6 +166,8 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     conn: conn,
     admin: admin
   } do
+    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+
     conn = log_in_user(conn, admin)
     {:ok, view, _html} = live(conn, ~p"/admin/system")
 
@@ -218,11 +221,51 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     # Evaluate health monitor state
     DealScout.Admin.HealthMonitor.check_now()
 
+    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+
     conn = log_in_user(conn, admin)
     {:ok, view, _html} = live(conn, ~p"/admin/system")
 
     assert has_element?(view, "#active-alarms-banner")
     assert has_element?(view, "#active_alarms-auto_paused_rules")
     assert has_element?(view, "#active_alarms-auto_paused_rules", "Alert Rules Auto-Paused")
+  end
+
+  test "displays web push delivery and browser receipt diagnostics card", %{
+    conn: conn,
+    admin: admin
+  } do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now_usec = DateTime.utc_now()
+
+    DealScout.Repo.insert!(%DealScout.Notifications.PushDeliveryLog{
+      user_id: admin.id,
+      tracking_id: "sys-live-track-1",
+      status: "delivered",
+      endpoint: "https://fcm.googleapis.com/fcm/send/sys-live-token",
+      gateway_duration_ms: 110,
+      client_delay_ms: 320,
+      client_received_at: now_usec,
+      inserted_at: now
+    })
+
+    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+
+    conn = log_in_user(conn, admin)
+    {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+    assert has_element?(view, "#web-push-diagnostics-card")
+
+    assert has_element?(
+             view,
+             "#web-push-diagnostics-card",
+             "Web Push Delivery & Browser Receipt Diagnostics"
+           )
+
+    assert has_element?(view, "#web-push-diagnostics-card", "100.0%")
+    assert has_element?(view, "#web-push-diagnostics-card", "320 ms")
+    assert has_element?(view, "#push-delivery-audit-logs")
+    assert has_element?(view, "#push-delivery-audit-logs", "Google FCM")
+    assert has_element?(view, "#push-delivery-audit-logs", "Confirmed in 320ms")
   end
 end

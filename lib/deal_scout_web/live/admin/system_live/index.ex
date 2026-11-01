@@ -2,6 +2,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   use DealScoutWeb, :live_view
 
   alias DealScout.Analytics
+  alias DealScout.Notifications
   alias DealScout.Feeds.Poller
   alias DealScout.Alerts
   alias DealScout.Admin.{SystemMetrics, HealthMonitor}
@@ -21,6 +22,8 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
     slowest_rules = Alerts.list_slowest_rules(10)
     system_metrics = SystemMetrics.get_metrics()
     active_alarms = fetch_streamable_alarms()
+    push_metrics = Notifications.get_delivery_metrics(24)
+    push_logs = Notifications.list_recent_delivery_logs(10)
 
     socket =
       socket
@@ -32,8 +35,11 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
       |> assign(:slowest_rules, slowest_rules)
       |> assign(:ebay_status, get_ebay_status())
       |> assign(:system_metrics, system_metrics)
+      |> assign(:push_metrics, push_metrics)
+      |> assign(:has_push_logs?, push_logs != [])
       |> assign(:active_alarms_count, length(active_alarms))
       |> stream(:active_alarms, active_alarms)
+      |> stream(:push_logs, push_logs)
 
     {:ok, socket}
   end
@@ -47,10 +53,14 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   @impl true
   def handle_info(%Phoenix.Socket.Broadcast{topic: "admin:system"}, socket) do
     active_alarms = fetch_streamable_alarms()
+    push_logs = Notifications.list_recent_delivery_logs(10)
 
     {:noreply,
      socket
      |> assign(:system_metrics, SystemMetrics.get_metrics())
+     |> assign(:push_metrics, Notifications.get_delivery_metrics(24))
+     |> assign(:has_push_logs?, push_logs != [])
+     |> stream(:push_logs, push_logs, reset: true)
      |> assign(:active_alarms_count, length(active_alarms))
      |> stream(:active_alarms, active_alarms, reset: true)}
   end
@@ -71,6 +81,8 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
     backup_status = DealScout.Backup.get_status()
     system_metrics = SystemMetrics.get_metrics()
     active_alarms = fetch_streamable_alarms()
+    push_metrics = Notifications.get_delivery_metrics(24)
+    push_logs = Notifications.list_recent_delivery_logs(10)
 
     {:noreply,
      socket
@@ -80,6 +92,9 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
      |> assign(:slowest_rules, Alerts.list_slowest_rules(10))
      |> assign(:ebay_status, get_ebay_status())
      |> assign(:system_metrics, system_metrics)
+     |> assign(:push_metrics, push_metrics)
+     |> assign(:has_push_logs?, push_logs != [])
+     |> stream(:push_logs, push_logs, reset: true)
      |> assign(:active_alarms_count, length(active_alarms))
      |> stream(:active_alarms, active_alarms, reset: true)
      |> put_flash(:info, "System operations metrics updated.")}
@@ -456,6 +471,205 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                 <.icon name="hero-bell" class="size-3.5" />
                 <span>Enable Device Alarms</span>
               </button>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Web Push Delivery & Browser Receipt Diagnostics Card -->
+        <div
+          id="web-push-diagnostics-card"
+          class="bg-base-100 border border-base-300 p-6 rounded-2xl shadow-sm space-y-6"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-base-200">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
+                <.icon name="hero-paper-airplane" class="size-5" />
+              </div>
+              <div>
+                <h3 class="text-base font-bold text-base-content flex items-center gap-2">
+                  <span>Web Push Delivery & Browser Receipt Diagnostics</span>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-base-200 text-base-content/70 font-mono">
+                    24h Rolling Window
+                  </span>
+                </h3>
+                <p class="text-xs text-base-content/60 mt-0.5">
+                  Real-world delivery confirmation rate, background Service Worker latency, and client receipt ping status.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <%= cond do %>
+                <% @push_metrics.delivered_to_gateway == 0 -> %>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-base-200 text-base-content/70">
+                    <.icon name="hero-information-circle" class="size-3.5" />
+                    <span>No Pushes Sent</span>
+                  </span>
+                <% @push_metrics.confirmation_rate_pct >= 85.0 -> %>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <.icon name="hero-check-circle" class="size-3.5" />
+                    <span>Optimal Delivery ({@push_metrics.confirmation_rate_pct}%)</span>
+                  </span>
+                <% @push_metrics.confirmation_rate_pct >= 70.0 -> %>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <.icon name="hero-exclamation-triangle" class="size-3.5" />
+                    <span>Acceptable Rate ({@push_metrics.confirmation_rate_pct}%)</span>
+                  </span>
+                <% true -> %>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                    <.icon name="hero-exclamation-circle" class="size-3.5" />
+                    <span>Delivery Degraded ({@push_metrics.confirmation_rate_pct}%)</span>
+                  </span>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- KPI Summary Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="p-4 rounded-xl bg-base-200/50 border border-base-200 space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-base-content/60">
+                Browser Receipt Rate
+              </span>
+              <div class="text-2xl font-black text-base-content font-mono">
+                <%= if @push_metrics.delivered_to_gateway > 0 do %>
+                  {@push_metrics.confirmation_rate_pct}%
+                <% else %>
+                  <span class="text-base-content/40 text-lg">N/A</span>
+                <% end %>
+              </div>
+              <p class="text-xs text-base-content/60">
+                {@push_metrics.device_confirmed} confirmed of {@push_metrics.delivered_to_gateway} accepted
+              </p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-base-200/50 border border-base-200 space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-base-content/60">
+                Avg End-to-End Latency
+              </span>
+              <div class="text-2xl font-black text-base-content font-mono">
+                <%= if @push_metrics.avg_client_delay_ms do %>
+                  {@push_metrics.avg_client_delay_ms} ms
+                <% else %>
+                  <span class="text-base-content/40 text-lg">--</span>
+                <% end %>
+              </div>
+              <p class="text-xs text-base-content/60">
+                Server dispatch -> Service Worker ack
+              </p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-base-200/50 border border-base-200 space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-base-content/60">
+                Gateway Round-Trip
+              </span>
+              <div class="text-2xl font-black text-base-content font-mono">
+                <%= if @push_metrics.avg_gateway_ms do %>
+                  {@push_metrics.avg_gateway_ms} ms
+                <% else %>
+                  <span class="text-base-content/40 text-lg">--</span>
+                <% end %>
+              </div>
+              <p class="text-xs text-base-content/60">
+                FCM / Apple APNs HTTP response
+              </p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-base-200/50 border border-base-200 space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-base-content/60">
+                Pipeline & Pruned
+              </span>
+              <div class="text-2xl font-black text-base-content font-mono flex items-center gap-2">
+                <span>{@push_metrics.pending_confirmation}</span>
+                <span class="text-xs font-normal text-base-content/50">pending</span>
+              </div>
+              <p class="text-xs text-base-content/60">
+                {@push_metrics.expired} expired (410) • {@push_metrics.no_subscriptions} no devices
+              </p>
+            </div>
+          </div>
+
+          <!-- Recent Delivery Attempts Audit Stream -->
+          <div class="space-y-3 pt-2">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
+                <.icon name="hero-list-bullet" class="size-3.5" />
+                <span>Recent Global Delivery Attempts</span>
+              </h4>
+              <span class="text-xs text-base-content/50">Last 10 attempts</span>
+            </div>
+
+            <%= if not @has_push_logs? do %>
+              <div
+                id="push-delivery-audit-empty"
+                class="p-6 text-center text-xs text-base-content/50 italic bg-base-200/30 rounded-xl border border-base-200"
+              >
+                No push delivery attempts recorded yet.
+              </div>
+            <% else %>
+              <div id="push-delivery-audit-logs" phx-update="stream" class="space-y-2">
+                <div
+                  :for={{dom_id, log} <- @streams.push_logs}
+                  id={dom_id}
+                  class="text-xs p-3 rounded-xl border border-base-200 bg-base-200/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-base-200/60 transition-colors"
+                >
+                  <div class="flex items-center gap-2.5 flex-wrap">
+                    <%= cond do %>
+                      <% log.client_received_at -> %>
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <.icon name="hero-check-circle" class="size-3" />
+                          <span>Confirmed in {log.client_delay_ms || 0}ms</span>
+                        </span>
+                      <% log.status == "delivered" -> %>
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                          <.icon name="hero-clock" class="size-3" />
+                          <span>Pending Client Receipt</span>
+                        </span>
+                      <% log.status == "expired" -> %>
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                          <.icon name="hero-x-circle" class="size-3" />
+                          <span>Expired (410)</span>
+                        </span>
+                      <% log.status == "no_subscriptions" -> %>
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          <.icon name="hero-exclamation-triangle" class="size-3" />
+                          <span>No Device</span>
+                        </span>
+                      <% true -> %>
+                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                          <.icon name="hero-exclamation-circle" class="size-3" />
+                          <span>{log.status}</span>
+                        </span>
+                    <% end %>
+
+                    <span class="font-mono text-base-content/80 text-[11px]">
+                      User #{log.user_id}
+                      <%= if log.user do %>
+                        <span class="text-base-content/50">({log.user.email})</span>
+                      <% end %>
+                    </span>
+
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-base-300/50 text-base-content/70 font-mono">
+                      {endpoint_provider(log.endpoint)}
+                    </span>
+
+                    <%= if log.gateway_duration_ms do %>
+                      <span class="text-base-content/50 font-mono text-[11px]">
+                        GW: {log.gateway_duration_ms}ms
+                      </span>
+                    <% end %>
+
+                    <%= if log.error_message do %>
+                      <span class="text-rose-600 dark:text-rose-400 text-[11px] truncate max-w-xs font-mono">
+                        {log.error_message}
+                      </span>
+                    <% end %>
+                  </div>
+
+                  <span class="text-[11px] text-base-content/50 font-mono shrink-0">
+                    {Calendar.strftime(log.inserted_at, "%d.%m %H:%M:%S")}
+                  </span>
+                </div>
+              </div>
             <% end %>
           </div>
         </div>
@@ -1318,5 +1532,16 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
       seen_items: DealScout.Feeds.Ebay.SeenCache.size(),
       poll_interval: DealScout.Feeds.Ebay.Config.poll_interval_seconds()
     }
+  end
+
+  defp endpoint_provider(nil), do: "No Device"
+
+  defp endpoint_provider(endpoint) do
+    cond do
+      String.contains?(endpoint, "fcm.googleapis.com") -> "Google FCM"
+      String.contains?(endpoint, "push.apple.com") -> "Apple WebPush"
+      String.contains?(endpoint, "mozilla") -> "Mozilla Push"
+      true -> "WebPush"
+    end
   end
 end

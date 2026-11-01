@@ -108,9 +108,14 @@ defmodule DealScout.Maintenance.Pruner do
 
   defp prune_and_vacuum(days) do
     {count, _} = Deals.prune_old_deals(days)
+    {push_count, _} = DealScout.Notifications.prune_push_delivery_logs(7)
 
     if count > 0 do
       Logger.info("[DealScout.Pruner] Pruned #{count} deals older than #{days} days.")
+    end
+
+    if push_count > 0 do
+      Logger.info("[DealScout.Pruner] Pruned #{push_count} push delivery logs older than 7 days.")
     end
 
     case Repo.query("PRAGMA incremental_vacuum;") do

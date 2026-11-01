@@ -316,6 +316,160 @@ defmodule DealScout.Notifications do
     end
   end
 
+  @analytics_cache_table :deal_scout_analytics_cache
+  @default_analytics_ttl_ms 60_000
+
+  @doc """
+  Returns aggregated push delivery metrics for the specified rolling time window in hours (default 24).
+  Uses ETS caching with a 60-second TTL to avoid database load.
+  """
+  def get_delivery_metrics(hours \\ 24) when is_integer(hours) and hours > 0 do
+    cache_key = {:push_delivery_metrics, hours}
+
+    case lookup_cached_metrics(cache_key) do
+      {:ok, metrics} ->
+        metrics
+
+      _ ->
+        metrics = compute_delivery_metrics(hours)
+        put_cached_metrics(cache_key, metrics)
+        metrics
+    end
+  end
+
+  @doc """
+  Invalidates the cached delivery metrics in ETS.
+  """
+  def invalidate_delivery_metrics_cache(hours \\ 24) when is_integer(hours) and hours > 0 do
+    try do
+      :ets.delete(@analytics_cache_table, {:push_delivery_metrics, hours})
+      :ok
+    rescue
+      _ -> :ok
+    end
+  end
+
+  @doc """
+  Computes aggregated push delivery statistics across all users over the last `hours` hours.
+  Executes a single-pass index-scanned aggregate on `push_delivery_logs` without grouping.
+  """
+  def compute_delivery_metrics(hours \\ 24) when is_integer(hours) and hours > 0 do
+    since = DateTime.add(DateTime.utc_now(), -hours * 3600, :second)
+
+    query =
+      from(l in PushDeliveryLog,
+        where: l.inserted_at >= ^since,
+        select: %{
+          total: count(l.id),
+          delivered_to_gateway: count(l.id) |> filter(l.status == "delivered"),
+          device_confirmed: count(l.id) |> filter(not is_nil(l.client_received_at)),
+          expired: count(l.id) |> filter(l.status == "expired"),
+          no_subscriptions: count(l.id) |> filter(l.status == "no_subscriptions"),
+          http_error: count(l.id) |> filter(l.status == "http_error"),
+          network_error: count(l.id) |> filter(l.status == "network_error"),
+          skipped_cooldown: count(l.id) |> filter(l.status == "skipped_cooldown"),
+          avg_client_delay_ms: avg(l.client_delay_ms) |> filter(not is_nil(l.client_delay_ms)),
+          avg_gateway_ms: avg(l.gateway_duration_ms) |> filter(not is_nil(l.gateway_duration_ms))
+        }
+      )
+
+    res = Repo.one(query) || %{}
+
+    total = Map.get(res, :total) || 0
+    delivered = Map.get(res, :delivered_to_gateway) || 0
+    confirmed = Map.get(res, :device_confirmed) || 0
+    pending = max(0, delivered - confirmed)
+
+    rate =
+      if delivered > 0 do
+        Float.round(confirmed / delivered * 100, 1)
+      else
+        0.0
+      end
+
+    avg_client =
+      case Map.get(res, :avg_client_delay_ms) do
+        nil -> nil
+        %Decimal{} = d -> Decimal.to_float(d) |> round()
+        val when is_float(val) -> round(val)
+        val when is_integer(val) -> val
+      end
+
+    avg_gateway =
+      case Map.get(res, :avg_gateway_ms) do
+        nil -> nil
+        %Decimal{} = d -> Decimal.to_float(d) |> round()
+        val when is_float(val) -> round(val)
+        val when is_integer(val) -> val
+      end
+
+    %{
+      total: total,
+      delivered_to_gateway: delivered,
+      device_confirmed: confirmed,
+      pending_confirmation: pending,
+      confirmation_rate_pct: rate,
+      expired: Map.get(res, :expired) || 0,
+      no_subscriptions: Map.get(res, :no_subscriptions) || 0,
+      http_error: Map.get(res, :http_error) || 0,
+      network_error: Map.get(res, :network_error) || 0,
+      skipped_cooldown: Map.get(res, :skipped_cooldown) || 0,
+      avg_client_delay_ms: avg_client,
+      avg_gateway_ms: avg_gateway,
+      hours: hours
+    }
+  end
+
+  @doc """
+  Lists the most recent push delivery logs globally across all users for admin inspection.
+  Preloads the user and user_match associations.
+  """
+  def list_recent_delivery_logs(limit \\ 10) when is_integer(limit) and limit > 0 do
+    from(l in PushDeliveryLog,
+      order_by: [desc: l.inserted_at, desc: l.id],
+      limit: ^limit,
+      preload: [:user, :user_match]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Prunes push delivery logs older than the given number of days (default 7).
+  Returns `{deleted_count, nil}`.
+  """
+  def prune_push_delivery_logs(days \\ 7) when is_integer(days) and days > 0 do
+    cutoff = DateTime.add(DateTime.utc_now(), -days * 86_400, :second)
+
+    from(l in PushDeliveryLog, where: l.inserted_at < ^cutoff)
+    |> Repo.delete_all()
+  end
+
+  defp lookup_cached_metrics(cache_key) do
+    try do
+      now = System.monotonic_time(:millisecond)
+
+      case :ets.lookup(@analytics_cache_table, cache_key) do
+        [{^cache_key, metrics, expires_at}] when expires_at > now ->
+          {:ok, metrics}
+
+        _ ->
+          :error
+      end
+    rescue
+      _ -> :error
+    end
+  end
+
+  defp put_cached_metrics(cache_key, metrics) do
+    try do
+      now = System.monotonic_time(:millisecond)
+      :ets.insert(@analytics_cache_table, {cache_key, metrics, now + @default_analytics_ttl_ms})
+      :ok
+    rescue
+      _ -> :ok
+    end
+  end
+
   defp log_push_attempt(
          user_id,
          sub,

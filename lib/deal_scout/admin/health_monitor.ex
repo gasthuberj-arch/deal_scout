@@ -287,6 +287,26 @@ defmodule DealScout.Admin.HealthMonitor do
         anomalies
       end
 
+    # 6. Web push delivery degradation (receipt rate < 50% with at least 10 delivered attempts in 24h)
+    push_metrics = Notifications.get_delivery_metrics(24)
+
+    anomalies =
+      if push_metrics.delivered_to_gateway >= 10 and
+           push_metrics.confirmation_rate_pct < 50.0 do
+        [
+          %{
+            type: :push_delivery_degraded,
+            severity: :warning,
+            title: "Push Delivery Degraded (#{push_metrics.confirmation_rate_pct}% confirmed)",
+            message:
+              "Only #{push_metrics.device_confirmed} of #{push_metrics.delivered_to_gateway} push notifications were confirmed by user browsers in the last 24h (#{push_metrics.confirmation_rate_pct}%)."
+          }
+          | anomalies
+        ]
+      else
+        anomalies
+      end
+
     Enum.reverse(anomalies)
   end
 
