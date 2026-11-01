@@ -274,8 +274,8 @@ defmodule DealScout.Alerts.AlertsTest do
   } do
     dropshipper =
       Repo.insert!(%Merchant{
-        name: "AliExpress Store",
-        slug: "aliexpress-store-#{System.unique_integer([:positive])}",
+        name: "Temu Store",
+        slug: "temu-store-#{System.unique_integer([:positive])}",
         trust_level: "dropshipper"
       })
 

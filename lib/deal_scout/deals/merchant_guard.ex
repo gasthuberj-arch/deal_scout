@@ -51,8 +51,6 @@ defmodule DealScout.Deals.MerchantGuard do
 
   @dropshippers [
     "temu",
-    "aliexpress",
-    "ali express",
     "wish",
     "shein",
     "dhgate",

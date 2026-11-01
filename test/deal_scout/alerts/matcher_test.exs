@@ -124,6 +124,16 @@ defmodule DealScout.Alerts.MatcherTest do
 
     rule_allow = %AlertRule{keywords: "RTX 4080", exclude_dropshippers: false, is_active: true}
     assert Matcher.matches?(temu_deal, rule_allow)
+
+    # AliExpress is unverified marketplace, not dropshipper, so it is not excluded
+    aliexpress_merchant = %Merchant{
+      name: "AliExpress",
+      slug: "aliexpress",
+      trust_level: "unverified"
+    }
+
+    aliexpress_deal = %{deal | merchant: aliexpress_merchant, raw_merchant: "AliExpress"}
+    assert Matcher.matches?(aliexpress_deal, rule_exclude)
   end
 
   test "supports exact quoted phrase matching", %{deal: deal} do

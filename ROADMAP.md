@@ -29,7 +29,7 @@ This document outlines the complete feature set, roadmap, and architectural desi
   - **Smart Domain Extraction**: If an RSS post omits merchant tags, cleanly derive the merchant from the deal URL domain (e.g. `mediamarkt.de`), with fallback to *"Diverse Händler"*.
   - **Verified Whitelist (🟢)**: Reputable German and EU retailers (Amazon, Mindfactory, MediaMarkt, Saturn, Alternate, Cyberport, Otto, Lidl, Edeka, Galaxus, Coolblue, NBB, Kaufland, Decathlon).
   - **High-Risk / Scam Red Flags (🔴)**: Detect prepayment-only terms (*“nur Vorkasse”*, *“nur Überweisung”*), suspicious TLDs (`.top`, `.xyz`, `.buzz`), and grey-market key sellers.
-  - **Spam Dropshipper Filter**: Identify marketplace dropshippers (Temu, AliExpress, Wish, Shein).
+  - **Spam Dropshipper Filter**: Identify marketplace dropshippers (Temu, Wish, Shein).
 - **UI & Safety**:
   - Distinct safety status badges on cards (🟢 Verified, 🟡 Unverified, 🔴 High Risk).
   - **Merchant Intelligence Popover**: Hover/click merchant badge to see cross-portal deal frequencies (e.g. *“Seen 42 times across MyDealz (30), DealDoktor (12). Avg temp: 180° 🔥”*).

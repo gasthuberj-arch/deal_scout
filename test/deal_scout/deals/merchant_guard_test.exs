@@ -20,12 +20,19 @@ defmodule DealScout.Deals.MerchantGuardTest do
 
     test "classifies dropshippers as dropshipper" do
       assert MerchantGuard.classify("Temu") == "dropshipper"
-      assert MerchantGuard.classify("AliExpress") == "dropshipper"
       assert MerchantGuard.classify("Wish") == "dropshipper"
       assert MerchantGuard.classify("Shein") == "dropshipper"
 
-      assert MerchantGuard.classify("Random Shop", "https://aliexpress.com/item/123") ==
+      assert MerchantGuard.classify("Random Shop", "https://temu.com/item/123") ==
                "dropshipper"
+    end
+
+    test "classifies general marketplaces (AliExpress, Alibaba) as unverified rather than dropshipper" do
+      assert MerchantGuard.classify("AliExpress") == "unverified"
+      assert MerchantGuard.classify("Alibaba") == "unverified"
+
+      assert MerchantGuard.classify("8BitDo Official", "https://aliexpress.com/item/123") ==
+               "unverified"
     end
 
     test "classifies prepayment-only shops and suspicious TLDs as high_risk" do

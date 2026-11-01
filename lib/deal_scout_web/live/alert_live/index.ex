@@ -775,7 +775,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:exclude_dropshippers]}
                         id="alert-rule-exclude-dropshippers-check"
                         type="checkbox"
-                        label="Exclude dropshippers (Temu, AliExpress)"
+                        label="Exclude dropshippers (Temu, Wish, Shein)"
                       />
                     </div>
                   </div>
