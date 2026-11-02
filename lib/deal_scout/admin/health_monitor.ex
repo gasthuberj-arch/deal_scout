@@ -25,10 +25,10 @@ defmodule DealScout.Admin.HealthMonitor do
 
   # Memory & Storage Invariant Thresholds
   @ram_limit_mb 400.0
-  @default_swap_critical_pct 80.0
-  @default_swap_min_free_mb 64.0
-  @default_swap_starvation_pct 50.0
-  @default_min_available_ram_mb 50.0
+  @swap_critical_pct 80.0
+  @swap_min_free_mb 64.0
+  @swap_starvation_pct 50.0
+  @min_available_ram_mb 50.0
   @wal_limit_bytes 250 * 1024 * 1024
 
   # ============================================================================
@@ -188,9 +188,7 @@ defmodule DealScout.Admin.HealthMonitor do
     %{state | alarms: final_alarms}
   end
 
-  @doc """
-  Evaluates system metrics and returns a list of detected anomalies.
-  """
+  @doc false
   def evaluate_anomalies(metrics) do
     anomalies = []
 
@@ -319,8 +317,7 @@ defmodule DealScout.Admin.HealthMonitor do
         nil
 
       # Case 1: Critical swap space exhaustion (near OOM limit)
-      swap_pct >= swap_critical_pct() or
-          (swap_total >= 100.0 and swap_free < swap_min_free_mb()) ->
+      swap_pct >= @swap_critical_pct or swap_free < @swap_min_free_mb ->
         %{
           type: :high_swap,
           severity: :critical,
@@ -330,7 +327,8 @@ defmodule DealScout.Admin.HealthMonitor do
         }
 
       # Case 2: Memory starvation: elevated swap combined with depleted physical RAM
-      swap_pct >= swap_starvation_pct() and avail_ram > 0 and avail_ram < min_available_ram_mb() ->
+      swap_pct >= @swap_starvation_pct and is_number(avail_ram) and
+          avail_ram < @min_available_ram_mb ->
         %{
           type: :high_swap,
           severity: :warning,
@@ -343,34 +341,6 @@ defmodule DealScout.Admin.HealthMonitor do
       true ->
         nil
     end
-  end
-
-  defp swap_critical_pct do
-    Application.get_env(
-      :deal_scout,
-      :health_monitor_swap_critical_pct,
-      @default_swap_critical_pct
-    )
-  end
-
-  defp swap_min_free_mb do
-    Application.get_env(:deal_scout, :health_monitor_swap_min_free_mb, @default_swap_min_free_mb)
-  end
-
-  defp swap_starvation_pct do
-    Application.get_env(
-      :deal_scout,
-      :health_monitor_swap_starvation_pct,
-      @default_swap_starvation_pct
-    )
-  end
-
-  defp min_available_ram_mb do
-    Application.get_env(
-      :deal_scout,
-      :health_monitor_min_available_ram_mb,
-      @default_min_available_ram_mb
-    )
   end
 
   # ============================================================================

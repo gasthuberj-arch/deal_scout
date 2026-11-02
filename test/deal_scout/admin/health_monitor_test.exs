@@ -197,6 +197,28 @@ defmodule DealScout.Admin.HealthMonitorTest do
       assert swap_alarm.message =~ "Physical RAM is depleted"
     end
 
+    test "total RAM exhaustion (avail_ram == 0.0) with elevated swap triggers starvation alarm" do
+      metrics =
+        put_in(base_metrics(), [:memory], %{
+          beam_total_mb: 320.0,
+          beam_usage_pct: 62.5,
+          swap_total_mb: 512.0,
+          swap_used_mb: 280.0,
+          swap_free_mb: 232.0,
+          swap_usage_pct: 54.7,
+          host_mem_total_mb: 470.0,
+          host_mem_available_mb: 0.0
+        })
+
+      anomalies = HealthMonitor.evaluate_anomalies(metrics)
+      swap_alarm = Enum.find(anomalies, &(&1.type == :high_swap))
+
+      assert swap_alarm != nil
+      assert swap_alarm.severity == :warning
+      assert swap_alarm.title =~ "Memory Starvation"
+      assert swap_alarm.message =~ "Physical RAM is depleted"
+    end
+
     test "swap disabled (swap_total == 0) produces no swap alarm" do
       metrics =
         put_in(base_metrics(), [:memory], %{
