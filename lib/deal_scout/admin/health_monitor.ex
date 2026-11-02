@@ -25,7 +25,10 @@ defmodule DealScout.Admin.HealthMonitor do
 
   # Memory & Storage Invariant Thresholds
   @ram_limit_mb 400.0
-  @swap_limit_mb 100.0
+  @default_swap_critical_pct 80.0
+  @default_swap_min_free_mb 64.0
+  @default_swap_starvation_pct 50.0
+  @default_min_available_ram_mb 50.0
   @wal_limit_bytes 250 * 1024 * 1024
 
   # ============================================================================
@@ -185,7 +188,10 @@ defmodule DealScout.Admin.HealthMonitor do
     %{state | alarms: final_alarms}
   end
 
-  defp evaluate_anomalies(metrics) do
+  @doc """
+  Evaluates system metrics and returns a list of detected anomalies.
+  """
+  def evaluate_anomalies(metrics) do
     anomalies = []
 
     # 1. BEAM RAM pressure (> 400 MB of 512 MB micro-VM limit)
@@ -205,21 +211,11 @@ defmodule DealScout.Admin.HealthMonitor do
         anomalies
       end
 
-    # 2. Swap pressure (> 100 MB used when swap is enabled)
+    # 2. Swap pressure / distress evaluation
     anomalies =
-      if metrics.memory.swap_total_mb > 0 and metrics.memory.swap_used_mb > @swap_limit_mb do
-        [
-          %{
-            type: :high_swap,
-            severity: :warning,
-            title: "Swap Memory Elevated (#{metrics.memory.swap_used_mb} MB)",
-            message:
-              "Swap usage is #{metrics.memory.swap_used_mb} MB / #{metrics.memory.swap_total_mb} MB (#{metrics.memory.swap_usage_pct}%). Physical RAM is saturated."
-          }
-          | anomalies
-        ]
-      else
-        anomalies
+      case evaluate_swap_anomaly(metrics.memory) do
+        nil -> anomalies
+        anomaly -> [anomaly | anomalies]
       end
 
     # 3. SQLite WAL bloat (> 250 MB)
@@ -308,6 +304,73 @@ defmodule DealScout.Admin.HealthMonitor do
       end
 
     Enum.reverse(anomalies)
+  end
+
+  defp evaluate_swap_anomaly(memory) do
+    swap_total = memory.swap_total_mb
+    swap_used = memory.swap_used_mb
+    swap_free = memory.swap_free_mb
+    swap_pct = memory.swap_usage_pct
+    avail_ram = memory.host_mem_available_mb
+
+    cond do
+      # Swap disabled or unconfigured
+      swap_total <= 0 ->
+        nil
+
+      # Case 1: Critical swap space exhaustion (near OOM limit)
+      swap_pct >= swap_critical_pct() or
+          (swap_total >= 100.0 and swap_free < swap_min_free_mb()) ->
+        %{
+          type: :high_swap,
+          severity: :critical,
+          title: "Swap Space Critical (#{swap_used} MB)",
+          message:
+            "Swap space is #{swap_pct}% utilized (#{swap_used} MB / #{swap_total} MB, #{swap_free} MB remaining). Risk of out-of-memory crash."
+        }
+
+      # Case 2: Memory starvation: elevated swap combined with depleted physical RAM
+      swap_pct >= swap_starvation_pct() and avail_ram > 0 and avail_ram < min_available_ram_mb() ->
+        %{
+          type: :high_swap,
+          severity: :warning,
+          title: "Memory Starvation (#{swap_used} MB swap, #{avail_ram} MB RAM free)",
+          message:
+            "Physical RAM is depleted (#{avail_ram} MB available) and swap is elevated (#{swap_used} MB / #{swap_total} MB, #{swap_pct}%)."
+        }
+
+      # Normal: cold pages in swap with sufficient RAM and swap headroom
+      true ->
+        nil
+    end
+  end
+
+  defp swap_critical_pct do
+    Application.get_env(
+      :deal_scout,
+      :health_monitor_swap_critical_pct,
+      @default_swap_critical_pct
+    )
+  end
+
+  defp swap_min_free_mb do
+    Application.get_env(:deal_scout, :health_monitor_swap_min_free_mb, @default_swap_min_free_mb)
+  end
+
+  defp swap_starvation_pct do
+    Application.get_env(
+      :deal_scout,
+      :health_monitor_swap_starvation_pct,
+      @default_swap_starvation_pct
+    )
+  end
+
+  defp min_available_ram_mb do
+    Application.get_env(
+      :deal_scout,
+      :health_monitor_min_available_ram_mb,
+      @default_min_available_ram_mb
+    )
   end
 
   # ============================================================================

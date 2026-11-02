@@ -115,4 +115,103 @@ defmodule DealScout.Admin.HealthMonitorTest do
     nas_alarm = Enum.find(alarms, fn a -> a.type in [:nas_disconnected, :backup_disconnected] end)
     assert nas_alarm == nil
   end
+
+  describe "swap alarm evaluation" do
+    defp base_metrics do
+      %{
+        memory: %{
+          beam_total_mb: 150.0,
+          beam_usage_pct: 29.3,
+          swap_total_mb: 512.0,
+          swap_used_mb: 0.0,
+          swap_free_mb: 512.0,
+          swap_usage_pct: 0.0,
+          host_mem_total_mb: 470.0,
+          host_mem_available_mb: 250.0
+        },
+        storage: %{
+          wal_bytes: 10_000_000
+        }
+      }
+    end
+
+    test "cold swap usage with healthy available RAM does not trigger an alarm (live profile)" do
+      # Exactly matching the live production profile: 122.7 MB used / 512 MB swap (24%), 245.9 MB RAM available
+      metrics =
+        put_in(base_metrics(), [:memory], %{
+          beam_total_mb: 158.0,
+          beam_usage_pct: 30.8,
+          swap_total_mb: 512.0,
+          swap_used_mb: 122.7,
+          swap_free_mb: 389.3,
+          swap_usage_pct: 24.0,
+          host_mem_total_mb: 470.0,
+          host_mem_available_mb: 245.9
+        })
+
+      anomalies = HealthMonitor.evaluate_anomalies(metrics)
+      assert Enum.find(anomalies, &(&1.type == :high_swap)) == nil
+    end
+
+    test "critical swap exhaustion triggers critical alarm" do
+      metrics =
+        put_in(base_metrics(), [:memory], %{
+          beam_total_mb: 350.0,
+          beam_usage_pct: 68.3,
+          swap_total_mb: 512.0,
+          swap_used_mb: 450.0,
+          swap_free_mb: 62.0,
+          swap_usage_pct: 87.9,
+          host_mem_total_mb: 470.0,
+          host_mem_available_mb: 120.0
+        })
+
+      anomalies = HealthMonitor.evaluate_anomalies(metrics)
+      swap_alarm = Enum.find(anomalies, &(&1.type == :high_swap))
+
+      assert swap_alarm != nil
+      assert swap_alarm.severity == :critical
+      assert swap_alarm.title =~ "Swap Space Critical"
+      assert swap_alarm.message =~ "87.9% utilized"
+    end
+
+    test "dual memory starvation (elevated swap + depleted RAM) triggers warning alarm" do
+      metrics =
+        put_in(base_metrics(), [:memory], %{
+          beam_total_mb: 320.0,
+          beam_usage_pct: 62.5,
+          swap_total_mb: 512.0,
+          swap_used_mb: 280.0,
+          swap_free_mb: 232.0,
+          swap_usage_pct: 54.7,
+          host_mem_total_mb: 470.0,
+          host_mem_available_mb: 35.0
+        })
+
+      anomalies = HealthMonitor.evaluate_anomalies(metrics)
+      swap_alarm = Enum.find(anomalies, &(&1.type == :high_swap))
+
+      assert swap_alarm != nil
+      assert swap_alarm.severity == :warning
+      assert swap_alarm.title =~ "Memory Starvation"
+      assert swap_alarm.message =~ "Physical RAM is depleted"
+    end
+
+    test "swap disabled (swap_total == 0) produces no swap alarm" do
+      metrics =
+        put_in(base_metrics(), [:memory], %{
+          beam_total_mb: 200.0,
+          beam_usage_pct: 39.0,
+          swap_total_mb: 0.0,
+          swap_used_mb: 0.0,
+          swap_free_mb: 0.0,
+          swap_usage_pct: 0.0,
+          host_mem_total_mb: 470.0,
+          host_mem_available_mb: 200.0
+        })
+
+      anomalies = HealthMonitor.evaluate_anomalies(metrics)
+      assert Enum.find(anomalies, &(&1.type == :high_swap)) == nil
+    end
+  end
 end
