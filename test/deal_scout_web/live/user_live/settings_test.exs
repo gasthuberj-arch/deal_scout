@@ -249,6 +249,50 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
       refute has_element?(lv, "#push-subscriptions", "Apple iPhone 15 Pro")
       assert DealScout.Notifications.list_push_subscriptions_for_user(user.id) == []
     end
+
+    test "allows renaming device nickname and shows device confirmation health", %{conn: conn} do
+      user = user_fixture()
+
+      sub =
+        DealScout.Repo.insert!(%DealScout.Notifications.PushSubscription{
+          user_id: user.id,
+          endpoint:
+            "https://push.example.com/device-rename-test-#{System.unique_integer([:positive])}",
+          p256dh: "key_p256dh",
+          auth: "key_auth",
+          device_name: "Original Name",
+          user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Safari/604.1"
+        })
+
+      {:ok, lv, _html} =
+        conn
+        |> log_in_user(user)
+        |> live(~p"/users/settings")
+
+      assert has_element?(lv, "#push-subscriptions", "Original Name")
+      assert has_element?(lv, "#push-subscriptions", "Safari on iOS")
+      assert has_element?(lv, "#push-subscriptions", "0 confirmed (24h)")
+
+      # Click edit device button
+      lv
+      |> element("button[phx-click='edit_device'][phx-value-id='#{sub.id}']")
+      |> render_click()
+
+      assert has_element?(lv, "#edit-device-form-#{sub.id}")
+
+      # Submit rename form
+      lv
+      |> form("#edit-device-form-#{sub.id}", %{
+        "device" => %{"device_name" => "Renamed iPhone"}
+      })
+      |> render_submit()
+
+      assert has_element?(lv, "#push-subscriptions", "Renamed iPhone")
+      refute has_element?(lv, "#push-subscriptions", "Original Name")
+
+      updated_sub = DealScout.Repo.get!(DealScout.Notifications.PushSubscription, sub.id)
+      assert updated_sub.device_name == "Renamed iPhone"
+    end
   end
 
   describe "data export: gdpr data portability" do

@@ -75,13 +75,73 @@ defmodule DealScoutWeb.UserLive.Settings do
             id={dom_id}
             class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-base-200/30 transition-colors"
           >
-            <div class="space-y-1">
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-sm text-base-content">
-                  {sub.device_name || "Web Browser"}
+            <div class="space-y-1.5 min-w-0">
+              <%= if @editing_device_id == sub.id do %>
+                <.form
+                  for={@edit_device_form}
+                  id={"edit-device-form-#{sub.id}"}
+                  phx-submit="save_device_name"
+                  class="flex items-center gap-2 flex-wrap"
+                >
+                  <.input
+                    field={@edit_device_form[:device_name]}
+                    type="text"
+                    placeholder="e.g. Personal iPhone"
+                    required
+                    class="input input-sm input-bordered rounded-lg text-sm w-48 sm:w-64"
+                  />
+                  <button type="submit" class="btn btn-primary btn-sm rounded-lg text-xs">
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="cancel_edit_device"
+                    class="btn btn-ghost btn-sm rounded-lg text-xs"
+                  >
+                    Cancel
+                  </button>
+                </.form>
+              <% else %>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-sm text-base-content device-name">
+                    {sub.device_name || "Web Browser"}
+                  </span>
+                  <button
+                    type="button"
+                    phx-click="edit_device"
+                    phx-value-id={sub.id}
+                    title="Rename device nickname"
+                    class="btn btn-ghost btn-xs btn-circle text-base-content/50 hover:text-base-content"
+                  >
+                    <.icon name="hero-pencil" class="size-3" />
+                  </button>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono bg-base-300/50 text-base-content/70">
+                    {sub.browser_info}
+                  </span>
+                  <span class="badge badge-xs badge-success">Active</span>
+                </div>
+              <% end %>
+
+              <div class="flex items-center gap-2 flex-wrap text-xs">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <.icon name="hero-check-circle" class="size-3" />
+                  <span>{sub.confirmed_count || 0} confirmed (24h)</span>
                 </span>
-                <span class="badge badge-xs badge-success">Active</span>
+
+                <%= if sub.pending_count && sub.pending_count > 0 do %>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                    <.icon name="hero-clock" class="size-3" />
+                    <span>{sub.pending_count} pending confirms</span>
+                  </span>
+                <% end %>
+
+                <%= if sub.last_receipt_at do %>
+                  <span class="text-[11px] text-base-content/50">
+                    · Last confirmed: {Calendar.strftime(sub.last_receipt_at, "%d.%m %H:%M")}
+                  </span>
+                <% end %>
               </div>
+
               <p class="text-xs text-base-content/60 font-mono truncate max-w-sm sm:max-w-md">
                 {sub.endpoint}
               </p>
@@ -350,7 +410,7 @@ defmodule DealScoutWeb.UserLive.Settings do
     user = scope.user
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
-    subscriptions = Notifications.list_push_subscriptions(scope)
+    subscriptions = Notifications.get_device_delivery_metrics(scope, 24)
     delivery_logs = Notifications.list_push_delivery_logs(scope, 8)
     has_password? = is_binary(user.hashed_password) and byte_size(user.hashed_password) > 0
 
@@ -362,6 +422,9 @@ defmodule DealScoutWeb.UserLive.Settings do
       |> assign(:delete_account_form, to_form(%{}, as: "user"))
       |> assign(:current_user_has_password?, has_password?)
       |> assign(:trigger_submit, false)
+      |> assign(:devices_by_id, Map.new(subscriptions, &{&1.id, &1}))
+      |> assign(:editing_device_id, nil)
+      |> assign(:edit_device_form, nil)
       |> assign(:has_subscriptions, subscriptions != [])
       |> assign(:delivery_logs, delivery_logs)
       |> stream(:subscriptions, subscriptions)
@@ -380,11 +443,14 @@ defmodule DealScoutWeb.UserLive.Settings do
     scope = socket.assigns.current_scope
 
     case Notifications.create_or_update_push_subscription(scope, params) do
-      {:ok, sub} ->
+      {:ok, _sub} ->
+        reloaded_subs = Notifications.get_device_delivery_metrics(scope, 24)
+
         socket =
           socket
-          |> assign(:has_subscriptions, true)
-          |> stream_insert(:subscriptions, sub)
+          |> assign(:devices_by_id, Map.new(reloaded_subs, &{&1.id, &1}))
+          |> assign(:has_subscriptions, reloaded_subs != [])
+          |> stream(:subscriptions, reloaded_subs, reset: true)
 
         socket =
           if Map.get(params, "silent", false) do
@@ -403,6 +469,72 @@ defmodule DealScoutWeb.UserLive.Settings do
         {:noreply,
          socket
          |> put_flash(:error, "Failed to register push device: #{inspect(changeset.errors)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("edit_device", %{"id" => id}, socket) do
+    sub_id = String.to_integer(id)
+    scope = socket.assigns.current_scope
+    sub = Notifications.get_user_push_subscription!(scope, sub_id)
+    form = to_form(%{"device_name" => sub.device_name || ""}, as: "device")
+    target_metric = socket.assigns.devices_by_id[sub_id]
+
+    socket =
+      socket
+      |> assign(:editing_device_id, sub_id)
+      |> assign(:edit_device_form, form)
+
+    socket =
+      if target_metric do
+        stream_insert(socket, :subscriptions, target_metric)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cancel_edit_device", _params, socket) do
+    sub_id = socket.assigns.editing_device_id
+    target_metric = sub_id && socket.assigns.devices_by_id[sub_id]
+
+    socket =
+      socket
+      |> assign(:editing_device_id, nil)
+      |> assign(:edit_device_form, nil)
+
+    socket =
+      if target_metric do
+        stream_insert(socket, :subscriptions, target_metric)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("save_device_name", %{"device" => %{"device_name" => name}}, socket) do
+    scope = socket.assigns.current_scope
+    sub_id = socket.assigns.editing_device_id
+
+    case Notifications.update_push_subscription_device_name(scope, sub_id, name) do
+      {:ok, _updated} ->
+        devices = Notifications.get_device_delivery_metrics(scope, 24)
+        devices_by_id = Map.new(devices, &{&1.id, &1})
+
+        {:noreply,
+         socket
+         |> assign(:editing_device_id, nil)
+         |> assign(:edit_device_form, nil)
+         |> assign(:devices_by_id, devices_by_id)
+         |> stream(:subscriptions, devices, reset: true)
+         |> put_flash(:info, "Device nickname updated.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not update device nickname.")}
     end
   end
 
@@ -461,11 +593,12 @@ defmodule DealScoutWeb.UserLive.Settings do
         end
       end
 
-    reloaded_subs = Notifications.list_push_subscriptions(scope)
+    reloaded_subs = Notifications.get_device_delivery_metrics(scope, 24)
     logs = Notifications.list_push_delivery_logs(scope, 8)
 
     {:noreply,
      socket
+     |> assign(:devices_by_id, Map.new(reloaded_subs, &{&1.id, &1}))
      |> assign(:has_subscriptions, reloaded_subs != [])
      |> assign(:delivery_logs, logs)
      |> stream(:subscriptions, reloaded_subs, reset: true)}
@@ -477,11 +610,12 @@ defmodule DealScoutWeb.UserLive.Settings do
 
     case Notifications.delete_user_push_subscription(scope, id) do
       {:ok, sub} ->
-        subs = Notifications.list_push_subscriptions(scope)
+        subs = Notifications.get_device_delivery_metrics(scope, 24)
 
         {:noreply,
          socket
          |> put_flash(:info, "Device removed.")
+         |> assign(:devices_by_id, Map.new(subs, &{&1.id, &1}))
          |> assign(:has_subscriptions, subs != [])
          |> stream_delete(:subscriptions, sub)}
 

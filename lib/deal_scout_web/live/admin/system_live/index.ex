@@ -23,7 +23,6 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
     system_metrics = SystemMetrics.get_metrics()
     active_alarms = fetch_streamable_alarms()
     push_metrics = Notifications.get_delivery_metrics(24)
-    push_logs = Notifications.list_recent_delivery_logs(10)
 
     socket =
       socket
@@ -36,10 +35,9 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
       |> assign(:ebay_status, get_ebay_status())
       |> assign(:system_metrics, system_metrics)
       |> assign(:push_metrics, push_metrics)
-      |> assign(:has_push_logs?, push_logs != [])
       |> assign(:active_alarms_count, length(active_alarms))
       |> stream(:active_alarms, active_alarms)
-      |> stream(:push_logs, push_logs)
+      |> load_device_metrics_stream("all")
 
     {:ok, socket}
   end
@@ -53,16 +51,15 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   @impl true
   def handle_info(%Phoenix.Socket.Broadcast{topic: "admin:system"}, socket) do
     active_alarms = fetch_streamable_alarms()
-    push_logs = Notifications.list_recent_delivery_logs(10)
+    filter = socket.assigns[:device_filter] || "all"
 
     {:noreply,
      socket
      |> assign(:system_metrics, SystemMetrics.get_metrics())
      |> assign(:push_metrics, Notifications.get_delivery_metrics(24))
-     |> assign(:has_push_logs?, push_logs != [])
-     |> stream(:push_logs, push_logs, reset: true)
      |> assign(:active_alarms_count, length(active_alarms))
-     |> stream(:active_alarms, active_alarms, reset: true)}
+     |> stream(:active_alarms, active_alarms, reset: true)
+     |> load_device_metrics_stream(filter)}
   end
 
   @impl true
@@ -82,7 +79,7 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
     system_metrics = SystemMetrics.get_metrics()
     active_alarms = fetch_streamable_alarms()
     push_metrics = Notifications.get_delivery_metrics(24)
-    push_logs = Notifications.list_recent_delivery_logs(10)
+    filter = socket.assigns[:device_filter] || "all"
 
     {:noreply,
      socket
@@ -93,11 +90,15 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
      |> assign(:ebay_status, get_ebay_status())
      |> assign(:system_metrics, system_metrics)
      |> assign(:push_metrics, push_metrics)
-     |> assign(:has_push_logs?, push_logs != [])
-     |> stream(:push_logs, push_logs, reset: true)
      |> assign(:active_alarms_count, length(active_alarms))
      |> stream(:active_alarms, active_alarms, reset: true)
+     |> load_device_metrics_stream(filter)
      |> put_flash(:info, "System operations metrics updated.")}
+  end
+
+  @impl true
+  def handle_event("set_device_filter", %{"filter" => filter}, socket) do
+    {:noreply, load_device_metrics_stream(socket, filter)}
   end
 
   @impl true
@@ -588,86 +589,135 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
             </div>
           </div>
 
-          <!-- Recent Delivery Attempts Audit Stream -->
+          <!-- Active Devices & Delivery Receipt Health -->
           <div class="space-y-3 pt-2">
-            <div class="flex items-center justify-between">
-              <h4 class="text-xs font-bold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
-                <.icon name="hero-list-bullet" class="size-3.5" />
-                <span>Recent Global Delivery Attempts</span>
-              </h4>
-              <span class="text-xs text-base-content/50">Last 10 attempts</span>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="space-y-0.5">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
+                  <.icon name="hero-device-phone-mobile" class="size-3.5" />
+                  <span>Active Devices & Confirmation Health</span>
+                </h4>
+                <p class="text-[11px] text-base-content/50">
+                  Per-device delivery receipts in the last 24h. Unresponsive devices sorted first.
+                </p>
+              </div>
+
+              <!-- Filter Toggles -->
+              <div class="inline-flex rounded-lg bg-base-200 p-0.5 self-start sm:self-auto">
+                <button
+                  type="button"
+                  id="device-filter-all"
+                  phx-click="set_device_filter"
+                  phx-value-filter="all"
+                  class={[
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all",
+                    @device_filter == "all" && "bg-base-100 text-base-content shadow-sm",
+                    @device_filter != "all" && "text-base-content/60 hover:text-base-content"
+                  ]}
+                >
+                  All Devices ({@all_devices_count})
+                </button>
+                <button
+                  type="button"
+                  id="device-filter-pending-only"
+                  phx-click="set_device_filter"
+                  phx-value-filter="pending_only"
+                  class={[
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1",
+                    @device_filter == "pending_only" && "bg-base-100 text-base-content shadow-sm",
+                    @device_filter != "pending_only" && "text-base-content/60 hover:text-base-content"
+                  ]}
+                >
+                  <span>Pending Only</span>
+                  <%= if @pending_devices_count > 0 do %>
+                    <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                      {@pending_devices_count}
+                    </span>
+                  <% end %>
+                </button>
+              </div>
             </div>
 
-            <%= if not @has_push_logs? do %>
+            <%= if not @has_devices? do %>
               <div
-                id="push-delivery-audit-empty"
+                id="push-devices-empty"
                 class="p-6 text-center text-xs text-base-content/50 italic bg-base-200/30 rounded-xl border border-base-200"
               >
-                No push delivery attempts recorded yet.
+                <%= if @device_filter == "pending_only" do %>
+                  All active devices have 100% confirmed receipts! No pending devices.
+                <% else %>
+                  No push devices registered in the system yet.
+                <% end %>
               </div>
             <% else %>
-              <div id="push-delivery-audit-logs" phx-update="stream" class="space-y-2">
+              <div id="push-devices-table" phx-update="stream" class="space-y-2">
                 <div
-                  :for={{dom_id, log} <- @streams.push_logs}
+                  :for={{dom_id, device} <- @streams.devices}
                   id={dom_id}
-                  class="text-xs p-3 rounded-xl border border-base-200 bg-base-200/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-base-200/60 transition-colors"
+                  class="text-xs p-3 rounded-xl border border-base-200 bg-base-200/30 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-base-200/60 transition-colors"
                 >
-                  <div class="flex items-center gap-2.5 flex-wrap">
-                    <%= cond do %>
-                      <% log.client_received_at -> %>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          <.icon name="hero-check-circle" class="size-3" />
-                          <span>Confirmed in {log.client_delay_ms || 0}ms</span>
-                        </span>
-                      <% log.status == "delivered" -> %>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                          <.icon name="hero-clock" class="size-3" />
-                          <span>Pending Client Receipt</span>
-                        </span>
-                      <% log.status == "expired" -> %>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                          <.icon name="hero-x-circle" class="size-3" />
-                          <span>Expired (410)</span>
-                        </span>
-                      <% log.status == "no_subscriptions" -> %>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                          <.icon name="hero-exclamation-triangle" class="size-3" />
-                          <span>No Device</span>
-                        </span>
-                      <% true -> %>
-                        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                          <.icon name="hero-exclamation-circle" class="size-3" />
-                          <span>{log.status}</span>
-                        </span>
-                    <% end %>
-
-                    <span class="font-mono text-base-content/80 text-[11px]">
-                      User #{log.user_id}
-                      <%= if log.user do %>
-                        <span class="text-base-content/50">({log.user.email})</span>
-                      <% end %>
-                    </span>
-
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-base-300/50 text-base-content/70 font-mono">
-                      {endpoint_provider(log.endpoint)}
-                    </span>
-
-                    <%= if log.gateway_duration_ms do %>
-                      <span class="text-base-content/50 font-mono text-[11px]">
-                        GW: {log.gateway_duration_ms}ms
+                  <div class="space-y-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-bold text-sm text-base-content device-name">
+                        {device.device_name}
                       </span>
-                    <% end %>
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono bg-base-300/50 text-base-content/70">
+                        <.icon name="hero-computer-desktop" class="size-3" />
+                        <span>{device.browser_info}</span>
+                      </span>
+                      <span class="font-mono text-base-content/60 text-[11px]">
+                        User #{device.user_id}
+                        <%= if device.user do %>
+                          <span class="text-base-content/40">({device.user.email})</span>
+                        <% end %>
+                      </span>
+                    </div>
 
-                    <%= if log.error_message do %>
-                      <span class="text-rose-600 dark:text-rose-400 text-[11px] truncate max-w-xs font-mono">
-                        {log.error_message}
+                    <div class="flex items-center gap-3 text-[11px] text-base-content/60 flex-wrap">
+                      <span
+                        class="font-mono truncate max-w-xs text-base-content/40"
+                        title={device.endpoint}
+                      >
+                        {device.endpoint}
+                      </span>
+                      <%= if device.last_receipt_at do %>
+                        <span>
+                          Last confirmed:
+                          <strong class="text-base-content/80">{Calendar.strftime(
+                            device.last_receipt_at,
+                            "%d.%m %H:%M:%S"
+                          )}</strong>
+                        </span>
+                      <% else %>
+                        <span class="text-base-content/40 italic">Never confirmed</span>
+                      <% end %>
+                    </div>
+                  </div>
+
+                  <!-- Delivery Counters & Status Badge -->
+                  <div class="flex items-center gap-3 shrink-0 self-end md:self-center">
+                    <div class="text-right text-[11px] font-mono space-y-0.5">
+                      <div class="text-base-content/70">
+                        <span class="font-bold text-base-content">{device.sent_count}</span>
+                        sent
+                        ·
+                        <span class="font-bold text-emerald-600 dark:text-emerald-400">{device.confirmed_count}</span>
+                        confirmed
+                      </div>
+                    </div>
+
+                    <%= if device.pending_count > 0 do %>
+                      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                        <.icon name="hero-clock" class="size-3.5" />
+                        <span>{device.pending_count} Pending</span>
+                      </span>
+                    <% else %>
+                      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <.icon name="hero-check-circle" class="size-3.5" />
+                        <span>0 Pending</span>
                       </span>
                     <% end %>
                   </div>
-
-                  <span class="text-[11px] text-base-content/50 font-mono shrink-0">
-                    {Calendar.strftime(log.inserted_at, "%d.%m %H:%M:%S")}
-                  </span>
                 </div>
               </div>
             <% end %>
@@ -1534,14 +1584,24 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
     }
   end
 
-  defp endpoint_provider(nil), do: "No Device"
+  defp filter_devices(devices, "pending_only") when is_list(devices) do
+    Enum.filter(devices, &(&1.pending_count > 0))
+  end
 
-  defp endpoint_provider(endpoint) do
-    cond do
-      String.contains?(endpoint, "fcm.googleapis.com") -> "Google FCM"
-      String.contains?(endpoint, "push.apple.com") -> "Apple WebPush"
-      String.contains?(endpoint, "mozilla") -> "Mozilla Push"
-      true -> "WebPush"
-    end
+  defp filter_devices(devices, _all) when is_list(devices) do
+    devices
+  end
+
+  defp load_device_metrics_stream(socket, filter) do
+    all_devices = Notifications.get_device_delivery_metrics(:all, 24)
+    pending_count = Enum.count(all_devices, &(&1.pending_count > 0))
+    filtered = filter_devices(all_devices, filter)
+
+    socket
+    |> assign(:device_filter, filter)
+    |> assign(:all_devices_count, length(all_devices))
+    |> assign(:pending_devices_count, pending_count)
+    |> assign(:has_devices?, filtered != [])
+    |> stream(:devices, filtered, reset: true)
   end
 end

@@ -2,13 +2,14 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
   use DealScout.DataCase, async: false
 
   alias DealScout.Repo
-  alias DealScout.Accounts.User
+  alias DealScout.Accounts.{Scope, User}
   alias DealScout.Notifications
-  alias DealScout.Notifications.PushDeliveryLog
+  alias DealScout.Notifications.{PushDeliveryLog, PushSubscription}
   alias DealScout.Admin.HealthMonitor
 
   setup do
     Notifications.invalidate_delivery_metrics_cache(24)
+    Notifications.invalidate_device_metrics_cache(24)
 
     user =
       Repo.insert!(%User{
@@ -217,5 +218,221 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
     assert push_alarm.severity == :warning
     assert push_alarm.title =~ "Push Delivery Degraded (20.0% confirmed)"
     assert push_alarm.message =~ "Only 2 of 10 push notifications were confirmed"
+  end
+
+  test "parse_user_agent/1 formats common browser and platform combinations" do
+    assert Notifications.parse_user_agent(
+             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
+           ) == "Safari on iOS"
+
+    assert Notifications.parse_user_agent(
+             "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.80 Mobile Safari/537.36"
+           ) == "Chrome on Android"
+
+    assert Notifications.parse_user_agent(
+             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0"
+           ) == "Firefox on macOS"
+
+    assert Notifications.parse_user_agent(
+             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.2420.65"
+           ) == "Edge on Windows"
+
+    assert Notifications.parse_user_agent(nil) == "Web Browser"
+    assert Notifications.parse_user_agent("") == "Web Browser"
+  end
+
+  test "update_push_subscription_device_name/3 allows updating device nickname", %{user: user} do
+    scope = %Scope{user: user}
+
+    sub =
+      Repo.insert!(%PushSubscription{
+        user_id: user.id,
+        endpoint: "https://push.example.com/sub-rename-#{System.unique_integer([:positive])}",
+        p256dh: "key_p256dh",
+        auth: "key_auth",
+        device_name: "Apple iPhone"
+      })
+
+    assert {:ok, updated} =
+             Notifications.update_push_subscription_device_name(scope, sub.id, "My Work iPhone")
+
+    assert updated.device_name == "My Work iPhone"
+
+    other_user =
+      Repo.insert!(%User{
+        email: "other-user-#{System.unique_integer([:positive])}@example.com",
+        hashed_password: "dummy_password"
+      })
+
+    other_scope = %Scope{user: other_user}
+
+    assert {:error, :not_found} =
+             Notifications.update_push_subscription_device_name(other_scope, sub.id, "Hacked")
+  end
+
+  test "get_device_delivery_metrics/2 aggregates pending confirms and sorts by pending count", %{
+    user: user
+  } do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now_usec = DateTime.utc_now()
+
+    sub_phone =
+      Repo.insert!(%PushSubscription{
+        user_id: user.id,
+        endpoint: "https://push.example.com/phone-#{System.unique_integer([:positive])}",
+        p256dh: "key_p256dh",
+        auth: "key_auth",
+        device_name: "Personal iPhone",
+        user_agent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1"
+      })
+
+    sub_laptop =
+      Repo.insert!(%PushSubscription{
+        user_id: user.id,
+        endpoint: "https://push.example.com/laptop-#{System.unique_integer([:positive])}",
+        p256dh: "key_p256dh",
+        auth: "key_auth",
+        device_name: "MacBook Pro",
+        user_agent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/123.0 Safari/537.36"
+      })
+
+    # Laptop: 2 sent, 2 confirmed (0 pending)
+    for i <- 1..2 do
+      Repo.insert!(%PushDeliveryLog{
+        user_id: user.id,
+        push_subscription_id: sub_laptop.id,
+        endpoint: sub_laptop.endpoint,
+        tracking_id: "trk-laptop-#{i}-#{System.unique_integer([:positive])}",
+        status: "delivered",
+        client_received_at: now_usec,
+        client_delay_ms: 250,
+        inserted_at: now
+      })
+    end
+
+    # Phone: 3 sent, only 1 confirmed (2 pending confirms!)
+    for i <- 1..3 do
+      confirmed? = i == 1
+
+      Repo.insert!(%PushDeliveryLog{
+        user_id: user.id,
+        push_subscription_id: sub_phone.id,
+        endpoint: sub_phone.endpoint,
+        tracking_id: "trk-phone-#{i}-#{System.unique_integer([:positive])}",
+        status: "delivered",
+        client_received_at: if(confirmed?, do: now_usec, else: nil),
+        client_delay_ms: if(confirmed?, do: 310, else: nil),
+        inserted_at: now
+      })
+    end
+
+    # Query global device metrics (admin mode)
+    metrics = Notifications.get_device_delivery_metrics(nil, 24)
+
+    # Phone has 2 pending, Laptop has 0 pending. Phone must be sorted first!
+    phone_metric = Enum.find(metrics, &(&1.subscription_id == sub_phone.id))
+    laptop_metric = Enum.find(metrics, &(&1.subscription_id == sub_laptop.id))
+
+    assert phone_metric != nil
+    assert laptop_metric != nil
+
+    assert phone_metric.sent_count == 3
+    assert phone_metric.confirmed_count == 1
+    assert phone_metric.pending_count == 2
+    assert phone_metric.browser_info == "Safari on iOS"
+
+    assert laptop_metric.sent_count == 2
+    assert laptop_metric.confirmed_count == 2
+    assert laptop_metric.pending_count == 0
+    assert laptop_metric.browser_info == "Chrome on macOS"
+
+    # Sorted with pending first
+    assert hd(metrics).subscription_id == sub_phone.id
+
+    # Query scoped to user
+    scope = %Scope{user: user}
+    user_metrics = Notifications.get_device_delivery_metrics(scope, 24)
+    assert length(user_metrics) == 2
+    assert hd(user_metrics).subscription_id == sub_phone.id
+  end
+
+  test "get_device_delivery_metrics/2 performance benchmark with composite index and ETS caching",
+       %{
+         user: user
+       } do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now_usec = DateTime.utc_now()
+
+    # Create 5 distinct subscriptions
+    subs =
+      for i <- 1..5 do
+        Repo.insert!(%PushSubscription{
+          user_id: user.id,
+          endpoint:
+            "https://push.example.com/perf-dev-#{i}-#{System.unique_integer([:positive])}",
+          p256dh: "key_p256dh",
+          auth: "key_auth",
+          device_name: "Device ##{i}",
+          user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Safari/604.1"
+        })
+      end
+
+    # Insert 1,500 logs distributed across the 5 devices
+    sub_ids = Enum.map(subs, & &1.id)
+
+    logs =
+      Enum.map(1..1500, fn i ->
+        sub_id = Enum.at(sub_ids, rem(i, 5))
+        confirmed? = rem(i, 3) == 0
+
+        %{
+          user_id: user.id,
+          push_subscription_id: sub_id,
+          endpoint: "https://push.example.com/perf-endpoint",
+          tracking_id: "perf-dev-trk-#{System.unique_integer([:positive])}-#{i}",
+          status: "delivered",
+          client_received_at: if(confirmed?, do: now_usec, else: nil),
+          client_delay_ms: if(confirmed?, do: 200, else: nil),
+          gateway_duration_ms: 100,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    {1500, nil} = Repo.insert_all(PushDeliveryLog, logs)
+
+    # Invalidate cache
+    Notifications.invalidate_device_metrics_cache(24)
+
+    # Warmup query
+    _ = Notifications.get_device_delivery_metrics(nil, 24)
+    Notifications.invalidate_device_metrics_cache(24)
+
+    # Measure uncached single-pass SQLite execution time on 1,500+ records
+    {query_time_us, computed} =
+      :timer.tc(fn ->
+        Notifications.get_device_delivery_metrics(nil, 24)
+      end)
+
+    query_ms = query_time_us / 1000
+
+    assert length(computed) >= 5
+
+    # Bounded query performance: must comfortably execute within 250ms even on slow virtualized runners
+    assert query_ms < 250.0
+
+    # Measure ETS cached access time
+    {cache_time_us, cached} =
+      :timer.tc(fn ->
+        Notifications.get_device_delivery_metrics(nil, 24)
+      end)
+
+    cache_ms = cache_time_us / 1000
+
+    assert length(cached) == length(computed)
+    # ETS cache should return in low milliseconds
+    assert cache_ms < 5.0
   end
 end

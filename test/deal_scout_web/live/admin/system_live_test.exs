@@ -231,18 +231,30 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     assert has_element?(view, "#active_alarms-auto_paused_rules", "Alert Rules Auto-Paused")
   end
 
-  test "displays web push delivery and browser receipt diagnostics card", %{
+  test "displays web push delivery diagnostics and per-device confirmation health", %{
     conn: conn,
     admin: admin
   } do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     now_usec = DateTime.utc_now()
 
+    sub =
+      DealScout.Repo.insert!(%DealScout.Notifications.PushSubscription{
+        user_id: admin.id,
+        endpoint: "https://fcm.googleapis.com/fcm/send/sys-live-token",
+        p256dh: "test-p256dh",
+        auth: "test-auth",
+        device_name: "Admin Pixel 8",
+        user_agent:
+          "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/123.0 Mobile Safari/537.36"
+      })
+
     DealScout.Repo.insert!(%DealScout.Notifications.PushDeliveryLog{
       user_id: admin.id,
+      push_subscription_id: sub.id,
       tracking_id: "sys-live-track-1",
       status: "delivered",
-      endpoint: "https://fcm.googleapis.com/fcm/send/sys-live-token",
+      endpoint: sub.endpoint,
       gateway_duration_ms: 110,
       client_delay_ms: 320,
       client_received_at: now_usec,
@@ -250,6 +262,7 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     })
 
     DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+    DealScout.Notifications.invalidate_device_metrics_cache(24)
 
     conn = log_in_user(conn, admin)
     {:ok, view, _html} = live(conn, ~p"/admin/system")
@@ -264,8 +277,22 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
 
     assert has_element?(view, "#web-push-diagnostics-card", "100.0%")
     assert has_element?(view, "#web-push-diagnostics-card", "320 ms")
-    assert has_element?(view, "#push-delivery-audit-logs")
-    assert has_element?(view, "#push-delivery-audit-logs", "Google FCM")
-    assert has_element?(view, "#push-delivery-audit-logs", "Confirmed in 320ms")
+    assert has_element?(view, "#push-devices-table")
+    assert has_element?(view, "#push-devices-table", "Admin Pixel 8")
+    assert has_element?(view, "#push-devices-table", "Chrome on Android")
+    assert has_element?(view, "#push-devices-table", "0 Pending")
+
+    # Filter to pending only - since this device has 0 pending, it shouldn't show in pending list
+    view |> element("#device-filter-pending-only") |> render_click()
+
+    assert has_element?(
+             view,
+             "#push-devices-empty",
+             "All active devices have 100% confirmed receipts"
+           )
+
+    # Switch back to all devices
+    view |> element("#device-filter-all") |> render_click()
+    assert has_element?(view, "#push-devices-table", "Admin Pixel 8")
   end
 end
