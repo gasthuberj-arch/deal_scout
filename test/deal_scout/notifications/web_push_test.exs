@@ -141,5 +141,39 @@ defmodule DealScout.Notifications.WebPushTest do
       assert {:ok, _} = Notifications.delete_user_push_subscription(user.id, sub.id)
       assert Notifications.list_push_subscriptions_for_user(user.id) == []
     end
+
+    test "send_notification/2 sets urgency, ttl, and sanitized RFC 8030 topic header", %{
+      user: user
+    } do
+      WebPush.TestTransport.reset()
+
+      {rec_pub, _rec_priv} = :crypto.generate_key(:ecdh, :secp256r1)
+      rec_auth = :crypto.strong_rand_bytes(16)
+
+      sub =
+        Repo.insert!(%Notifications.PushSubscription{
+          user_id: user.id,
+          endpoint: "https://fcm.googleapis.com/fcm/send/test-sub-token",
+          p256dh: Base.url_encode64(rec_pub, padding: false),
+          auth: Base.url_encode64(rec_auth, padding: false)
+        })
+
+      payload = %{
+        title: "Deal Alert",
+        body: "Super cheap item",
+        tag: "deal-match-42",
+        ttl: 3600
+      }
+
+      assert {:ok, :delivered} = WebPush.send_notification(sub, payload)
+
+      deliveries = WebPush.TestTransport.delivered_notifications()
+      assert length(deliveries) == 1
+      headers = Map.new(hd(deliveries).headers)
+
+      assert headers["urgency"] == "high"
+      assert headers["ttl"] == "3600"
+      assert headers["topic"] == "deal-match-42"
+    end
   end
 end

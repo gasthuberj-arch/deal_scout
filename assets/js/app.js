@@ -52,6 +52,7 @@ const PushManagerHook = {
     const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
 
     let permission = isSupported ? Notification.permission : 'unsupported';
     let hasExistingSubscription = false;
@@ -94,6 +95,7 @@ const PushManagerHook = {
       subscribed: hasExistingSubscription,
       is_standalone: isStandalone,
       is_ios: isIos,
+      is_android: isAndroid,
     });
 
     this.handleEvent('request-push-subscription', async ({vapid_public_key}) => {

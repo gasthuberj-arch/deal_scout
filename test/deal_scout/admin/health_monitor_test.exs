@@ -267,5 +267,33 @@ defmodule DealScout.Admin.HealthMonitorTest do
       # Must NOT have sent any push notifications to avoid self-reinforcing feedback loop
       assert TestTransport.delivered_notifications() == []
     end
+
+    test "partial device confirmation from sleeping/offline devices does not trigger false push degradation alarm",
+         %{
+           admin: admin,
+           mon_name: mon_name
+         } do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_usec = DateTime.utc_now()
+
+      for i <- 1..10 do
+        received_at = if i <= 3, do: now_usec, else: nil
+
+        Repo.insert!(%Notifications.PushDeliveryLog{
+          user_id: admin.id,
+          tracking_id: "partial-ack-#{System.unique_integer([:positive])}-#{i}",
+          status: "delivered",
+          gateway_duration_ms: 100,
+          client_received_at: received_at,
+          client_delay_ms: if(received_at, do: 250, else: nil),
+          inserted_at: now
+        })
+      end
+
+      Notifications.invalidate_delivery_metrics_cache(24)
+
+      alarms = HealthMonitor.check_now(mon_name)
+      assert Enum.find(alarms, &(&1.type == :push_delivery_degraded)) == nil
+    end
   end
 end

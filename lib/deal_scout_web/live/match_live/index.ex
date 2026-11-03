@@ -80,6 +80,8 @@ defmodule DealScoutWeb.MatchLive.Index do
              "push-error",
              "open_ios_modal",
              "close_ios_modal",
+             "open_android_modal",
+             "close_android_modal",
              "dismiss_push_banner"
            ] do
     case PushNotificationHandler.handle_push_event(event, params, socket) do
@@ -123,8 +125,10 @@ defmodule DealScoutWeb.MatchLive.Index do
           push_subscribed={@push_subscribed}
           push_supported={@push_supported}
           is_ios={@is_ios}
+          is_android={@is_android}
           is_standalone={@is_standalone}
           show_ios_modal={@show_ios_modal}
+          show_android_modal={@show_android_modal}
           dismissed={@banner_dismissed}
         />
 

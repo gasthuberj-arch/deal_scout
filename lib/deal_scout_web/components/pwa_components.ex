@@ -9,13 +9,15 @@ defmodule DealScoutWeb.PWAComponents do
   attr :push_subscribed, :boolean, default: false
   attr :push_supported, :boolean, default: true
   attr :is_ios, :boolean, default: false
+  attr :is_android, :boolean, default: false
   attr :is_standalone, :boolean, default: false
   attr :show_ios_modal, :boolean, default: false
+  attr :show_android_modal, :boolean, default: false
   attr :dismissed, :boolean, default: false
 
   def push_install_banner(assigns) do
     ~H"""
-    <div id="pwa-push-container" phx-hook="PushManager" class="w-full">
+    <div id="pwa-push-container" phx-hook="PushManager" class="w-full space-y-3">
       <%= if !@dismissed && @push_supported && !@push_subscribed do %>
         <div class="bg-gradient-to-r from-primary/15 via-primary/10 to-base-200 border border-primary/20 rounded-2xl p-4 sm:p-5 shadow-sm transition-all duration-200">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -62,6 +64,43 @@ defmodule DealScoutWeb.PWAComponents do
                 </button>
               <% end %>
             </div>
+          </div>
+        </div>
+      <% end %>
+
+      <%= if !@dismissed && @push_subscribed && @is_android do %>
+        <div
+          id="android-battery-banner"
+          class="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-3.5 sm:p-4 text-xs shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2.5">
+            <span class="p-1.5 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300">
+              <.icon name="hero-bolt" class="size-4 shrink-0" />
+            </span>
+            <div>
+              <span class="font-bold text-base-content">Instant Mobile Alarms:</span>
+              <span class="text-base-content/70">
+                To receive instant deal alerts while your phone screen is locked, ensure browser battery usage is set to <strong>Unrestricted</strong>.
+              </span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              phx-click="open_android_modal"
+              class="btn btn-xs btn-outline btn-warning gap-1 font-semibold"
+            >
+              <span>Setup Guide</span>
+              <.icon name="hero-chevron-right" class="size-3" />
+            </button>
+            <button
+              type="button"
+              phx-click="dismiss_push_banner"
+              class="btn btn-ghost btn-xs text-base-content/50"
+              title="Dismiss tip"
+            >
+              ✕
+            </button>
           </div>
         </div>
       <% end %>
@@ -122,6 +161,74 @@ defmodule DealScoutWeb.PWAComponents do
 
               <div class="pt-2 flex justify-end">
                 <button phx-click="close_ios_modal" class="btn btn-primary btn-sm w-full">Got it</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Android Battery Optimization Instructions Modal -->
+      <%= if @show_android_modal do %>
+        <div
+          id="android-battery-modal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+        >
+          <div class="card bg-base-100 w-full max-w-md shadow-2xl border border-base-300">
+            <div class="p-6 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-base-200">
+                <div class="flex items-center gap-2">
+                  <div class="size-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <.icon name="hero-bolt" class="size-5" />
+                  </div>
+                  <h3 class="font-bold text-base text-base-content">Instant Android Deal Alarms</h3>
+                </div>
+                <button phx-click="close_android_modal" class="btn btn-ghost btn-circle btn-sm">✕</button>
+              </div>
+
+              <p class="text-xs sm:text-sm text-base-content/80 leading-relaxed">
+                By default, Android's <em>Doze Mode</em>
+                delays browser push alerts when your screen is locked. Setting battery usage to
+                <strong>Unrestricted</strong>
+                ensures you never miss a lightning deal:
+              </p>
+
+              <div class="space-y-3 py-2 text-xs sm:text-sm">
+                <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
+                  <span class="size-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                  <div>
+                    <span class="font-semibold text-base-content">Open App Info</span>
+                    <p class="text-base-content/70 text-xs mt-0.5">
+                      Long-press the <strong>DealScout</strong>
+                      (or Chrome) icon on your home screen and tap <strong>App Info</strong>
+                      (or the ⓘ icon).
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
+                  <span class="size-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                  <div>
+                    <span class="font-semibold text-base-content">Tap "App Battery Usage"</span>
+                    <p class="text-base-content/70 text-xs mt-0.5">
+                      Scroll down to <strong>Battery</strong> or <strong>App battery usage</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
+                  <span class="size-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                  <div>
+                    <span class="font-semibold text-base-content">Select "Unrestricted"</span>
+                    <p class="text-base-content/70 text-xs mt-0.5">
+                      Switch from <em>Optimized</em>
+                      to <strong>Unrestricted</strong>. Deal alerts will now vibrate immediately while locked!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pt-2 flex justify-end">
+                <button phx-click="close_android_modal" class="btn btn-primary btn-sm w-full">Got it</button>
               </div>
             </div>
           </div>

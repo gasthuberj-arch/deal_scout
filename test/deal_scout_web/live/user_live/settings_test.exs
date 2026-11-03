@@ -219,6 +219,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
     test "registers, tests, and removes a push notification device", %{conn: conn, user: user} do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
       assert has_element?(lv, "#push-settings-container")
+      assert has_element?(lv, "#android-battery-guide-card")
       assert has_element?(lv, "#push-subscriptions")
       assert has_element?(lv, "button[phx-click='register_this_device']")
 

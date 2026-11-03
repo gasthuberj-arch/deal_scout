@@ -262,6 +262,8 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
              "save-push-subscription",
              "open_ios_modal",
              "close_ios_modal",
+             "open_android_modal",
+             "close_android_modal",
              "dismiss_push_banner"
            ] do
     case PushNotificationHandler.handle_push_event(event, params, socket) do
@@ -506,20 +508,20 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
                     <.icon name="hero-information-circle" class="size-3.5" />
                     <span>No Pushes Sent</span>
                   </span>
-                <% @push_metrics.confirmation_rate_pct >= 85.0 -> %>
-                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <.icon name="hero-check-circle" class="size-3.5" />
-                    <span>Optimal Delivery ({@push_metrics.confirmation_rate_pct}%)</span>
-                  </span>
-                <% @push_metrics.confirmation_rate_pct >= 70.0 -> %>
-                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                    <.icon name="hero-exclamation-triangle" class="size-3.5" />
-                    <span>Acceptable Rate ({@push_metrics.confirmation_rate_pct}%)</span>
-                  </span>
-                <% true -> %>
+                <% (@push_metrics.http_error + @push_metrics.network_error) > 0 -> %>
                   <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
                     <.icon name="hero-exclamation-circle" class="size-3.5" />
-                    <span>Delivery Degraded ({@push_metrics.confirmation_rate_pct}%)</span>
+                    <span>Gateway Errors ({@push_metrics.http_error + @push_metrics.network_error})</span>
+                  </span>
+                <% @push_metrics.delivered_to_gateway > 0 and @push_metrics.device_confirmed == 0 and @push_metrics.delivered_to_gateway >= 10 -> %>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <.icon name="hero-exclamation-triangle" class="size-3.5" />
+                    <span>No Devices Responding (0 of {@push_metrics.delivered_to_gateway})</span>
+                  </span>
+                <% true -> %>
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <.icon name="hero-check-circle" class="size-3.5" />
+                    <span>Gateway 100% Operational ({@push_metrics.delivered_to_gateway} Sent)</span>
                   </span>
               <% end %>
             </div>
@@ -540,6 +542,9 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
               </div>
               <p class="text-xs text-base-content/60">
                 {@push_metrics.device_confirmed} confirmed of {@push_metrics.delivered_to_gateway} accepted
+              </p>
+              <p class="text-[10px] text-base-content/45 leading-tight">
+                Sleeping phones & closed laptops acknowledge upon screen unlock
               </p>
             </div>
 

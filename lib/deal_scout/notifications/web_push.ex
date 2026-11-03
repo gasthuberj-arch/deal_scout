@@ -89,14 +89,21 @@ defmodule DealScout.Notifications.WebPush do
     with {:ok, encrypted_body} <- encrypt_payload(json_payload, p256dh, auth),
          {:ok, jwt} <- generate_vapid_jwt(endpoint, config.subject, config.private_key) do
       pub_b64 = Base.url_encode64(config.public_key, padding: false)
+      ttl = if is_map(payload), do: to_string(Map.get(payload, :ttl, 86400)), else: "86400"
 
-      headers = [
+      base_headers = [
         {"content-type", "application/octet-stream"},
         {"content-encoding", "aes128gcm"},
-        {"ttl", "86400"},
+        {"ttl", ttl},
         {"urgency", "high"},
         {"authorization", "vapid t=#{jwt},k=#{pub_b64}"}
       ]
+
+      headers =
+        case sanitize_topic(payload) do
+          nil -> base_headers
+          topic -> [{"topic", topic} | base_headers]
+        end
 
       case transport().post(endpoint, encrypted_body, headers) do
         {:ok, %{status: status}} when status in 200..204 ->
@@ -195,6 +202,21 @@ defmodule DealScout.Notifications.WebPush do
   rescue
     e ->
       {:error, {:jwt_error, Exception.message(e)}}
+  end
+
+  defp sanitize_topic(%{topic: topic}) when is_binary(topic), do: clean_topic(topic)
+  defp sanitize_topic(%{tag: tag}) when is_binary(tag), do: clean_topic(tag)
+  defp sanitize_topic(_), do: nil
+
+  defp clean_topic(str) do
+    # RFC 8030 section 5.4: Topic consists of up to 32 characters from base64url ([A-Za-z0-9_-])
+    sanitized = String.replace(str, ~r/[^a-zA-Z0-9_\-]/, "-")
+
+    if byte_size(sanitized) in 1..32 do
+      sanitized
+    else
+      nil
+    end
   end
 
   defp extract_origin(endpoint) do

@@ -183,23 +183,21 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
     assert Repo.get_by(PushDeliveryLog, tracking_id: "recent-to-keep") != nil
   end
 
-  test "HealthMonitor triggers :push_delivery_degraded alarm when confirmation rate < 50%", %{
-    user: user
-  } do
+  test "HealthMonitor triggers :push_delivery_degraded alarm when zero receipts confirmed for 10+ deliveries",
+       %{
+         user: user
+       } do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    now_usec = DateTime.utc_now()
 
-    # Insert 10 delivered logs, with only 2 confirmed (20% confirmation rate)
+    # Insert 10 delivered logs, with 0 confirmed (total receipt blackout)
     for i <- 1..10 do
-      confirmed? = i <= 2
-
       Repo.insert!(%PushDeliveryLog{
         user_id: user.id,
         tracking_id: "alarm-trk-#{System.unique_integer([:positive])}-#{i}",
         status: "delivered",
         gateway_duration_ms: 100,
-        client_delay_ms: if(confirmed?, do: 300, else: nil),
-        client_received_at: if(confirmed?, do: now_usec, else: nil),
+        client_delay_ms: nil,
+        client_received_at: nil,
         inserted_at: now
       })
     end
@@ -216,8 +214,8 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
 
     assert push_alarm != nil
     assert push_alarm.severity == :warning
-    assert push_alarm.title =~ "Push Delivery Degraded (20.0% confirmed)"
-    assert push_alarm.message =~ "Only 2 of 10 push notifications were confirmed"
+    assert push_alarm.title =~ "Zero Push Receipts (0 confirmed of 10)"
+    assert push_alarm.message =~ "0 device receipt pings were confirmed"
   end
 
   test "parse_user_agent/1 formats common browser and platform combinations" do

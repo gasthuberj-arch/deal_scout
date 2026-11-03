@@ -232,6 +232,26 @@ defmodule DealScoutWeb.AlertLiveTest do
     })
 
     assert has_element?(index_live, "#pwa-push-container")
+
+    # Send Android push status from client hook with subscribed: true
+    render_hook(index_live, "push-status", %{
+      "supported" => true,
+      "is_ios" => false,
+      "is_android" => true,
+      "is_standalone" => false,
+      "subscribed" => true
+    })
+
+    assert has_element?(index_live, "#android-battery-banner")
+    assert has_element?(index_live, "button[phx-click='open_android_modal']")
+
+    # Open and close Android battery guide modal
+    index_live |> element("button[phx-click='open_android_modal']") |> render_click()
+    assert has_element?(index_live, "#android-battery-modal")
+    assert has_element?(index_live, "#android-battery-modal", "Instant Android Deal Alarms")
+
+    index_live |> element("#android-battery-modal button", "Got it") |> render_click()
+    refute has_element?(index_live, "#android-battery-modal")
   end
 
   test "backtests rule with past matching deal and displays green result card", %{conn: conn} do

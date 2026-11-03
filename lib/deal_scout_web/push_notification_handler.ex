@@ -22,8 +22,10 @@ defmodule DealScoutWeb.PushNotificationHandler do
     |> assign(:push_supported, true)
     |> assign(:push_subscribed, has_subscriptions)
     |> assign(:is_ios, false)
+    |> assign(:is_android, false)
     |> assign(:is_standalone, false)
     |> assign(:show_ios_modal, false)
+    |> assign(:show_android_modal, false)
     |> assign(:banner_dismissed, false)
   end
 
@@ -36,6 +38,7 @@ defmodule DealScoutWeb.PushNotificationHandler do
      socket
      |> assign(:push_supported, Map.get(params, "supported", true))
      |> assign(:is_ios, Map.get(params, "is_ios", false))
+     |> assign(:is_android, Map.get(params, "is_android", false))
      |> assign(:is_standalone, Map.get(params, "is_standalone", false))
      |> assign(
        :push_subscribed,
@@ -95,6 +98,14 @@ defmodule DealScoutWeb.PushNotificationHandler do
 
   def handle_push_event("close_ios_modal", _params, socket) do
     {:handled, assign(socket, :show_ios_modal, false)}
+  end
+
+  def handle_push_event("open_android_modal", _params, socket) do
+    {:handled, assign(socket, :show_android_modal, true)}
+  end
+
+  def handle_push_event("close_android_modal", _params, socket) do
+    {:handled, assign(socket, :show_android_modal, false)}
   end
 
   def handle_push_event("dismiss_push_banner", _params, socket) do

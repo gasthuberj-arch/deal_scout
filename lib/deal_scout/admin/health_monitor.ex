@@ -281,24 +281,39 @@ defmodule DealScout.Admin.HealthMonitor do
         anomalies
       end
 
-    # 6. Web push delivery degradation (receipt rate < 50% with at least 10 delivered attempts in 24h)
+    # 6. Web push gateway failure or complete receipt blackout
+    # Differentiates healthy client sleep/doze from actual gateway infrastructure breakdown.
     push_metrics = Notifications.get_delivery_metrics(24)
+    gateway_errors = push_metrics.http_error + push_metrics.network_error
 
     anomalies =
-      if push_metrics.delivered_to_gateway >= 10 and
-           push_metrics.confirmation_rate_pct < 50.0 do
-        [
-          %{
-            type: :push_delivery_degraded,
-            severity: :warning,
-            title: "Push Delivery Degraded (#{push_metrics.confirmation_rate_pct}% confirmed)",
-            message:
-              "Only #{push_metrics.device_confirmed} of #{push_metrics.delivered_to_gateway} push notifications were confirmed by user browsers in the last 24h (#{push_metrics.confirmation_rate_pct}%)."
-          }
-          | anomalies
-        ]
-      else
-        anomalies
+      cond do
+        gateway_errors > 0 ->
+          [
+            %{
+              type: :push_delivery_degraded,
+              severity: :critical,
+              title: "Push Gateway Errors (#{gateway_errors} failures)",
+              message:
+                "Web Push gateway reported #{push_metrics.http_error} HTTP error(s) and #{push_metrics.network_error} network error(s) in the last 24h."
+            }
+            | anomalies
+          ]
+
+        push_metrics.delivered_to_gateway >= 10 and push_metrics.device_confirmed == 0 ->
+          [
+            %{
+              type: :push_delivery_degraded,
+              severity: :warning,
+              title: "Zero Push Receipts (0 confirmed of #{push_metrics.delivered_to_gateway})",
+              message:
+                "#{push_metrics.delivered_to_gateway} notifications were delivered to the push gateway, but 0 device receipt pings were confirmed. Browser Service Worker or receipt endpoint may be blocked."
+            }
+            | anomalies
+          ]
+
+        true ->
+          anomalies
       end
 
     Enum.reverse(anomalies)

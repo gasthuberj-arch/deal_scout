@@ -56,6 +56,33 @@ defmodule DealScoutWeb.UserLive.Settings do
           </div>
         </div>
 
+        <!-- Android Battery Optimization Guide Card -->
+        <div
+          id="android-battery-guide-card"
+          class="bg-amber-500/10 border border-amber-500/25 rounded-xl p-4 text-xs space-y-2"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-base-content flex items-center gap-1.5">
+              <.icon name="hero-bolt" class="size-4 text-amber-600 dark:text-amber-400" />
+              <span>Android Background Optimization Guide (Instant Locked-Screen Alarms)</span>
+            </span>
+          </div>
+          <p class="text-base-content/75 leading-relaxed">
+            By default, Android's <em>Doze Mode</em>
+            delays background notifications from web browsers when your screen is locked.
+            To guarantee alarms ring the exact second a deal is found:
+          </p>
+          <ol class="list-decimal list-inside space-y-1 text-base-content/80 font-medium pl-1">
+            <li>
+              Long-press the <strong>DealScout</strong>
+              (or Chrome) icon on your home screen &rarr; tap <strong>App Info</strong>
+              (ⓘ).
+            </li>
+            <li>Tap <strong>App battery usage</strong> (or <strong>Battery</strong>).</li>
+            <li>Select <strong>Unrestricted</strong> (instead of <em>Optimized</em>).</li>
+          </ol>
+        </div>
+
         <div
           id="push-subscriptions"
           phx-update="stream"
