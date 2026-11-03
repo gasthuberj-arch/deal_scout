@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0014: Empirical Migration Gates vs. Speculative AST Linters</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Production Post-Mortems &bull; Lesson 0014</div>
+      <h1>Empirical Migration Gates vs. Speculative AST Linters</h1>
+      <p class="subtitle">Why we wrote—and 5 minutes later deleted—a 130-line Elixir AST migration linter in favor of a seeded N-1 → N WAL budget test.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>Right after fixing the FTS5 migration trigger bug in commit <code>a293663</code>, we over-reacted by writing a 130-line static AST + regex SQL linter in <code>test/deal_scout/repo_migration_test.exs</code>—and even edited an old historical migration from two weeks ago just to make the linter pass. Five minutes later, in commit <code>b03d524</code>, we deleted the entire AST linter. This lesson examines why static regex linting of SQL migrations violates our testing philosophy (avoiding <strong>Implementation Coupling</strong> and <strong>Speculative Generality</strong>) and how an empirical outcome gate catches the real bug in 30 lines.</p>
+    </div>
+
+    <h2>1. The Over-Correction: Writing a 130-Line Speculative AST Linter</h2>
+    <p>When a bug slips through, it is tempting to write a static source-code rule against the exact syntax of the bug. In commit <code>a293663</code>, we added <code>lint_migration_ast!/3</code> to walk every migration's Elixir AST with <code>Macro.prewalk/2</code> and run regular expressions against raw SQL strings:</p>
+    <pre><code># ❌ WHAT WE WROTE IN a293663 (AND DELETED IN b03d524):
+if Regex.match?(~r/CREATE\s+TRIGGER\b.*\bAFTER\s+UPDATE\s+ON\b/s, normalized) do
+  flunk("Migration creates an unscoped AFTER UPDATE ON trigger...")
+end
+
+# Counting line numbers of regex matches to guess whether UPDATE ran before DROP TRIGGER:
+if first_bulk_mutation_line &lt; last_drop_trigger_line do
+  flunk("Migration runs a bulk UPDATE/DELETE on `deals` before `DROP TRIGGER`...")
+end</code></pre>
+    <p>Why was this a mistake across multiple axes?</p>
+    <ul>
+      <li><strong>Implementation Coupling:</strong> It tested how migration code was <em>spelled</em> (exact regexes on table names like <code>DEALS</code> and SQL keywords) rather than what the migration actually <em>did</em> to the database.</li>
+      <li><strong>Speculative Generality:</strong> Over 130 lines of AST walking and escape-hatch comments (<code># migration-lint: allow-table-rewrite</code>) were added to guard hypothetical future syntax patterns that had never occurred.</li>
+      <li><strong>Blind to Real Database Semantics:</strong> A regex on a single migration file has no idea what triggers <em>previous</em> migrations left behind in the database! Even if the latest migration never mentions <code>DROP TRIGGER</code> at all, an existing trigger from migration <code>N-5</code> can still fire on a bulk <code>UPDATE</code> in migration <code>N</code>.</li>
+    </ul>
+
+    <h2>2. The Cardinal Sin: Editing Historical Migrations</h2>
+    <p>Because the AST linter scanned <em>all</em> migration files in <code>priv/repo/migrations/</code>, it immediately failed on <code>20261020133300_add_deals_fts.exs</code>—a historical migration that had already run in production weeks earlier. To appease our own linter, we edited that historical migration in <code>a293663</code>.</p>
+    <p><strong>Never edit historical migrations that have already run in production</strong> (unless fixing a literal syntax error that prevents fresh DB setup). Ecto tracks executed migrations in the <code>schema_migrations</code> table by version timestamp. Production will <em>never</em> re-run <code>20261020133300</code>, which means editing it causes fresh test databases and production databases to diverge silently.</p>
+
+    <h2>3. The Fix (`b03d524`): An Empirical N-1 → N WAL &amp; Runtime Gate</h2>
+    <p>In commit <code>b03d524</code>, we reverted the historical migration edit, deleted all 130 lines of AST/regex linting, and kept only the <strong>observable outcome test at the database Seam</strong>:</p>
+    <pre><code># ✅ TEST THE OUTCOME AT THE SEAM (test/deal_scout/repo_migration_test.exs):
+# 1. Migrate up to N - 1 (simulating production state prior to latest migration)
+Ecto.Migrator.run(repo, migrations_path, :up, to: prior_version, log: false)
+
+# 2. Seed 1,000 realistic deals (~2.5 KB description + clean_text each) via recursive CTE
+seed_deals_for_migration_benchmark(repo)
+
+# 3. Truncate the WAL so we measure ONLY the latest migration's footprint
+Ecto.Adapters.SQL.query!(repo, "PRAGMA wal_checkpoint(TRUNCATE);", [])
+
+# 4. Run latest migration N and assert runtime and WAL size budgets
+{duration_us, [^latest_version]} =
+  :timer.tc(fn -&gt;
+    Ecto.Migrator.run(repo, migrations_path, :up, all: true, log: false)
+  end)
+
+assert div(duration_us, 1000) &lt; 750
+assert wal_bytes &lt; 12 * 1024 * 1024</code></pre>
+    <p>Notice the leverage: whether a future migration causes runaway WAL growth via an unscoped trigger from 10 migrations ago, an accidental 12-step table copy, or a slow correlated subquery, this 30-line empirical gate catches it automatically—with zero regexes and zero false positives.</p>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Verify your grasp of outcome-based migration testing versus static AST coupling:</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">⚡ Retrieval Practice</div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why did the 130-line Elixir AST and regex SQL migration linter fail our testing standards?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Elixir's `Code.string_to_quoted!/2` parses heredocs and multiline strings without issue.">
+            Elixir macros cannot parse multiline raw string literals inside compiled test modules
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Walking an AST in memory does not load native SQLite extensions.">
+            Static code analysis slows down compilation times by loading SQLite native extensions
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Regex-matching SQL strings inside ASTs is classic Implementation Coupling and misses cross-migration state like triggers created in earlier migrations.">
+            It coupled tests to brittle source syntax rather than observable database behavior
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. `Ecto.Migrator` does not strip AST metadata from source files on disk.">
+            Ecto migrator processes strip abstract syntax metadata before executing test suite assertions
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. Why is editing an already-deployed historical migration file to satisfy a new linter an anti-pattern?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! Once a migration version is recorded in `schema_migrations`, production never runs it again, so editing it makes test and prod schemas diverge.">
+            Production databases never re-run old migrations creating silent schema drift across environments
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ecto only checks version integers in `schema_migrations`, not file checksums.">
+            Ecto automatically rolls back the entire production database whenever historical checksums change
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Editing an `.exs` file on disk does not corrupt existing SQLite indexes unless executed.">
+            SQLite corrupts existing foreign key indexes if historical migration timestamps are modified
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Git allows editing any file; the hazard is operational schema drift between environments.">
+            Git repositories reject commits that modify migration files older than thirty days
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. How does the seeded <code>N-1</code> to <code>N</code> migration gate verify performance without implementation coupling?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Mocking the database adapter hides real SQLite trigger and WAL behavior.">
+            It mocks the SQLite adapter to count how many SQL statements execute
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. That was the deleted AST linter approach.">
+            It parses migration source files to forbid update statements on large tables
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. On an empty 0-row database, even an O(N) row-by-row trigger rewrite takes 0ms and 0 bytes of WAL!">
+            It runs migrations on an empty database and inspects generated schema files
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! By seeding 1,000 rows at N-1, checkpointing the WAL, and running migration N, we measure real execution time and WAL bytes written.">
+            It seeds realistic data at N-1 and asserts runtime and WAL budgets
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Review <a href="https://www.sqlite.org/wal.html#ckpt" target="_blank" rel="noopener">SQLite Write-Ahead Logging: Checkpointing</a> (specifically <code>PRAGMA wal_checkpoint(TRUNCATE)</code>) and our workspace's <a href="../.agents/skills/tdd/SKILL.md">TDD Skill</a> on testing observable behavior at seams rather than implementation details.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0013-sqlite-fts5-bloat-and-trigger-wal-amplification.html">0013 SQLite FTS5 &amp; WAL Amplification</a></span>
+        <span>📖 Reference: <a href="../reference/0014-empirical-migration-testing-reference.html">0014 Empirical Migration Testing Reference Card</a></span>
+        <span>➡️ Next: <a href="0015-sqlite-index-traps-and-in-place-ets-cache-refresh.html">0015 Index Traps &amp; ETS Refresh</a></span>
+      </div>
+      <p><strong>Ask Your Teacher:</strong> Curious how the recursive CTE seeds 1,000 realistic deals in under 20ms without slowing down `mix test`? Ask in chat!</p>
+    </footer>
+  </div>
+</body>
+</html>

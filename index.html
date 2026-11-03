@@ -92,20 +92,44 @@
 
     <h2>Interactive Lessons</h2>
     <div class="curriculum-grid">
+      <a href="/lessons/0016-liveview-transport-service-workers-and-boot-blocking.html" class="lesson-card" style="border-left: 4px solid #dc2626;">
+        <div class="lesson-number">Lesson 0016 <span class="badge-new">NEW POST-MORTEM</span></div>
+        <div class="lesson-card-title">LiveView Transport Traps, Service Worker Interception, &amp; Boot Blocking</div>
+        <div class="lesson-card-desc">Why longPollFallbackMs poisoned browser tabs in sessionStorage, how sw.js intercepted /live and cached stale CSS, why cross-session navigate links bounced, and how synchronous WAL hashing in init/1 blocked port 8080.</div>
+      </a>
+
+      <a href="/lessons/0015-sqlite-index-traps-and-in-place-ets-cache-refresh.html" class="lesson-card" style="border-left: 4px solid #ea580c;">
+        <div class="lesson-number">Lesson 0015 <span class="badge-new">NEW POST-MORTEM</span></div>
+        <div class="lesson-card-title">SQLite B-Tree Index Traps &amp; Zero-Miss In-Place ETS Cache Refresh</div>
+        <div class="lesson-card-desc">How an unindexed OR clause defeated B-tree indexes, why sparse nullable columns needed partial indexes, and why deleting ETS cache keys on deal ingestion caused cold-cache misses and key alias bugs.</div>
+      </a>
+
+      <a href="/lessons/0014-empirical-migration-gates-vs-speculative-ast-linters.html" class="lesson-card" style="border-left: 4px solid #d97706;">
+        <div class="lesson-number">Lesson 0014 <span class="badge-new">NEW POST-MORTEM</span></div>
+        <div class="lesson-card-title">Empirical Migration Gates vs. Speculative AST Linters</div>
+        <div class="lesson-card-desc">Why we wrote—and 5 minutes later deleted—a 130-line Elixir AST/regex SQL migration linter and reverted a historical migration edit in favor of a 30-line seeded N-1 → N WAL and runtime budget gate.</div>
+      </a>
+
+      <a href="/lessons/0013-sqlite-fts5-bloat-and-trigger-wal-amplification.html" class="lesson-card" style="border-left: 4px solid #e11d48;">
+        <div class="lesson-number">Lesson 0013 <span class="badge-new">NEW POST-MORTEM</span></div>
+        <div class="lesson-card-title">SQLite Storage Bloat, External-Content FTS5, &amp; Trigger WAL Amplification</div>
+        <div class="lesson-card-desc">How storing raw HTML + clean_text + default FTS5 tripled our disk usage, how running UPDATE before DROP TRIGGER fired row-by-row FTS rebuilds, and why /tmp snapshots risked container OOMs.</div>
+      </a>
+
       <a href="/lessons/0012-multi-node-cluster-coordination-and-poller-consensus.html" class="lesson-card" style="border-left: 4px solid #8b5cf6;">
-        <div class="lesson-number">Lesson 0012 <span class="badge-new">NEW</span></div>
+        <div class="lesson-number">Lesson 0012</div>
         <div class="lesson-card-title">Multi-Node Cluster Coordination &amp; Poller Consensus</div>
         <div class="lesson-card-desc">Solving duplicate polling collisions, PostgreSQL session advisory locks (pg_try_advisory_lock), BEAM :global singletons, and consistent hashing work partitioning.</div>
       </a>
 
       <a href="/lessons/0011-cross-border-normalization-and-regional-heuristics.html" class="lesson-card" style="border-left: 4px solid #f59e0b;">
-        <div class="lesson-number">Lesson 0011 <span class="badge-new">NEW</span></div>
+        <div class="lesson-number">Lesson 0011</div>
         <div class="lesson-card-title">Cross-Border Normalization &amp; Regional Heuristics</div>
         <div class="lesson-card-desc">Merchant domain country detection, hardware taxonomy tagging, the AZERTY / QWERTY layout trap, and ingestion-time precomputation onto %Deal{} schemas.</div>
       </a>
 
       <a href="/lessons/0010-pathological-query-defense-and-compute-guards.html" class="lesson-card" style="border-left: 4px solid #ef4444;">
-        <div class="lesson-number">Lesson 0010 <span class="badge-new">NEW</span></div>
+        <div class="lesson-number">Lesson 0010</div>
         <div class="lesson-card-title">Pathological Query Defense &amp; Compute Guards</div>
         <div class="lesson-card-desc">Defending against ReDoS, AST grammar bounding, normalized microsecond execution budgets, and the auto-pause circuit breaker in DealScout.Alerts.ComputeGuard.</div>
       </a>
@@ -168,6 +192,10 @@
     <div class="reference-section">
       <h2>Reference Documents (Cheat Sheets &amp; Checklists)</h2>
       <ul class="reference-list">
+        <li>📌 <a href="/reference/0016-liveview-sw-and-boot-resilience-reference.html">0016: LiveView, Service Worker &amp; Boot Resilience Reference Card</a></li>
+        <li>📌 <a href="/reference/0015-sqlite-indexing-and-ets-refresh-reference.html">0015: SQLite Indexing &amp; ETS Refresh Reference Card</a></li>
+        <li>📌 <a href="/reference/0014-empirical-migration-testing-reference.html">0014: Empirical Migration Testing Reference Card</a></li>
+        <li>📌 <a href="/reference/0013-sqlite-fts5-and-wal-reference.html">0013: SQLite FTS5 &amp; Trigger WAL Reference Card</a></li>
         <li>📌 <a href="/reference/0012-cluster-coordination-and-consensus-reference.html">0012: Multi-Node Cluster Coordination &amp; Consensus Reference Card</a></li>
         <li>📌 <a href="/reference/0011-cross-border-normalization-reference.html">0011: Cross-Border Normalization Reference Card</a></li>
         <li>📌 <a href="/reference/0010-compute-guards-and-redos-defense-reference.html">0010: Compute Guards &amp; ReDoS Defense Reference Card</a></li>

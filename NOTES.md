@@ -16,7 +16,11 @@
   - Lesson 0010: Completed with 100% correct answers. Recorded in learning-record 0013. Covered ReDoS mitigation, AST grammar restrictions, microsecond normalized budgeting, NDJSON slow logging, and the auto-pause circuit breaker in DealScout.Alerts.ComputeGuard.
   - Lesson 0011: Completed with 100% correct answers. Recorded in learning-record 0014. Covered merchant domain detection, hardware taxonomy tagging, AZERTY/QWERTY layout traps, and ingestion-time precomputation onto %Deal{}.
   - Lesson 0012: Completed with 100% correct answers. Recorded in learning-record 0015. Covered multi-node duplicate polling hazards, PostgreSQL session advisory locks (pg_try_advisory_lock), BEAM :global singletons, and consistent hashing work partitioning.
-  - Teaching Journey Status: Complete comprehensive master engineering curriculum (Lessons 0001 - 0012) delivering Architecture & Design, Engineering Execution, Meta-Agent Crafting, Systems/Performance Engineering, Distributed Resilience, Security/Compute Guards, Regional Domain Modeling, and Cluster Consensus.
+  - Lesson 0013: Prepared (SQLite Storage Bloat, External-Content FTS5, & Trigger WAL Amplification).
+  - Lesson 0014: Prepared (Empirical Migration Gates vs. Speculative AST Linters).
+  - Lesson 0015: Prepared (SQLite B-Tree Index Traps & Zero-Miss In-Place ETS Cache Refresh).
+  - Lesson 0016: Prepared (LiveView Transport Traps, Service Worker Interception, & Boot Blocking).
+  - Teaching Journey Status: Added Production Post-Mortems cluster (Lessons 0013 - 0016) analyzing recent mistakes and fixes in DealScout across SQLite FTS5/triggers, migration testing philosophy, B-Tree/partial indexes & ETS caching, and LiveView/Service Worker/OTP startup resilience.
 - **Format Requirements**:
   - Tufte-inspired typography, elegant styling, and fast interactive quizzes.
   - Quizzes: matched word counts (and close character counts across choices), varied correct positions, instant automatic feedback.

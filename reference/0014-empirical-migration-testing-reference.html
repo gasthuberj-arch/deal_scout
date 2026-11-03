@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: Empirical Migration Testing vs. Speculative AST Linting</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Post-Mortem Reference 0014</div>
+      <h1>Empirical Migration Testing Reference</h1>
+      <p class="subtitle">Testing observable runtime and WAL budgets at the database seam instead of regex-linting Elixir ASTs.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0014-empirical-migration-gates-vs-speculative-ast-linters.html">← Back to Lesson 0014: Empirical Migration Gates vs. Speculative AST Linters</a>
+    </div>
+
+    <h2>Core Migration Verification Patterns</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">N-1 State Simulation</div>
+        <p>Migrate a temporary test database up to the second-to-last migration version (<code>N-1</code>) to replicate exact pre-deploy production schema and triggers.</p>
+        <span class="term-code">Ecto.Migrator.run(repo, path, :up, to: prior_version)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Recursive CTE Fast Seeding</div>
+        <p>Seed 1,000 realistic rows in a single SQL statement (&lt;20ms) using <code>WITH RECURSIVE cnt(x)</code> so the test suite stays fast.</p>
+        <span class="term-code">WITH RECURSIVE cnt(x) AS (SELECT 1 UNION ALL ...)</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">WAL Baseline Truncation</div>
+        <p>Checkpoint and truncate the SQLite write-ahead log to 0 bytes right before running migration <code>N</code> to isolate its exact write footprint.</p>
+        <span class="term-code">PRAGMA wal_checkpoint(TRUNCATE);</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Runtime &amp; WAL Budget Gate</div>
+        <p>Measure both wall-clock execution time and resulting <code>.db-wal</code> file size after migration <code>N</code> completes.</p>
+        <span class="term-code">assert duration_ms &lt; 750 and wal_bytes &lt; 12_582_912</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Immutability of Historical Migrations</div>
+        <p>Never modify migrations that have already executed in production; doing so causes silent schema drift between fresh test DBs and prod.</p>
+        <span class="term-code">Write a new migration instead of editing old ones</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Avoiding AST Regex Coupling</div>
+        <p>Static regexes on migration files miss triggers created in earlier migrations and break on valid SQL formatting variations.</p>
+        <span class="term-code">Test database outcomes, not SQL string spelling</span>
+      </div>
+    </div>
+
+    <h2>Migration Gate Checklist</h2>
+    <ul>
+      <li>[ ] <strong>Historical Immutability:</strong> Did `git diff` leave all previously deployed migration files untouched?</li>
+      <li>[ ] <strong>Seeded Benchmark:</strong> Does `test/deal_scout/repo_migration_test.exs` pass the 1,000-row N-1 → N runtime (&lt;750ms) and WAL (&lt;12MB) budgets?</li>
+      <li>[ ] <strong>Rollback Verification:</strong> Does the full `up` → `down` → `up` cycle in `RepoMigrationTest` succeed cleanly?</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0014-empirical-migration-gates-vs-speculative-ast-linters.html">Lesson 0014</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

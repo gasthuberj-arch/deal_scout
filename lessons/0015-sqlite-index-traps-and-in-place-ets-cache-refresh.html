@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 0015: SQLite B-Tree Index Traps &amp; Zero-Miss In-Place ETS Cache Refresh</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <script src="../assets/teach-quiz.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Production Post-Mortems &bull; Lesson 0015</div>
+      <h1>SQLite B-Tree Index Traps &amp; Zero-Miss In-Place ETS Cache Refresh</h1>
+      <p class="subtitle">How an unindexed OR clause, missing partial indexes, and evict-on-write ETS invalidation caused full-table scans and cold-cache misses.</p>
+    </header>
+
+    <div class="callout">
+      <h4>Tied to Your Mission</h4>
+      <p>In commit <code>8baf24d</code>, we fixed two subtle performance bugs that made DealScout feel sluggish under load: our analytics queries were silently performing full-table scans on <code>deals</code>, and our <code>DealScout.Deals.StreamCache</code> was deleting ETS cache entries every time a new <strong>Deal</strong> arrived—forcing concurrent LiveView visitors to hit a cold cache. Worse, our selective invalidation forgot that feed keys could be integers, strings, or slugs!</p>
+    </div>
+
+    <h2>1. Trap #1: Disjunction (`OR`) Across an Unindexed Column</h2>
+    <p>In <code>DealScout.Analytics</code>, we computed 24-hour and 1-hour deal velocity using this Ecto query:</p>
+    <pre><code># ❌ BEFORE: `inserted_at` has no index!
+from d in Deal,
+  where: d.published_at &gt;= ^since_24h or d.inserted_at &gt;= ^since_24h,
+  select: count(d.id)</code></pre>
+    <p>The <code>deals</code> table had an index on <code>published_at</code>, so why did SQLite scan the entire table? Because of the <code>OR d.inserted_at &gt;= ^since_24h</code> predicate! When a <code>WHERE</code> clause combines two columns with <code>OR</code> and one of those columns (<code>inserted_at</code>) has no index, <a href="https://use-the-index-luke.com/sql/where-clause/obfuscation/smart-logic" target="_blank" rel="noopener">the query planner cannot satisfy the disjunction via the B-Tree index</a>—it must inspect every row in the table to check whether <code>inserted_at &gt;= ^since_24h</code>.</p>
+    <p>Since <strong>Deal ingestion</strong> always populates <code>published_at</code> (defaulting to <code>DateTime.utc_now()</code> when a feed omits it), checking <code>or d.inserted_at &gt;= ...</code> was completely redundant. Removing it turned a full-table scan into an instant B-Tree index range count.</p>
+
+    <h2>2. Trap #2: Sparse Nullable Columns Without Partial Indexes</h2>
+    <p>Our analytics dashboard also counts cross-border deals (<code>country IS NOT NULL</code>) and foreign-keyboard warnings (<code>keyboard_warning IS NOT NULL</code>). Only a small minority of deals have non-null values in these columns, yet counting them required scanning every row in <code>deals</code>.</p>
+    <p>In migration <code>20261031215949_add_analytics_partial_indexes_to_deals.exs</code>, we added <a href="https://www.sqlite.org/partialindex.html" target="_blank" rel="noopener">SQLite Partial Indexes</a>:</p>
+    <pre><code># ✅ Partial indexes only store rows where the column is NOT NULL:
+create_if_not_exists index(:deals, [:country],
+  where: "country IS NOT NULL",
+  name: :deals_country_not_null_index
+)
+
+create_if_not_exists index(:deals, [:keyboard_warning],
+  where: "keyboard_warning IS NOT NULL",
+  name: :deals_keyboard_warning_not_null_index
+)</code></pre>
+    <p>Because a partial index omits all <code>NULL</code> rows, it takes almost zero disk space and zero write overhead on normal domestic deals, while making <code>WHERE country IS NOT NULL</code> counts instant index-only scans.</p>
+
+    <h2>3. Trap #3: Evict-on-Write ETS Storms &amp; Key Alias Mismatches</h2>
+    <p>Look at what <code>DealScout.Deals.broadcast_deal/1</code> and <code>DealScout.Deals.StreamCache</code> originally did whenever a new <strong>Deal</strong> was ingested:</p>
+    <pre><code># ❌ BEFORE:
+# 1. Tiny 5-second TTL (@default_ttl_ms 5_000) meant idle feeds expired constantly.
+# 2. On every new deal, we DELETED the ETS keys (`invalidate(feed_id: deal.feed_id)`):
+if feed_id do
+  :ets.match_delete(@table, {{:deals, feed_id, :_, :_, :_, :_, :_}, :_, :_})
+  :ets.match_delete(@table, {{:deals, "all", :_, :_, :_, :_, :_}, :_, :_})
+end</code></pre>
+    <p>Two things went wrong here:</p>
+    <ol>
+      <li><strong>Cold Cache Misses on Write:</strong> Deleting the ETS entry meant the next user loading the home page or switching tabs had to wait for a synchronous SQLite query. Similarly, in <code>DealScout.Analytics.Server.init/1</code>, deferring the initial warm via <code>handle_continue(:initial_warm, state)</code> without first seeding an empty snapshot meant early web requests during boot saw an empty ETS table and ran synchronous full-table scans on the request path!</li>
+      <li><strong>Incomplete Key Invalidation:</strong> Callers pass <code>feed:</code> to <code>Deals.list_deals/1</code> as an integer ID (<code>10</code>), a URL param string (<code>"10"</code>), or a feed slug (<code>"mydealz"</code>). Only matching integer <code>feed_id</code> and <code>"all"</code> left cached entries under <code>"10"</code> and <code>"mydealz"</code> stale!</li>
+    </ol>
+
+    <h3>The Fix: In-Place `StreamCache.refresh/3` &amp; Boot Seeding</h3>
+    <p>Instead of evicting keys, <code>StreamCache.refresh/3</code> finds all currently cached keys matching <code>["all", feed_id, to_string(feed_id), feed_slug]</code>, recomputes their queries in the background poller process, and overwrites them atomically via <code>:ets.insert/2</code> with a 300-second TTL. Concurrent LiveView readers <strong>never</strong> experience a cache miss.</p>
+
+    <h2>Interactive Checkpoint</h2>
+    <p>Test your mastery of B-Tree index predicates, partial indexes, and zero-miss ETS caching:</p>
+
+    <div class="quiz-section">
+      <div class="quiz-header">⚡ Retrieval Practice</div>
+
+      <!-- Question 1 -->
+      <div class="quiz-question" id="q1">
+        <div class="question-text">1. Why did <code>where: d.published_at &gt;= ^since or d.inserted_at &gt;= ^since</code> trigger full-table scans?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. SQLite handles parameterized datetime comparisons on indexed columns efficiently.">
+            SQLite cannot ever evaluate datetime comparison operators inside parameterized Ecto query expressions
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Because `inserted_at` had no index, SQLite could not use `deals_published_at_index` alone to satisfy the `OR` condition.">
+            An OR condition across an unindexed column forces scanning every table row
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. B-tree indexes accelerate `COUNT` queries via fast index range scans.">
+            B-tree indexes automatically disable themselves whenever database queries select aggregate count values
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ecto compiles `or` directly to SQL `OR` on the `deals` table.">
+            Ecto converts logical OR clauses into slow subqueries on virtual FTS5 tables
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" id="q2">
+        <div class="question-text">2. What advantage does <code>StreamCache.refresh/3</code> (in-place overwrite) have over <code>StreamCache.invalidate/1</code> on deal ingestion?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. ETS stores terms in memory; `refresh/3` does not write disk files.">
+            In-place refresh automatically compresses cached Elixir structs into compact binary disk files
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. `:ets.match_delete/2` does not permanently lock ETS tables.">
+            Deleting ETS keys permanently locks the table against concurrent GenServer write operations
+          </button>
+          <button class="quiz-option" data-correct="true" data-explanation="Correct! By recomputing and overwriting existing ETS keys via `:ets.insert/2`, readers always get an instant ETS hit while new data is swapped in.">
+            Concurrent LiveView readers never hit cold cache misses during high-frequency deal ingestion
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. `refresh/3` executes the database query function in the background writer and replaces the ETS entry.">
+            Overwriting keys bypasses Ecto database queries by mutating structs directly in memory
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" id="q3">
+        <div class="question-text">3. Why did we add partial indexes (<code>WHERE country IS NOT NULL</code>) to the <code>deals</code> table?</div>
+        <div class="quiz-options">
+          <button class="quiz-option" data-correct="true" data-explanation="Spot on! Partial indexes exclude the ~90% of rows where `country` is NULL, keeping the index tiny while making `IS NOT NULL` counts instant.">
+            Partial indexes store only sparse non-null rows making cross-border analytics queries instant
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Standard SQLite B-tree indexes allow NULL values.">
+            SQLite forbids standard B-tree indexes on columns that allow nullable text values
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Partial indexes only optimize lookup and index size; `DealScout.Maintenance.Pruner` deletes old rows.">
+            Partial indexes automatically delete expired rows whenever background database vacuum tasks run
+          </button>
+          <button class="quiz-option" data-correct="false" data-explanation="Incorrect. Ecto changesets cast fields independently of database index definitions.">
+            Ecto schemas require partial indexes before casting optional string fields during ingestion
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    </div>
+
+    <div class="primary-source">
+      <strong>Primary Source Recommendation</strong>
+      <p>Read the <a href="https://www.sqlite.org/partialindex.html" target="_blank" rel="noopener">SQLite Partial Indexes Guide</a> and Markus Winand's <a href="https://use-the-index-luke.com/sql/where-clause/obfuscation/smart-logic" target="_blank" rel="noopener">Use The Index, Luke: Smart Logic &amp; OR Predicates</a> to see how query planners match <code>WHERE</code> predicates to partial and composite B-Tree indexes.</p>
+    </div>
+
+    <footer>
+      <div class="footer-nav">
+        <span>⬅️ Previous: <a href="0014-empirical-migration-gates-vs-speculative-ast-linters.html">0014 Empirical Migration Gates</a></span>
+        <span>📖 Reference: <a href="../reference/0015-sqlite-indexing-and-ets-refresh-reference.html">0015 SQLite Indexing &amp; ETS Refresh Reference Card</a></span>
+        <span>➡️ Next: <a href="0016-liveview-transport-service-workers-and-boot-blocking.html">0016 LiveView, Service Workers &amp; Boot Blocking</a></span>
+      </div>
+      <p><strong>Ask Your Teacher:</strong> Want to check <code>EXPLAIN QUERY PLAN</code> output on any query in <code>DealScout.Analytics</code> or <code>DealScout.Deals</code>? Ask in chat!</p>
+    </footer>
+  </div>
+</body>
+</html>

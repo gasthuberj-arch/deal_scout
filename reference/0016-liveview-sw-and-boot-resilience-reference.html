@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reference: LiveView Transport, Service Workers, &amp; OTP Boot Resilience</title>
+  <link rel="stylesheet" href="../assets/teach-style.css">
+  <style>
+    @media print {
+      body { padding: 0; font-size: 14pt; }
+      .no-print { display: none; }
+    }
+    .grid-terms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 640px) {
+      .grid-terms { grid-template-columns: 1fr; }
+    }
+    .term-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    .term-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 0.35rem;
+    }
+    .term-code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: #f8fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      display: block;
+      margin-top: 0.5rem;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="lesson-meta">Post-Mortem Reference 0016</div>
+      <h1>LiveView, Service Worker &amp; Boot Resilience Reference</h1>
+      <p class="subtitle">Quick reference for WebSocket transport hygiene, Service Worker bypass rules, cross-session links, and non-blocking OTP init.</p>
+    </header>
+
+    <div class="no-print" style="margin-bottom: 1.5rem;">
+      <a href="../lessons/0016-liveview-transport-service-workers-and-boot-blocking.html">← Back to Lesson 0016: LiveView Transport Traps, Service Workers &amp; Boot Blocking</a>
+    </div>
+
+    <h2>Core Browser &amp; OTP Resilience Patterns</h2>
+    <div class="grid-terms">
+      <div class="term-card">
+        <div class="term-title">Preventing Sticky LongPoll Poisoning</div>
+        <p>Omit aggressive <code>longPollFallbackMs</code> and clear <code>phx:fallback:LongPoll</code> from <code>sessionStorage</code> so deploy restarts don't trap tabs on HTTP polling.</p>
+        <span class="term-code">sessionStorage.removeItem("phx:fallback:LongPoll")</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Service Worker Transport Bypass</div>
+        <p>Never intercept non-GET requests or Phoenix real-time endpoints (<code>/live</code>, <code>/socket</code>, <code>/phoenix</code>) inside a Service Worker.</p>
+        <span class="term-code">if (req.method !== 'GET' || url.pathname.startsWith('/live')) return;</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Network-First Asset Bundles</div>
+        <p>Use network-first with cache fallback for <code>/assets/</code> so deployed CSS and JS updates take effect immediately without stale cache traps.</p>
+        <span class="term-code">fetch(request).catch(() =&gt; caches.match(request))</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Cross-Session Link Semantics</div>
+        <p>Use <code>href={...}</code> instead of <code>navigate={...}</code> when linking between different router <code>live_session</code> blocks to avoid failed WebSocket hops.</p>
+        <span class="term-code">&lt;.link href={~p"/alerts"}&gt;My Alerts&lt;/.link&gt;</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Asynchronous GenServer Boot</div>
+        <p>Defer heavy disk I/O or network scans in <code>init/1</code> to <code>handle_continue/2</code> so <code>DealScoutWeb.Endpoint</code> binds port 8080 immediately.</p>
+        <span class="term-code">{:ok, state, {:continue, :initial_scan}}</span>
+      </div>
+
+      <div class="term-card">
+        <div class="term-title">Stat-Cached File Hashing</div>
+        <p>Cache <code>{size, mtime, sha256}</code> in memory when polling replica directories so unchanged WAL files are never re-read and re-hashed.</p>
+        <span class="term-code">when prev_size == stat.size and prev_mtime == mtime_iso</span>
+      </div>
+    </div>
+
+    <h2>Frontend &amp; Deployment Audit Checklist</h2>
+    <ul>
+      <li>[ ] <strong>WebSocket Recovery:</strong> Does a tab automatically reconnect over WebSocket after a server restart without getting stuck in LongPoll?</li>
+      <li>[ ] <strong>SW Pass-Through:</strong> Does `sw.js` ignore all `POST` requests and all `/live`, `/socket`, and cross-origin URLs?</li>
+      <li>[ ] <strong>`live_session` Alignment:</strong> Do `<.link navigate={...}>` calls stay strictly inside the same `live_session` boundary?</li>
+      <li>[ ] <strong>Instant Port Binding:</strong> Do all GenServers started before `Endpoint` return from `init/1` in &lt;5ms?</li>
+    </ul>
+
+    <footer>
+      <div class="footer-nav">
+        <span>📖 Lesson: <a href="../lessons/0016-liveview-transport-service-workers-and-boot-blocking.html">Lesson 0016</a></span>
+        <span>🎯 Mission: <a href="../MISSION.md">MISSION.md</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
