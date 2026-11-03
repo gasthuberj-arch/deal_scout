@@ -235,5 +235,37 @@ defmodule DealScout.Admin.HealthMonitorTest do
       anomalies = HealthMonitor.evaluate_anomalies(metrics)
       assert Enum.find(anomalies, &(&1.type == :high_swap)) == nil
     end
+
+    test "push_delivery_degraded alarm records anomaly but does not dispatch push to admins", %{
+      admin: admin,
+      mon_name: mon_name
+    } do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      # Insert 10 delivered logs, none confirmed (0% confirmation rate)
+      for i <- 1..10 do
+        Repo.insert!(%Notifications.PushDeliveryLog{
+          user_id: admin.id,
+          tracking_id: "alarm-no-push-#{System.unique_integer([:positive])}-#{i}",
+          status: "delivered",
+          gateway_duration_ms: 100,
+          inserted_at: now
+        })
+      end
+
+      Notifications.invalidate_delivery_metrics_cache(24)
+
+      # Clear any previous deliveries
+      TestTransport.reset()
+
+      alarms = HealthMonitor.check_now(mon_name)
+      push_alarm = Enum.find(alarms, &(&1.type == :push_delivery_degraded))
+
+      assert push_alarm != nil
+      assert push_alarm.severity == :warning
+
+      # Must NOT have sent any push notifications to avoid self-reinforcing feedback loop
+      assert TestTransport.delivered_notifications() == []
+    end
   end
 end

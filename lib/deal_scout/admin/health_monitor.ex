@@ -347,6 +347,12 @@ defmodule DealScout.Admin.HealthMonitor do
   # Notifications & PubSub
   # ============================================================================
 
+  defp dispatch_admin_push(%{type: :push_delivery_degraded}, _action) do
+    # Operational health alarms about push delivery degradation must never dispatch via push
+    # to prevent recursive, self-reinforcing feedback loops when admin devices are sleeping/offline.
+    :ok
+  end
+
   defp dispatch_admin_push(alarm, action) do
     admin_users = Accounts.list_admin_users()
 
