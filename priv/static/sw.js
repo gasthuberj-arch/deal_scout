@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dealscout-shell-v4';
+const CACHE_NAME = 'dealscout-shell-v5';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -127,19 +127,44 @@ self.addEventListener('push', (event) => {
 
   // Send delivery receipt back to DealScout if tracking_id is present
   if (data.tracking_id) {
-    const receiptPromise = fetch('/api/push/receipt', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tracking_id: data.tracking_id,
-        received_at: receivedAt,
-        client_delay_ms: clientDelayMs
-      })
-    }).catch((err) => {
-      console.debug('[SW] Receipt ping failed:', err);
-    });
+    const receiptUrl = resolveUrl('/api/push/receipt');
+    const sendReceipt = async (retriesLeft = 2, delayMs = 500) => {
+      try {
+        const res = await fetch(receiptUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          keepalive: true,
+          body: JSON.stringify({
+            tracking_id: data.tracking_id,
+            received_at: receivedAt,
+            client_delay_ms: clientDelayMs
+          })
+        });
 
-    promises.push(receiptPromise);
+        if (res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (body.status === 'ok') {
+            return;
+          }
+        }
+
+        if (retriesLeft > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return sendReceipt(retriesLeft - 1, delayMs * 2);
+        }
+      } catch (err) {
+        if (retriesLeft > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return sendReceipt(retriesLeft - 1, delayMs * 2);
+        }
+        console.debug('[SW] Receipt ping failed:', err);
+      }
+    };
+
+    promises.push(sendReceipt());
   }
 
   event.waitUntil(Promise.all(promises));

@@ -336,7 +336,19 @@ defmodule DealScout.Notifications do
       when is_binary(tracking_id) do
     query = from(l in PushDeliveryLog, where: l.tracking_id == ^tracking_id)
 
-    case Repo.one(query) do
+    log =
+      case Repo.one(query) do
+        nil ->
+          # Device ACK can occasionally outpace the server committing the initial
+          # gateway delivery log to SQLite. A brief grace pause bridges this write lag.
+          Process.sleep(150)
+          Repo.one(query)
+
+        found ->
+          found
+      end
+
+    case log do
       nil ->
         {:error, :not_found}
 

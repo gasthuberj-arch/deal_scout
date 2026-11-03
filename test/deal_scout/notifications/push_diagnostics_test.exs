@@ -114,4 +114,31 @@ defmodule DealScout.Notifications.PushDiagnosticsTest do
     reloaded = Repo.get!(PushDeliveryLog, log.id)
     assert reloaded.client_delay_ms == updated.client_delay_ms
   end
+
+  test "record_receipt/3 resolves receipt even when log insertion is delayed by write lag", %{
+    user: user
+  } do
+    tracking_id = "delayed-tracking-#{System.unique_integer([:positive])}"
+    now_ms = System.system_time(:millisecond)
+
+    # Simulate receipt ping arriving slightly ahead of server DB commit
+    task =
+      Task.async(fn ->
+        Notifications.record_receipt(tracking_id, now_ms, 300)
+      end)
+
+    # Server finishes inserting the log 40ms later
+    Process.sleep(40)
+
+    Repo.insert!(%PushDeliveryLog{
+      user_id: user.id,
+      tracking_id: tracking_id,
+      status: "delivered",
+      http_status: 201
+    })
+
+    assert {:ok, updated} = Task.await(task)
+    assert %DateTime{} = updated.client_received_at
+    assert is_integer(updated.client_delay_ms)
+  end
 end
