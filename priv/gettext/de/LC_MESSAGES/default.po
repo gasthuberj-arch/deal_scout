@@ -1,0 +1,1281 @@
+## "msgid"s in this file come from POT (.pot) files.
+###
+### Do not add, change, or remove "msgid"s manually here as
+### they're tied to the ones in the corresponding POT file
+### (with the same domain).
+###
+### Use "mix gettext.extract --merge" or "mix gettext.merge"
+### to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: de\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:868
+#, elixir-autogen, elixir-format
+msgid "%{count} match found in database sample."
+msgid_plural "%{count} matches found in database sample."
+msgstr[0] "%{count} Treffer in der Stichprobe gefunden."
+msgstr[1] "%{count} Treffer in der Stichprobe gefunden."
+
+#: lib/deal_scout_web/live/match_live/index.ex:142
+#, elixir-autogen, elixir-format
+msgid "%{count} new"
+msgid_plural "%{count} new"
+msgstr[0] "%{count} neu"
+msgstr[1] "%{count} neu"
+
+#: lib/deal_scout_web/live/match_live/index.ex:378
+#, elixir-autogen, elixir-format
+msgid "%{count}d ago"
+msgstr "vor %{count} T."
+
+#: lib/deal_scout_web/live/match_live/index.ex:377
+#, elixir-autogen, elixir-format
+msgid "%{count}h ago"
+msgstr "vor %{count} Std."
+
+#: lib/deal_scout_web/live/match_live/index.ex:376
+#, elixir-autogen, elixir-format
+msgid "%{count}m ago"
+msgstr "vor %{count} Min."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:453
+#, elixir-autogen, elixir-format
+msgid "%{minutes}m cooldown"
+msgstr "%{minutes} Min. Cooldown"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:952
+#, elixir-autogen, elixir-format
+msgid "(May be a rare item or check spelling/operators)."
+msgstr "(Möglicherweise ein seltener Artikel oder Schreibweise/Operatoren prüfen)."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:134
+#, elixir-autogen, elixir-format
+msgid "(or Chrome) icon on your home screen &rarr; tap"
+msgstr "(oder Chrome) Icon auf deinem Startbildschirm &rarr; tippe auf"
+
+#: lib/deal_scout_web/components/pwa_components.ex:223
+#, elixir-autogen, elixir-format
+msgid "(or Chrome) icon on your home screen and tap"
+msgstr "(oder Chrome) Icon auf deinem Startbildschirm und tippe auf"
+
+#: lib/deal_scout_web/components/pwa_components.ex:225
+#, elixir-autogen, elixir-format
+msgid "(or the ⓘ icon)."
+msgstr "(oder das ⓘ-Symbol)."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:691
+#, elixir-autogen, elixir-format
+msgid "1 hour cooldown"
+msgstr "1 Stunde Cooldown"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:689
+#, elixir-autogen, elixir-format
+msgid "15 minutes cooldown"
+msgstr "15 Minuten Cooldown"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:690
+#, elixir-autogen, elixir-format
+msgid "30 minutes cooldown"
+msgstr "30 Minuten Cooldown"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:692
+#, elixir-autogen, elixir-format
+msgid "4 hours cooldown"
+msgstr "4 Stunden Cooldown"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:15
+#, elixir-autogen, elixir-format
+msgid "Account Settings"
+msgstr "Kontoeinstellungen"
+
+#: lib/deal_scout_web/components/core_components.ex:375
+#, elixir-autogen, elixir-format
+msgid "Actions"
+msgstr "Aktionen"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:344
+#, elixir-autogen, elixir-format
+msgid "Activate Alert"
+msgstr "Alarm aktivieren"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:334
+#: lib/deal_scout_web/live/user_live/settings.ex:212
+#, elixir-autogen, elixir-format
+msgid "Active"
+msgstr "Aktiv"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:808
+#, elixir-autogen, elixir-format
+msgid "Active immediately"
+msgstr "Sofort aktiv"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:296
+#, elixir-autogen, elixir-format
+msgid "Add Alert Rule"
+msgstr "Suchauftrag hinzufügen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:159
+#, elixir-autogen, elixir-format
+msgid "Add to Home Screen"
+msgstr "Zum Home-Bildschirm"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:243
+#, elixir-autogen, elixir-format
+msgid "Added:"
+msgstr "Hinzugefügt:"
+
+#: lib/deal_scout_web/components/layouts.ex:166
+#, elixir-autogen, elixir-format
+msgid "Admin System Ops"
+msgstr "Admin System Ops"
+
+#: lib/deal_scout_web/components/layouts.ex:173
+#, elixir-autogen, elixir-format
+msgid "Admin User Feedback"
+msgstr "Admin Benutzer-Feedback"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:686
+#, elixir-autogen, elixir-format
+msgid "Alert Cooldown (prevent bursts)"
+msgstr "Alarm-Cooldown (Spamschutz)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:537
+#, elixir-autogen, elixir-format
+msgid "Alert Rule Name"
+msgstr "Name des Suchauftrags"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:139
+#, elixir-autogen, elixir-format
+msgid "Alert rule created successfully."
+msgstr "Suchauftrag erfolgreich erstellt."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:192
+#, elixir-autogen, elixir-format
+msgid "Alert rule deleted."
+msgstr "Suchauftrag gelöscht."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:151
+#, elixir-autogen, elixir-format
+msgid "Alert rule updated successfully."
+msgstr "Suchauftrag erfolgreich aktualisiert."
+
+#: lib/deal_scout_web/components/layouts.ex:112
+#: lib/deal_scout_web/components/layouts.ex:161
+#, elixir-autogen, elixir-format
+msgid "Alerts"
+msgstr "Suchaufträge"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:738
+#, elixir-autogen, elixir-format
+msgid "All Merchants"
+msgstr "Alle Händler"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:775
+#, elixir-autogen, elixir-format
+msgid "All Portals (incl. eBay)"
+msgstr "Alle Portale (inkl. eBay)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:726
+#, elixir-autogen, elixir-format
+msgid "All Regions (DE, FR, ES, IT, etc.)"
+msgstr "Alle Regionen (DE, FR, ES, IT usw.)"
+
+#: lib/deal_scout_web/live/match_live/index.ex:69
+#, elixir-autogen, elixir-format
+msgid "All matches marked as read."
+msgstr "Alle Treffer als gelesen markiert."
+
+#: lib/deal_scout_web/components/layouts.ex:92
+#, elixir-autogen, elixir-format
+msgid "Analytics"
+msgstr "Analysen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:122
+#, elixir-autogen, elixir-format
+msgid "Android Background Optimization Guide (Instant Locked-Screen Alarms)"
+msgstr "Android-Hintergrundoptimierung (Sofort-Alarme bei gesperrtem Bildschirm)"
+
+#: lib/deal_scout_web/components/pwa_components.ex:224
+#: lib/deal_scout_web/live/user_live/settings.ex:135
+#, elixir-autogen, elixir-format
+msgid "App Info"
+msgstr "App-Info"
+
+#: lib/deal_scout_web/components/pwa_components.ex:238
+#: lib/deal_scout_web/live/user_live/settings.ex:138
+#, elixir-autogen, elixir-format
+msgid "App battery usage"
+msgstr "App-Akkunutzung"
+
+#: lib/deal_scout_web/components/pwa_components.ex:134
+#, elixir-autogen, elixir-format
+msgid "Apple requires Progressive Web Apps to be added to the Home Screen to deliver background push alerts. Follow these 3 easy steps:"
+msgstr "Apple verlangt, dass Progressive Web Apps zum Home-Bildschirm hinzugefügt werden, um Push-Alarme im Hintergrund zu senden. Folge diesen 3 einfachen Schritten:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:355
+#, elixir-autogen, elixir-format
+msgid "Are you sure you want to delete this alert rule?"
+msgstr "Möchtest du diesen Suchauftrag wirklich löschen?"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:467
+#, elixir-autogen, elixir-format
+msgid "Are you sure you want to permanently delete your account and all your alert rules? This cannot be undone."
+msgstr "Bist du sicher, dass du dein Konto und alle Suchaufträge endgültig löschen möchtest? Dies kann nicht rückgängig gemacht werden."
+
+#: lib/deal_scout_web/components/pwa_components.ex:238
+#: lib/deal_scout_web/live/user_live/settings.ex:139
+#, elixir-autogen, elixir-format
+msgid "Battery"
+msgstr "Akku"
+
+#: lib/deal_scout_web/components/layouts.ex:196
+#, elixir-autogen, elixir-format
+msgid "Buy a coffee"
+msgstr "Kaffee spendieren"
+
+#: lib/deal_scout_web/components/pwa_components.ex:208
+#: lib/deal_scout_web/live/user_live/settings.ex:126
+#, elixir-autogen, elixir-format
+msgid "By default, Android's"
+msgstr "Standardmäßig verzögert Androids"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:970
+#: lib/deal_scout_web/live/user_live/settings.ex:192
+#, elixir-autogen, elixir-format
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:355
+#, elixir-autogen, elixir-format
+msgid "Change Email"
+msgstr "E-Mail ändern"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:355
+#, elixir-autogen, elixir-format
+msgid "Changing..."
+msgstr "Ändere..."
+
+#: lib/deal_scout_web/live/match_live/index.ex:164
+#, elixir-autogen, elixir-format
+msgid "Chime On"
+msgstr "Ton an"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:35
+#, elixir-autogen, elixir-format
+msgid "Choose your preferred interface language."
+msgstr "Wähle deine bevorzugte Sprache für die Benutzeroberfläche."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:373
+#, elixir-autogen, elixir-format
+msgid "Circuit Breaker Auto-Paused"
+msgstr "Schutzschaltung automatisch pausiert"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:159
+#, elixir-autogen, elixir-format
+msgid "Click \"Register This Device\" above or open DealScout on your phone and tap \"Enable Alarms\" to get push notifications."
+msgstr ""
+
+#: lib/deal_scout_web/live/alert_live/index.ex:513
+#, elixir-autogen, elixir-format
+msgid "Close"
+msgstr "Schließen"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:625
+#, elixir-autogen, elixir-format
+msgid "Comma"
+msgstr "Komma"
+
+#: lib/deal_scout_web/live/match_live/index.ex:333
+#, elixir-autogen, elixir-format
+msgid "Compare offers on Geizhals"
+msgstr "Angebote auf Geizhals vergleichen"
+
+#: lib/deal_scout_web/live/match_live/index.ex:320
+#, elixir-autogen, elixir-format
+msgid "Compare price history and offers on Idealo"
+msgstr "Preisentwicklung und Angebote auf Idealo vergleichen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:387
+#, elixir-autogen, elixir-format
+msgid "Confirm new password"
+msgstr "Neues Passwort bestätigen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:478
+#, elixir-autogen, elixir-format
+msgid "Confirm your password to proceed"
+msgstr "Bestätige dein Passwort, um fortzufahren"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:900
+#, elixir-autogen, elixir-format
+msgid "Consider adding a maximum price or specific model. (%{count} matches found in sample)."
+msgstr "Erwäge einen Maximalpreis oder ein genaueres Modell hinzuzufügen. (%{count} Treffer in der Stichprobe)."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:301
+#, elixir-autogen, elixir-format
+msgid "Cooldown"
+msgstr "Cooldown"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:506
+#, elixir-autogen, elixir-format
+msgid "Create Alert Rule"
+msgstr "Suchauftrag erstellen"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:313
+#, elixir-autogen, elixir-format
+msgid "Create Your First Rule"
+msgstr "Erste Regel erstellen"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:308
+#, elixir-autogen, elixir-format
+msgid "Create an alert rule for products you are hunting (e.g. \"RTX 4080\", \"OLED TV\", \"Lego Star Wars\") to receive instant phone notifications."
+msgstr ""
+
+#: lib/deal_scout_web/live/alert_live/index.ex:441
+#, elixir-autogen, elixir-format
+msgid "DE Layout"
+msgstr "DE-Tastatur"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:429
+#, elixir-autogen, elixir-format
+msgid "DE Only"
+msgstr "Nur DE"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:420
+#, elixir-autogen, elixir-format
+msgid "Daily Digest"
+msgstr "Tägliche Zusammenfassung"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:444
+#, elixir-autogen, elixir-format
+msgid "Danger Zone: Delete Account"
+msgstr "Gefahrenzone: Konto löschen"
+
+#: lib/deal_scout_web/components/layouts.ex:371
+#, elixir-autogen, elixir-format
+msgid "Datenschutz"
+msgstr "Datenschutz"
+
+#: lib/deal_scout_web/components/layouts.ex:160
+#, elixir-autogen, elixir-format
+msgid "Deal Intelligence"
+msgstr "Deal-Intelligence"
+
+#: lib/deal_scout_web/components/pwa_components.ex:249
+#, elixir-autogen, elixir-format
+msgid "Deal alerts will now vibrate immediately while locked!"
+msgstr "Deal-Alarme vibrieren nun sofort bei gesperrtem Display!"
+
+#: lib/deal_scout_web/live/match_live/index.ex:147
+#, elixir-autogen, elixir-format
+msgid "Deals that matched your configured keyword alert criteria in real-time."
+msgstr "Deals, die in Echtzeit deinen konfigurierten Suchkriterien entsprochen haben."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:358
+#, elixir-autogen, elixir-format
+msgid "Delete"
+msgstr "Löschen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:454
+#, elixir-autogen, elixir-format
+msgid "Deleting your account will immediately and permanently erase your user profile, all saved keyword alert rules, matched deal history, and registered push notification devices."
+msgstr ""
+
+#: lib/deal_scout_web/live/user_live/settings.ex:287
+#, elixir-autogen, elixir-format
+msgid "Delivered"
+msgstr "Zugestellt"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:674
+#, elixir-autogen, elixir-format
+msgid "Delivery Mode"
+msgstr "Zustellungsart"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:318
+#, elixir-autogen, elixir-format
+msgid "Device confirmed in %{delay}ms"
+msgstr "Gerät bestätigt in %{delay}ms"
+
+#: lib/deal_scout_web/components/pwa_components.ex:48
+#, elixir-autogen, elixir-format
+msgid "Dismiss"
+msgstr "Schließen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:105
+#, elixir-autogen, elixir-format
+msgid "Dismiss tip"
+msgstr "Tipp schließen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:413
+#, elixir-autogen, elixir-format
+msgid "Download a machine-readable JSON copy of all your account settings, keyword alert rules, and deal match history."
+msgstr ""
+
+#: lib/deal_scout_web/components/pwa_components.ex:208
+#: lib/deal_scout_web/live/user_live/settings.ex:126
+#, elixir-autogen, elixir-format
+msgid "Doze Mode"
+msgstr "Doze-Modus"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:435
+#, elixir-autogen, elixir-format
+msgid "EU Only"
+msgstr "Nur EU"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:350
+#, elixir-autogen, elixir-format
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:71
+#: lib/deal_scout_web/live/alert_live/index.ex:507
+#, elixir-autogen, elixir-format
+msgid "Edit Alert Rule"
+msgstr "Suchauftrag bearbeiten"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:409
+#: lib/deal_scout_web/live/user_live/settings.ex:350
+#, elixir-autogen, elixir-format
+msgid "Email"
+msgstr "E-Mail"
+
+#: lib/deal_scout_web/components/pwa_components.ex:66
+#: lib/deal_scout_web/components/pwa_components.ex:171
+#, elixir-autogen, elixir-format
+msgid "Enable Alarms"
+msgstr "Alarme aktivieren"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:285
+#, elixir-autogen, elixir-format
+msgid "Enter product names (e.g. Google Pixel, Novablast 6) and separate alternatives with a comma or OR. When matching deals appear, you'll be alerted immediately on your phone."
+msgstr "Gib Produktnamen ein (z. B. Google Pixel, Novablast 6) und trenne Alternativen mit Komma oder OR. Wenn passende Deals erscheinen, wirst du sofort auf deinem Smartphone alarmiert."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:481
+#, elixir-autogen, elixir-format
+msgid "Enter your current password"
+msgstr "Gib dein aktuelles Passwort ein"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:799
+#, elixir-autogen, elixir-format
+msgid "Exclude dropshippers (Temu, Wish, Shein)"
+msgstr "Dropshipper ausschließen (Temu, Wish, Shein)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:389
+#, elixir-autogen, elixir-format
+msgid "Exclude:"
+msgstr "Ausschließen:"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:291
+#, elixir-autogen, elixir-format
+msgid "Expired (410)"
+msgstr "Abgelaufen (410)"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:427
+#, elixir-autogen, elixir-format
+msgid "Export Data"
+msgstr "Daten exportieren"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:410
+#, elixir-autogen, elixir-format
+msgid "Export My Data (GDPR Art. 15 & 20)"
+msgstr "Meine Daten exportieren (DSGVO Art. 15 & 20)"
+
+#: lib/deal_scout_web/components/pwa_components.ex:31
+#, elixir-autogen, elixir-format
+msgid "Get Deal Alarms on your Phone"
+msgstr "Deal-Alarme auf dein Smartphone"
+
+#: lib/deal_scout_web/components/pwa_components.ex:178
+#: lib/deal_scout_web/components/pwa_components.ex:258
+#, elixir-autogen, elixir-format
+msgid "Got it"
+msgstr "Verstanden"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:897
+#, elixir-autogen, elixir-format
+msgid "High volume rule: matched multiple recent deals."
+msgstr "Sehr aktive Regel: hat mehrere aktuelle Deals gematcht."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:820
+#, elixir-autogen, elixir-format
+msgid "Historical Backtesting Engine"
+msgstr "Historische Backtesting-Engine"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:418
+#, elixir-autogen, elixir-format
+msgid "Hourly Digest"
+msgstr "Stündliche Zusammenfassung"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:688
+#, elixir-autogen, elixir-format
+msgid "Immediate (No cooldown)"
+msgstr "Sofort (Kein Cooldown)"
+
+#: lib/deal_scout_web/components/layouts.ex:364
+#, elixir-autogen, elixir-format
+msgid "Impressum"
+msgstr "Impressum"
+
+#: lib/deal_scout_web/components/pwa_components.ex:145
+#, elixir-autogen, elixir-format
+msgid "In Safari's bottom toolbar, tap the square icon with an arrow pointing up."
+msgstr ""
+
+#: lib/deal_scout_web/live/match_live/index.ex:200
+#, elixir-autogen, elixir-format
+msgid "Inbox Zero"
+msgstr "Posteingang leer"
+
+#: lib/deal_scout_web/components/pwa_components.ex:127
+#, elixir-autogen, elixir-format
+msgid "Install DealScout on iOS"
+msgstr "DealScout auf iOS installieren"
+
+#: lib/deal_scout_web/components/pwa_components.ex:58
+#, elixir-autogen, elixir-format
+msgid "Install on iPhone"
+msgstr "Auf iPhone installieren"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:416
+#, elixir-autogen, elixir-format
+msgid "Instant"
+msgstr "Sofort"
+
+#: lib/deal_scout_web/components/pwa_components.ex:201
+#, elixir-autogen, elixir-format
+msgid "Instant Android Deal Alarms"
+msgstr "Sofortige Android Deal-Alarme"
+
+#: lib/deal_scout_web/components/pwa_components.ex:84
+#, elixir-autogen, elixir-format
+msgid "Instant Mobile Alarms:"
+msgstr "Sofortige Mobile-Alarme:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:282
+#, elixir-autogen, elixir-format
+msgid "Keyword Alert Rules"
+msgstr "Aktive Suchaufträge"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:381
+#, elixir-autogen, elixir-format
+msgid "Keywords:"
+msgstr "Suchbegriffe:"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:33
+#, elixir-autogen, elixir-format
+msgid "Language / Sprache"
+msgstr "Language / Sprache"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:245
+#, elixir-autogen, elixir-format
+msgid "Last active:"
+msgstr "Zuletzt aktiv:"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:231
+#, elixir-autogen, elixir-format
+msgid "Last confirmed:"
+msgstr "Zuletzt bestätigt:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:852
+#: lib/deal_scout_web/live/alert_live/index.ex:914
+#, elixir-autogen, elixir-format
+msgid "Last matched on %{date}:"
+msgstr "Zuletzt gematcht am %{date}:"
+
+#: lib/deal_scout_web/components/pwa_components.ex:50
+#, elixir-autogen, elixir-format
+msgid "Later"
+msgstr "Später"
+
+#: lib/deal_scout_web/components/pwa_components.ex:171
+#, elixir-autogen, elixir-format
+msgid "Launch DealScout from your phone's Home Screen and tap"
+msgstr "Starte DealScout von deinem Home-Bildschirm und tippe auf"
+
+#: lib/deal_scout_web/components/layouts.ex:87
+#, elixir-autogen, elixir-format
+msgid "Live Feed"
+msgstr "Live-Feed"
+
+#: lib/deal_scout_web/components/layouts.ex:208
+#, elixir-autogen, elixir-format
+msgid "Log in"
+msgstr "Anmelden"
+
+#: lib/deal_scout_web/components/layouts.ex:201
+#, elixir-autogen, elixir-format
+msgid "Log out"
+msgstr "Abmelden"
+
+#: lib/deal_scout_web/components/pwa_components.ex:222
+#: lib/deal_scout_web/live/user_live/settings.ex:133
+#, elixir-autogen, elixir-format
+msgid "Long-press the"
+msgstr "Halte das"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:17
+#, elixir-autogen, elixir-format
+msgid "Manage your account, credentials, and mobile deal push devices"
+msgstr "Verwalte dein Konto, Anmeldedaten und mobile Push-Geräte"
+
+#: lib/deal_scout_web/live/match_live/index.ex:188
+#, elixir-autogen, elixir-format
+msgid "Mark all read"
+msgstr "Alle als gelesen markieren"
+
+#: lib/deal_scout_web/live/match_live/index.ex:345
+#, elixir-autogen, elixir-format
+msgid "Mark as read"
+msgstr "Als gelesen markieren"
+
+#: lib/deal_scout_web/live/match_live/index.ex:347
+#, elixir-autogen, elixir-format
+msgid "Mark read"
+msgstr "Gelesen"
+
+#: lib/deal_scout_web/live/match_live/index.ex:18
+#: lib/deal_scout_web/live/match_live/index.ex:139
+#, elixir-autogen, elixir-format
+msgid "Matched Deals"
+msgstr "Gefundene Treffer"
+
+#: lib/deal_scout_web/components/layouts.ex:131
+#: lib/deal_scout_web/components/layouts.ex:162
+#, elixir-autogen, elixir-format
+msgid "Matches"
+msgstr "Treffer"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:567
+#, elixir-autogen, elixir-format
+msgid "Matches deal if it contains:"
+msgstr "Trifft zu, wenn der Deal enthält:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:594
+#, elixir-autogen, elixir-format
+msgid "Matches logic:"
+msgstr "Match-Logik:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:459
+#, elixir-autogen, elixir-format
+msgid "Max %{price} €"
+msgstr "Max. %{price} €"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:762
+#, elixir-autogen, elixir-format
+msgid "Max Price in € (optional)"
+msgstr "Maximalpreis in € (optional)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:736
+#, elixir-autogen, elixir-format
+msgid "Merchant Trust Filter"
+msgstr "Händler-Vertrauensfilter"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:787
+#, elixir-autogen, elixir-format
+msgid "Min. Community Temp (optional)"
+msgstr "Min. Community-Temperatur (optional)"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:84
+#, elixir-autogen, elixir-format
+msgid "Mobile Deal Alarms & PWA Devices"
+msgstr "Mobile Deal-Alarme & PWA-Geräte"
+
+#: lib/deal_scout_web/live/match_live/index.ex:167
+#, elixir-autogen, elixir-format
+msgid "Muted"
+msgstr "Stumm"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:25
+#: lib/deal_scout_web/live/alert_live/index.ex:80
+#, elixir-autogen, elixir-format
+msgid "My Alert Keywords"
+msgstr ""
+
+#: lib/deal_scout_web/live/alert_live/index.ex:656
+#, elixir-autogen, elixir-format
+msgid "Negative/Exclusion Keywords (optional, comma-separated)"
+msgstr "Negative Suchbegriffe / Ausschlüsse (optional, kommagetrennt)"
+
+#: lib/deal_scout_web/live/match_live/index.ex:260
+#, elixir-autogen, elixir-format
+msgid "New"
+msgstr "Neu"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:59
+#, elixir-autogen, elixir-format
+msgid "New Alert Rule"
+msgstr "Neuer Suchauftrag"
+
+#: lib/deal_scout_web/live/match_live/index.ex:104
+#, elixir-autogen, elixir-format
+msgid "New match: %{title}"
+msgstr "Neuer Treffer: %{title}"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:379
+#, elixir-autogen, elixir-format
+msgid "New password"
+msgstr "Neues Passwort"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:306
+#, elixir-autogen, elixir-format
+msgid "No Alert Rules Configured Yet"
+msgstr "Noch keine Suchaufträge konfiguriert"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:295
+#, elixir-autogen, elixir-format
+msgid "No Devices in DB"
+msgstr "Keine Geräte in DB"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:471
+#, elixir-autogen, elixir-format
+msgid "No Dropshippers"
+msgstr "Keine Dropshipper"
+
+#: lib/deal_scout_web/live/match_live/index.ex:202
+#, elixir-autogen, elixir-format
+msgid "No matching deals found for your current filter. As soon as a deal site publishes an item matching your keywords, it will pop up right here!"
+msgstr "Keine passenden Deals für deinen aktuellen Filter gefunden. Sobald ein neuer Deal deine Suchbegriffe matcht, taucht er direkt hier auf!"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:157
+#, elixir-autogen, elixir-format
+msgid "No mobile devices registered yet."
+msgstr "Noch keine mobilen Geräte registriert."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:941
+#, elixir-autogen, elixir-format
+msgid "No past deals matched this rule in the database."
+msgstr "Keine vergangenen Deals in der Datenbank passten zu dieser Regel."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:274
+#, elixir-autogen, elixir-format
+msgid "No push deliveries attempted yet."
+msgstr "Noch keine Push-Zustellungen versucht."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:666
+#, elixir-autogen, elixir-format
+msgid "Notification Delivery & Channels"
+msgstr "Zustellung & Benachrichtigungskanäle"
+
+#: lib/deal_scout_web/components/pwa_components.ex:220
+#, elixir-autogen, elixir-format
+msgid "Open App Info"
+msgstr "App-Info öffnen"
+
+#: lib/deal_scout_web/live/match_live/index.ex:357
+#, elixir-autogen, elixir-format
+msgid "Open Deal"
+msgstr "Deal öffnen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:167
+#, elixir-autogen, elixir-format
+msgid "Open DealScout from Home Screen"
+msgstr "DealScout vom Home-Bildschirm öffnen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:248
+#: lib/deal_scout_web/live/user_live/settings.ex:143
+#, elixir-autogen, elixir-format
+msgid "Optimized"
+msgstr "Optimiert"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:724
+#, elixir-autogen, elixir-format
+msgid "Origin Region"
+msgstr "Herkunftsregion"
+
+#: lib/deal_scout_web/live/match_live/index.ex:253
+#, elixir-autogen, elixir-format
+msgid "Origin:"
+msgstr "Herkunft:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:637
+#, elixir-autogen, elixir-format
+msgid "Parentheses to combine groups (e.g."
+msgstr "Klammern zur Gruppenkombination (z. B."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:347
+#, elixir-autogen, elixir-format
+msgid "Pause"
+msgstr "Pausieren"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:343
+#, elixir-autogen, elixir-format
+msgid "Pause Alert"
+msgstr "Alarm pausieren"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:334
+#, elixir-autogen, elixir-format
+msgid "Paused"
+msgstr "Pausiert"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:492
+#, elixir-autogen, elixir-format
+msgid "Permanently Delete My Account"
+msgstr "Mein Konto endgültig löschen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:446
+#, elixir-autogen, elixir-format
+msgid "Permanently delete your account and all associated data in accordance with Art. 17 DSGVO."
+msgstr "Lösche dein Konto und alle zugehörigen Daten unwiderruflich gemäß Art. 17 DSGVO."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:939
+#, elixir-autogen, elixir-format
+msgid "Please enter keywords or an alert rule name first."
+msgstr "Bitte gib zuerst Suchbegriffe oder einen Namen ein."
+
+#: lib/deal_scout_web/components/layouts.ex:356
+#, elixir-autogen, elixir-format
+msgid "Private deal monitor for German & EU portals"
+msgstr "Privater Deal-Monitor für deutsche & EU-Portale"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:402
+#, elixir-autogen, elixir-format
+msgid "Push"
+msgstr "Push"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:267
+#, elixir-autogen, elixir-format
+msgid "Push Delivery Diagnostics & Receipt Latency"
+msgstr "Push-Zustelldiagnose & Empfangslatenz"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:645
+#, elixir-autogen, elixir-format
+msgid "Quotes only for strict adjacent word order (e.g."
+msgstr "Anführungszeichen nur für exakte Wortreihenfolge (z. B."
+
+#: lib/deal_scout_web/components/pwa_components.ex:37
+#, elixir-autogen, elixir-format
+msgid "Receive instant mobile push notifications whenever a hot deal matches your alert rules—no app store download required."
+msgstr "Erhalte sofortige Push-Benachrichtigungen, wenn ein heißer Deal deine Regeln matcht – ganz ohne App-Store-Download."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:269
+#, elixir-autogen, elixir-format
+msgid "Recent attempts"
+msgstr "Kürzliche Versuche"
+
+#: lib/deal_scout_web/components/layouts.ex:257
+#, elixir-autogen, elixir-format
+msgid "Reconnecting..."
+msgstr ""
+
+#: lib/deal_scout_web/components/layouts.ex:209
+#, elixir-autogen, elixir-format
+msgid "Register"
+msgstr "Registrieren"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:109
+#, elixir-autogen, elixir-format
+msgid "Register This Device"
+msgstr "Dieses Gerät registrieren"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:87
+#, elixir-autogen, elixir-format
+msgid "Registered browsers and devices receiving instant deal notifications for your keyword rules."
+msgstr "Registrierte Browser und Geräte, die sofortige Deal-Benachrichtigungen für deine Regeln empfangen."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:257
+#, elixir-autogen, elixir-format
+msgid "Remove"
+msgstr "Entfernen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:253
+#, elixir-autogen, elixir-format
+msgid "Remove this device from receiving push notifications?"
+msgstr "Möchtest du dieses Gerät für Push-Benachrichtigungen entfernen?"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:204
+#, elixir-autogen, elixir-format
+msgid "Rename device nickname"
+msgstr "Gerätenamen bearbeiten"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:347
+#, elixir-autogen, elixir-format
+msgid "Resume"
+msgstr "Fortsetzen"
+
+#: lib/deal_scout_web/live/match_live/index.ex:237
+#, elixir-autogen, elixir-format
+msgid "Rule: %{name}"
+msgstr "Regel: %{name}"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:185
+#, elixir-autogen, elixir-format
+msgid "Save"
+msgstr "Speichern"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:392
+#, elixir-autogen, elixir-format
+msgid "Save Password"
+msgstr "Passwort speichern"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:980
+#, elixir-autogen, elixir-format
+msgid "Save Rule"
+msgstr "Regel speichern"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:391
+#, elixir-autogen, elixir-format
+msgid "Saving..."
+msgstr "Speichere..."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:823
+#, elixir-autogen, elixir-format
+msgid "Scan past indexed deals using fast FTS5 candidate jump to verify matches before saving."
+msgstr "Durchsuche vergangene Deals per schnellem FTS5-Index, um Treffer vor dem Speichern zu prüfen."
+
+#: lib/deal_scout_web/components/pwa_components.ex:159
+#, elixir-autogen, elixir-format
+msgid "Scroll down in the share sheet and tap"
+msgstr "Scrolle im Menü nach unten und tippe auf"
+
+#: lib/deal_scout_web/components/pwa_components.ex:237
+#, elixir-autogen, elixir-format
+msgid "Scroll down to"
+msgstr "Scrolle nach unten zu"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:550
+#, elixir-autogen, elixir-format
+msgid "Search Keywords"
+msgstr "Suchbegriffe"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:608
+#, elixir-autogen, elixir-format
+msgid "Search Operators & Grouping Syntax"
+msgstr "Such-Operatoren & Gruppierungs-Syntax"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:142
+#, elixir-autogen, elixir-format
+msgid "Select"
+msgstr "Wähle"
+
+#: lib/deal_scout_web/components/pwa_components.ex:155
+#, elixir-autogen, elixir-format
+msgid "Select \"Add to Home Screen\""
+msgstr "Wähle „Zum Home-Bildschirm“"
+
+#: lib/deal_scout_web/components/pwa_components.ex:246
+#, elixir-autogen, elixir-format
+msgid "Select \"Unrestricted\""
+msgstr "Wähle „Uneingeschränkt“"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:101
+#, elixir-autogen, elixir-format
+msgid "Send Test Alarm"
+msgstr "Test-Alarm senden"
+
+#: lib/deal_scout_web/components/layouts.ex:187
+#, elixir-autogen, elixir-format
+msgid "Send feedback"
+msgstr "Feedback senden"
+
+#: lib/deal_scout_web/components/layouts.ex:179
+#, elixir-autogen, elixir-format
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:98
+#, elixir-autogen, elixir-format
+msgid "Setup Guide"
+msgstr "Anleitung"
+
+#: lib/deal_scout_web/live/match_live/index.ex:180
+#, elixir-autogen, elixir-format
+msgid "Show All"
+msgstr "Alle anzeigen"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:716
+#, elixir-autogen, elixir-format
+msgid "Smart Deal & Region Filters"
+msgstr "Smarte Deal- & Regionsfilter"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:773
+#, elixir-autogen, elixir-format
+msgid "Source Portal"
+msgstr "Quellportal"
+
+#: lib/deal_scout_web/components/layouts.ex:380
+#, elixir-autogen, elixir-format
+msgid "Support this project"
+msgstr "Projekt unterstützen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:248
+#, elixir-autogen, elixir-format
+msgid "Switch from"
+msgstr "Wechsle von"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:138
+#, elixir-autogen, elixir-format
+msgid "Tap"
+msgstr "Tippe auf"
+
+#: lib/deal_scout_web/components/pwa_components.ex:233
+#, elixir-autogen, elixir-format
+msgid "Tap \"App Battery Usage\""
+msgstr "Tippe auf „App-Akkunutzung“"
+
+#: lib/deal_scout_web/components/pwa_components.ex:143
+#, elixir-autogen, elixir-format
+msgid "Tap the Share button"
+msgstr "Tippe auf den Teilen-Button"
+
+#: lib/deal_scout_web/live/match_live/index.ex:233
+#, elixir-autogen, elixir-format
+msgid "Target Deal"
+msgstr "Ziel-Deal"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:838
+#, elixir-autogen, elixir-format
+msgid "Test Rule on Past Deals"
+msgstr "Regel an vergangenen Deals testen"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:834
+#, elixir-autogen, elixir-format
+msgid "Testing..."
+msgstr "Prüfe..."
+
+#: lib/deal_scout_web/live/user_live/settings.ex:457
+#, elixir-autogen, elixir-format
+msgid "This action is irreversible."
+msgstr "Diese Aktion kann nicht rückgängig gemacht werden."
+
+#: lib/deal_scout_web/components/pwa_components.ex:86
+#, elixir-autogen, elixir-format
+msgid "To receive instant deal alerts while your phone screen is locked, ensure browser battery usage is set to"
+msgstr "Um Deal-Alarme sofort bei gesperrtem Bildschirm zu erhalten, setze die Akkunutzung des Browsers auf"
+
+#: lib/deal_scout_web/live/match_live/index.ex:160
+#, elixir-autogen, elixir-format
+msgid "Toggle audio notification"
+msgstr "Audio-Benachrichtigung umschalten"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:946
+#, elixir-autogen, elixir-format
+msgid "Type terms like"
+msgstr "Gib Begriffe ein wie"
+
+#: lib/deal_scout_web/live/match_live/index.ex:180
+#, elixir-autogen, elixir-format
+msgid "Unread Only"
+msgstr "Nur ungelesene"
+
+#: lib/deal_scout_web/components/pwa_components.ex:88
+#: lib/deal_scout_web/components/pwa_components.ex:212
+#: lib/deal_scout_web/components/pwa_components.ex:249
+#: lib/deal_scout_web/live/user_live/settings.ex:142
+#, elixir-autogen, elixir-format
+msgid "Unrestricted"
+msgstr "Uneingeschränkt"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:447
+#, elixir-autogen, elixir-format
+msgid "Verified Stores"
+msgstr "Verifizierte Händler"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:885
+#, elixir-autogen, elixir-format
+msgid "View deal"
+msgstr "Deal ansehen"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:198
+#, elixir-autogen, elixir-format
+msgid "Web Browser"
+msgstr "Webbrowser"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:617
+#, elixir-autogen, elixir-format
+msgid "Words together match in any order — no quotes needed (e.g."
+msgstr "Wörter zusammen matchen in beliebiger Reihenfolge – keine Anführungszeichen nötig (z. B."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:950
+#, elixir-autogen, elixir-format
+msgid "above to scan past deals."
+msgstr "oben ein, um vergangene Deals zu durchsuchen."
+
+#: lib/deal_scout_web/live/alert_live/index.ex:862
+#: lib/deal_scout_web/live/alert_live/index.ex:924
+#, elixir-autogen, elixir-format
+msgid "at"
+msgstr "bei"
+
+#: lib/deal_scout_web/components/core_components.ex:81
+#, elixir-autogen, elixir-format
+msgid "close"
+msgstr ""
+
+#: lib/deal_scout_web/live/user_live/settings.ex:219
+#, elixir-autogen, elixir-format
+msgid "confirmed (24h)"
+msgstr "bestätigt (24h)"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:127
+#, elixir-autogen, elixir-format
+msgid "delays background notifications from web browsers when your screen is locked. To guarantee alarms ring the exact second a deal is found:"
+msgstr ""
+
+#: lib/deal_scout_web/components/pwa_components.ex:209
+#, elixir-autogen, elixir-format
+msgid "delays browser push alerts when your screen is locked. Setting battery usage to"
+msgstr "Browser-Push-Alarme bei gesperrtem Bildschirm. Die Einstellung auf"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:323
+#, elixir-autogen, elixir-format
+msgid "device receipt pending"
+msgstr "Gerätebestätigung ausstehend"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:788
+#, elixir-autogen, elixir-format
+msgid "e.g. 100 (ignores unrated deals)"
+msgstr "z. B. 100 (ignoriert unbewertete Deals)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:763
+#, elixir-autogen, elixir-format
+msgid "e.g. 799.00"
+msgstr "z. B. 799.00"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:551
+#, elixir-autogen, elixir-format
+msgid "e.g. Google Pixel, Novablast 6 or evo sl, RTX 4080"
+msgstr "z. B. Google Pixel, Novablast 6 or evo sl, RTX 4080"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:180
+#, elixir-autogen, elixir-format
+msgid "e.g. Personal iPhone"
+msgstr "z. B. Mein iPhone"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:538
+#, elixir-autogen, elixir-format
+msgid "e.g. RTX 4080 GPU, OLED Monitor, Espresso Machine"
+msgstr "z. B. RTX 4080 GPU, OLED Monitor, Siebträger"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:657
+#, elixir-autogen, elixir-format
+msgid "e.g. defekt, kühler, zubehör, suche"
+msgstr "z. B. defekt, kühler, zubehör, suche"
+
+#: lib/deal_scout_web/components/pwa_components.ex:213
+#, elixir-autogen, elixir-format
+msgid "ensures you never miss a lightning deal:"
+msgstr "stellt sicher, dass du keinen Blitz-Deal verpasst:"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:629
+#, elixir-autogen, elixir-format
+msgid "for alternatives (e.g."
+msgstr "für Alternativen (z. B."
+
+#: lib/deal_scout_web/components/pwa_components.ex:33
+#, elixir-autogen, elixir-format
+msgid "iOS PWA"
+msgstr "iOS PWA"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:143
+#, elixir-autogen, elixir-format
+msgid "instead of"
+msgstr "statt"
+
+#: lib/deal_scout_web/live/match_live/index.ex:375
+#, elixir-autogen, elixir-format
+msgid "just now"
+msgstr "gerade eben"
+
+#: lib/deal_scout_web/components/pwa_components.ex:238
+#: lib/deal_scout_web/live/alert_live/index.ex:627
+#: lib/deal_scout_web/live/alert_live/index.ex:946
+#: lib/deal_scout_web/live/user_live/settings.ex:139
+#, elixir-autogen, elixir-format
+msgid "or"
+msgstr "oder"
+
+#: lib/deal_scout_web/live/user_live/settings.ex:225
+#, elixir-autogen, elixir-format
+msgid "pending confirms"
+msgstr "ausstehende Bestätigungen"
+
+#: lib/deal_scout_web/components/pwa_components.ex:249
+#, elixir-autogen, elixir-format
+msgid "to"
+msgstr "zu"
+
+#: lib/deal_scout_web/live/match_live/index.ex:300
+#, elixir-autogen, elixir-format
+msgid "via %{merchant}"
+msgstr "über %{merchant}"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:750
+#, elixir-autogen, elixir-format
+msgid "⌨️ Exclude foreign keyboard layouts (AZERTY, QWERTY-ES)"
+msgstr "⌨️ Ausländische Tastaturlayouts ausschließen (AZERTY, QWERTY-ES)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:677
+#, elixir-autogen, elixir-format
+msgid "⏱️ Hourly Digest (Batch matches once/hr)"
+msgstr "⏱️ Stündlich (Treffer 1x pro Stunde bündeln)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:676
+#, elixir-autogen, elixir-format
+msgid "⚡ Instant (Alert immediately on match)"
+msgstr "⚡ Sofort (Bei Match sofort alarmieren)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:708
+#, elixir-autogen, elixir-format
+msgid "✉️ Email Notification"
+msgstr "✉️ E-Mail-Benachrichtigung"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:727
+#, elixir-autogen, elixir-format
+msgid "🇩🇪 Germany Only (Exclude foreign imports)"
+msgstr "🇩🇪 Nur Deutschland (Keine Auslandsimporte)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:728
+#, elixir-autogen, elixir-format
+msgid "🇪🇺 EU Friendly Only (DE, FR, ES, IT, etc.)"
+msgstr "🇪🇺 Nur EU-freundlich (DE, FR, ES, IT usw.)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:678
+#, elixir-autogen, elixir-format
+msgid "📅 Daily Digest (Batch matches once/day)"
+msgstr "📅 Täglich (Treffer 1x täglich bündeln)"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:702
+#, elixir-autogen, elixir-format
+msgid "📱 Mobile Push Notification"
+msgstr "📱 Mobile Push-Benachrichtigung"
+
+#: lib/deal_scout/notifications/dispatcher.ex:358
+#, elixir-autogen, elixir-format
+msgid "🔥 %{count} new deals for '%{rule_name}'"
+msgstr "🔥 %{count} neue Deals für '%{rule_name}'"
+
+#: lib/deal_scout/notifications/dispatcher.ex:352
+#, elixir-autogen, elixir-format
+msgid "🔥 %{count} new deals for '%{rule_name}' (from %{price} €)"
+msgstr "🔥 %{count} neue Deals für '%{rule_name}' (ab %{price} €)"
+
+#: lib/deal_scout/notifications/dispatcher.ex:309
+#, elixir-autogen, elixir-format
+msgid "🔥 Deal Alert: %{rule_name}"
+msgstr "🔥 Neuer Deal: %{rule_name}"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:776
+#, elixir-autogen, elixir-format
+msgid "🛒 eBay Sofort-Kauf Only"
+msgstr "🛒 Nur eBay Sofort-Kauf"
+
+#: lib/deal_scout_web/live/alert_live/index.ex:739
+#, elixir-autogen, elixir-format
+msgid "🛡️ Verified Retailers Only (Amazon, MediaMarkt, etc.)"
+msgstr "🛡️ Nur verifizierte Händler (Amazon, MediaMarkt usw.)"
+
+#: lib/deal_scout/notifications/dispatcher.ex:301
+#, elixir-autogen, elixir-format
+msgid "View on Idealo"
+msgstr "Auf Idealo ansehen"
+
+#: lib/deal_scout/notifications/dispatcher.ex:366
+#, elixir-autogen, elixir-format
+msgid "and %{count} more"
+msgstr "und %{count} weitere"
+
+#: lib/deal_scout/notifications/dispatcher.ex:296
+#, elixir-autogen, elixir-format
+msgid "at %{merchant}"
+msgstr "bei %{merchant}"

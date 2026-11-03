@@ -9,7 +9,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
     test "renders settings page", %{conn: conn} do
       {:ok, _lv, html} =
         conn
-        |> log_in_user(user_fixture())
+        |> log_in_user(user_fixture(%{locale: "en"}))
         |> live(~p"/users/settings")
 
       assert html =~ "Change Email"
@@ -39,7 +39,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
 
   describe "update email form" do
     setup %{conn: conn} do
-      user = user_fixture()
+      user = user_fixture(%{locale: "en"})
       %{conn: log_in_user(conn, user), user: user}
     end
 
@@ -91,7 +91,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
 
   describe "update password form" do
     setup %{conn: conn} do
-      user = user_fixture()
+      user = user_fixture(%{locale: "en"})
       %{conn: log_in_user(conn, user), user: user}
     end
 
@@ -212,7 +212,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
 
   describe "push devices management" do
     setup %{conn: conn} do
-      user = user_fixture()
+      user = user_fixture(%{locale: "en"})
       %{conn: log_in_user(conn, user), user: user}
     end
 
@@ -252,7 +252,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
     end
 
     test "allows renaming device nickname and shows device confirmation health", %{conn: conn} do
-      user = user_fixture()
+      user = user_fixture(%{locale: "en"})
 
       sub =
         DealScout.Repo.insert!(%DealScout.Notifications.PushSubscription{
@@ -298,7 +298,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
 
   describe "data export: gdpr data portability" do
     test "renders export my data button and container", %{conn: conn} do
-      user = user_fixture()
+      user = user_fixture(%{locale: "en"})
 
       {:ok, lv, _html} =
         conn
@@ -313,7 +313,7 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
 
   describe "danger zone: delete account" do
     test "renders danger zone delete form and elements", %{conn: conn} do
-      user = user_fixture() |> set_password()
+      user = user_fixture(%{locale: "en"}) |> set_password()
 
       {:ok, lv, _html} =
         conn
@@ -325,6 +325,37 @@ defmodule DealScoutWeb.UserLive.SettingsTest do
       assert has_element?(lv, "#delete_account_form")
       assert has_element?(lv, "#delete_account_password")
       assert has_element?(lv, "#delete_account_btn")
+    end
+  end
+
+  describe "language / sprache settings" do
+    test "renders language settings card with options", %{conn: conn} do
+      user = user_fixture(%{locale: "de"})
+
+      {:ok, lv, _html} =
+        conn
+        |> log_in_user(user)
+        |> live(~p"/users/settings")
+
+      assert has_element?(lv, "#language-settings-card")
+      assert has_element?(lv, "#locale-settings-form input[value='de'][checked]")
+      assert has_element?(lv, "#locale-settings-form input[value='en']")
+    end
+
+    test "updates locale on form change and redirects to /locale/:locale", %{conn: conn} do
+      user = user_fixture(%{locale: "de"})
+
+      {:ok, lv, _html} =
+        conn
+        |> log_in_user(user)
+        |> live(~p"/users/settings")
+
+      lv
+      |> form("#locale-settings-form")
+      |> render_change(%{"locale" => "en"})
+
+      assert_redirect(lv, ~p"/locale/en?redirect_to=%2Fusers%2Fsettings")
+      assert Accounts.get_user!(user.id).locale == "en"
     end
   end
 end

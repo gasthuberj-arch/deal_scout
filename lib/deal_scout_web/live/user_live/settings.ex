@@ -12,12 +12,63 @@ defmodule DealScoutWeb.UserLive.Settings do
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="text-center">
         <.header>
-          Account Settings
-          <:subtitle>Manage your account, credentials, and mobile deal push devices</:subtitle>
+          {gettext("Account Settings")}
+          <:subtitle>
+            {gettext("Manage your account, credentials, and mobile deal push devices")}
+          </:subtitle>
         </.header>
       </div>
 
-      <!-- Mobile Deal Push Devices Section -->
+      <%!-- Language / Sprache Section --%>
+      <div
+        id="language-settings-card"
+        class="bg-base-200/50 p-6 rounded-2xl border border-base-300 space-y-4"
+      >
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <.icon name="hero-language" class="size-6" />
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-base-content">{gettext("Language / Sprache")}</h2>
+              <p class="text-xs text-base-content/70">
+                {gettext("Choose your preferred interface language.")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <.form
+          for={to_form(%{"locale" => @current_locale})}
+          id="locale-settings-form"
+          phx-change="save_locale"
+          class="flex flex-wrap gap-4 pt-2"
+        >
+          <label class="label cursor-pointer flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-300 hover:border-primary transition-colors cursor-pointer">
+            <input
+              type="radio"
+              name="locale"
+              value="de"
+              checked={@current_locale == "de"}
+              class="radio radio-primary radio-sm"
+            />
+            <span class="label-text font-semibold text-sm">🇩🇪 Deutsch</span>
+          </label>
+
+          <label class="label cursor-pointer flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-300 hover:border-primary transition-colors cursor-pointer">
+            <input
+              type="radio"
+              name="locale"
+              value="en"
+              checked={@current_locale == "en"}
+              class="radio radio-primary radio-sm"
+            />
+            <span class="label-text font-semibold text-sm">🇬🇧 English</span>
+          </label>
+        </.form>
+      </div>
+
+      <%!-- Mobile Deal Push Devices Section --%>
       <div
         id="push-settings-container"
         phx-hook="PushManager"
@@ -29,9 +80,13 @@ defmodule DealScoutWeb.UserLive.Settings do
               <.icon name="hero-device-phone-mobile" class="size-6" />
             </div>
             <div>
-              <h2 class="text-lg font-bold text-base-content">Mobile Deal Alarms & PWA Devices</h2>
+              <h2 class="text-lg font-bold text-base-content">
+                {gettext("Mobile Deal Alarms & PWA Devices")}
+              </h2>
               <p class="text-xs text-base-content/70">
-                Registered browsers and devices receiving instant deal notifications for your keyword rules.
+                {gettext(
+                  "Registered browsers and devices receiving instant deal notifications for your keyword rules."
+                )}
               </p>
             </div>
           </div>
@@ -43,7 +98,7 @@ defmodule DealScoutWeb.UserLive.Settings do
                 class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-sm"
               >
                 <.icon name="hero-paper-airplane" class="size-4" />
-                <span>Send Test Alarm</span>
+                <span>{gettext("Send Test Alarm")}</span>
               </button>
             <% end %>
             <button
@@ -51,12 +106,12 @@ defmodule DealScoutWeb.UserLive.Settings do
               class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
             >
               <.icon name="hero-plus" class="size-4" />
-              <span>Register This Device</span>
+              <span>{gettext("Register This Device")}</span>
             </button>
           </div>
         </div>
 
-        <!-- Android Battery Optimization Guide Card -->
+        <%!-- Android Battery Optimization Guide Card --%>
         <div
           id="android-battery-guide-card"
           class="bg-amber-500/10 border border-amber-500/25 rounded-xl p-4 text-xs space-y-2"
@@ -64,22 +119,29 @@ defmodule DealScoutWeb.UserLive.Settings do
           <div class="flex items-center justify-between">
             <span class="font-bold text-base-content flex items-center gap-1.5">
               <.icon name="hero-bolt" class="size-4 text-amber-600 dark:text-amber-400" />
-              <span>Android Background Optimization Guide (Instant Locked-Screen Alarms)</span>
+              <span>{gettext("Android Background Optimization Guide (Instant Locked-Screen Alarms)")}</span>
             </span>
           </div>
           <p class="text-base-content/75 leading-relaxed">
-            By default, Android's <em>Doze Mode</em>
-            delays background notifications from web browsers when your screen is locked.
-            To guarantee alarms ring the exact second a deal is found:
+            {gettext("By default, Android's")} <em>{gettext("Doze Mode")}</em>
+            {gettext(
+              "delays background notifications from web browsers when your screen is locked. To guarantee alarms ring the exact second a deal is found:"
+            )}
           </p>
           <ol class="list-decimal list-inside space-y-1 text-base-content/80 font-medium pl-1">
             <li>
-              Long-press the <strong>DealScout</strong>
-              (or Chrome) icon on your home screen &rarr; tap <strong>App Info</strong>
-              (ⓘ).
+              {gettext("Long-press the")} <strong>DealScout</strong>
+              {gettext("(or Chrome) icon on your home screen &rarr; tap")}
+              <strong>{gettext("App Info")}</strong> (ⓘ).
             </li>
-            <li>Tap <strong>App battery usage</strong> (or <strong>Battery</strong>).</li>
-            <li>Select <strong>Unrestricted</strong> (instead of <em>Optimized</em>).</li>
+            <li>
+              {gettext("Tap")} <strong>{gettext("App battery usage")}</strong>
+              ({gettext("or")} <strong>{gettext("Battery")}</strong>).
+            </li>
+            <li>
+              {gettext("Select")} <strong>{gettext("Unrestricted")}</strong>
+              ({gettext("instead of")} <em>{gettext("Optimized")}</em>).
+            </li>
           </ol>
         </div>
 
@@ -92,9 +154,11 @@ defmodule DealScoutWeb.UserLive.Settings do
             id="push-subscriptions-empty"
             class="hidden only:block text-center py-8 bg-base-100 p-6"
           >
-            <p class="text-sm text-base-content/70">No mobile devices registered yet.</p>
+            <p class="text-sm text-base-content/70">{gettext("No mobile devices registered yet.")}</p>
             <p class="text-xs text-base-content/50 mt-1">
-              Click "Register This Device" above or open DealScout on your phone and tap "Enable Alarms" to get push notifications.
+              {gettext(
+                "Click \"Register This Device\" above or open DealScout on your phone and tap \"Enable Alarms\" to get push notifications."
+              )}
             </p>
           </div>
           <div
@@ -113,31 +177,31 @@ defmodule DealScoutWeb.UserLive.Settings do
                   <.input
                     field={@edit_device_form[:device_name]}
                     type="text"
-                    placeholder="e.g. Personal iPhone"
+                    placeholder={gettext("e.g. Personal iPhone")}
                     required
                     class="input input-sm input-bordered rounded-lg text-sm w-48 sm:w-64"
                   />
                   <button type="submit" class="btn btn-primary btn-sm rounded-lg text-xs">
-                    Save
+                    {gettext("Save")}
                   </button>
                   <button
                     type="button"
                     phx-click="cancel_edit_device"
                     class="btn btn-ghost btn-sm rounded-lg text-xs"
                   >
-                    Cancel
+                    {gettext("Cancel")}
                   </button>
                 </.form>
               <% else %>
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-bold text-sm text-base-content device-name">
-                    {sub.device_name || "Web Browser"}
+                    {sub.device_name || gettext("Web Browser")}
                   </span>
                   <button
                     type="button"
                     phx-click="edit_device"
                     phx-value-id={sub.id}
-                    title="Rename device nickname"
+                    title={gettext("Rename device nickname")}
                     class="btn btn-ghost btn-xs btn-circle text-base-content/50 hover:text-base-content"
                   >
                     <.icon name="hero-pencil" class="size-3" />
@@ -145,26 +209,29 @@ defmodule DealScoutWeb.UserLive.Settings do
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono bg-base-300/50 text-base-content/70">
                     {sub.browser_info}
                   </span>
-                  <span class="badge badge-xs badge-success">Active</span>
+                  <span class="badge badge-xs badge-success">{gettext("Active")}</span>
                 </div>
               <% end %>
 
               <div class="flex items-center gap-2 flex-wrap text-xs">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <.icon name="hero-check-circle" class="size-3" />
-                  <span>{sub.confirmed_count || 0} confirmed (24h)</span>
+                  <span>{sub.confirmed_count || 0} {gettext("confirmed (24h)")}</span>
                 </span>
 
                 <%= if sub.pending_count && sub.pending_count > 0 do %>
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                     <.icon name="hero-clock" class="size-3" />
-                    <span>{sub.pending_count} pending confirms</span>
+                    <span>{sub.pending_count} {gettext("pending confirms")}</span>
                   </span>
                 <% end %>
 
                 <%= if sub.last_receipt_at do %>
                   <span class="text-[11px] text-base-content/50">
-                    · Last confirmed: {Calendar.strftime(sub.last_receipt_at, "%d.%m %H:%M")}
+                    · {gettext("Last confirmed:")} {Calendar.strftime(
+                      sub.last_receipt_at,
+                      "%d.%m %H:%M"
+                    )}
                   </span>
                 <% end %>
               </div>
@@ -173,9 +240,9 @@ defmodule DealScoutWeb.UserLive.Settings do
                 {sub.endpoint}
               </p>
               <p class="text-[11px] text-base-content/50">
-                Added: {Calendar.strftime(sub.inserted_at, "%d.%m.%Y %H:%M")}
+                {gettext("Added:")} {Calendar.strftime(sub.inserted_at, "%d.%m.%Y %H:%M")}
                 <%= if sub.last_used_at do %>
-                  · Last active: {Calendar.strftime(sub.last_used_at, "%d.%m.%Y %H:%M")}
+                  · {gettext("Last active:")} {Calendar.strftime(sub.last_used_at, "%d.%m.%Y %H:%M")}
                 <% end %>
               </p>
             </div>
@@ -183,11 +250,11 @@ defmodule DealScoutWeb.UserLive.Settings do
             <button
               phx-click="remove_subscription"
               phx-value-id={sub.id}
-              data-confirm="Remove this device from receiving push notifications?"
+              data-confirm={gettext("Remove this device from receiving push notifications?")}
               class="btn btn-ghost btn-xs text-error self-end sm:self-center"
             >
               <.icon name="hero-trash" class="size-4" />
-              <span>Remove</span>
+              <span>{gettext("Remove")}</span>
             </button>
           </div>
         </div>
@@ -197,13 +264,15 @@ defmodule DealScoutWeb.UserLive.Settings do
           <div class="flex items-center justify-between mb-2">
             <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
               <.icon name="hero-chart-bar" class="size-3.5" />
-              <span>Push Delivery Diagnostics & Receipt Latency</span>
+              <span>{gettext("Push Delivery Diagnostics & Receipt Latency")}</span>
             </h4>
-            <span class="text-[11px] text-base-content/50">Recent attempts</span>
+            <span class="text-[11px] text-base-content/50">{gettext("Recent attempts")}</span>
           </div>
 
           <%= if @delivery_logs == [] do %>
-            <p class="text-xs text-base-content/50 italic py-2">No push deliveries attempted yet.</p>
+            <p class="text-xs text-base-content/50 italic py-2">
+              {gettext("No push deliveries attempted yet.")}
+            </p>
           <% else %>
             <div id="push-delivery-logs" class="space-y-2">
               <div
@@ -215,19 +284,21 @@ defmodule DealScoutWeb.UserLive.Settings do
                   <%= case log.status do %>
                     <% "delivered" -> %>
                       <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                        <.icon name="hero-check-circle" class="size-3" /> Delivered
+                        <.icon name="hero-check-circle" class="size-3" /> {gettext("Delivered")}
                       </span>
                     <% "expired" -> %>
                       <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                        <.icon name="hero-x-circle" class="size-3" /> Expired (410)
+                        <.icon name="hero-x-circle" class="size-3" /> {gettext("Expired (410)")}
                       </span>
                     <% "no_subscriptions" -> %>
                       <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        <.icon name="hero-exclamation-triangle" class="size-3" /> No Devices in DB
+                        <.icon name="hero-exclamation-triangle" class="size-3" /> {gettext(
+                          "No Devices in DB"
+                        )}
                       </span>
                     <% "skipped_cooldown" -> %>
                       <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                        <.icon name="hero-clock" class="size-3" /> Cooldown
+                        <.icon name="hero-clock" class="size-3" /> {gettext("Cooldown")}
                       </span>
                     <% _ -> %>
                       <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
@@ -244,12 +315,12 @@ defmodule DealScoutWeb.UserLive.Settings do
 
                   <%= if log.client_delay_ms do %>
                     <span class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                      Device confirmed in {log.client_delay_ms}ms
+                      {gettext("Device confirmed in %{delay}ms", delay: log.client_delay_ms)}
                     </span>
                   <% else %>
                     <%= if log.status == "delivered" do %>
                       <span class="text-base-content/40 text-[10px]">
-                        (device receipt pending)
+                        ({gettext("device receipt pending")})
                       </span>
                     <% end %>
                   <% end %>
@@ -276,12 +347,12 @@ defmodule DealScoutWeb.UserLive.Settings do
         <.input
           field={@email_form[:email]}
           type="email"
-          label="Email"
+          label={gettext("Email")}
           autocomplete="username"
           spellcheck="false"
           required
         />
-        <.button variant="primary" phx-disable-with="Changing...">Change Email</.button>
+        <.button variant="primary" phx-disable-with={gettext("Changing...")}>{gettext("Change Email")}</.button>
       </.form>
 
       <div class="divider" />
@@ -305,7 +376,7 @@ defmodule DealScoutWeb.UserLive.Settings do
         <.input
           field={@password_form[:password]}
           type="password"
-          label="New password"
+          label={gettext("New password")}
           autocomplete="new-password"
           spellcheck="false"
           required
@@ -313,12 +384,12 @@ defmodule DealScoutWeb.UserLive.Settings do
         <.input
           field={@password_form[:password_confirmation]}
           type="password"
-          label="Confirm new password"
+          label={gettext("Confirm new password")}
           autocomplete="new-password"
           spellcheck="false"
         />
-        <.button variant="primary" phx-disable-with="Saving...">
-          Save Password
+        <.button variant="primary" phx-disable-with={gettext("Saving...")}>
+          {gettext("Save Password")}
         </.button>
       </.form>
 
@@ -336,10 +407,12 @@ defmodule DealScoutWeb.UserLive.Settings do
             </div>
             <div>
               <h2 class="text-lg font-bold text-base-content">
-                Export My Data (GDPR Art. 15 &amp; 20)
+                {gettext("Export My Data (GDPR Art. 15 & 20)")}
               </h2>
               <p class="text-xs sm:text-sm text-base-content/70">
-                Download a machine-readable JSON copy of all your account settings, keyword alert rules, and deal match history.
+                {gettext(
+                  "Download a machine-readable JSON copy of all your account settings, keyword alert rules, and deal match history."
+                )}
               </p>
             </div>
           </div>
@@ -351,7 +424,7 @@ defmodule DealScoutWeb.UserLive.Settings do
             download
           >
             <.icon name="hero-arrow-down-tray" class="size-4" />
-            <span>Export Data</span>
+            <span>{gettext("Export Data")}</span>
           </a>
         </div>
       </div>
@@ -368,17 +441,20 @@ defmodule DealScoutWeb.UserLive.Settings do
             <.icon name="hero-exclamation-triangle" class="size-6" />
           </div>
           <div>
-            <h2 class="text-lg font-bold text-error">Danger Zone: Delete Account</h2>
+            <h2 class="text-lg font-bold text-error">{gettext("Danger Zone: Delete Account")}</h2>
             <p class="text-xs sm:text-sm text-base-content/70">
-              Permanently delete your account and all associated data in accordance with Art. 17 DSGVO.
+              {gettext(
+                "Permanently delete your account and all associated data in accordance with Art. 17 DSGVO."
+              )}
             </p>
           </div>
         </div>
 
         <p class="text-xs sm:text-sm text-base-content/80 leading-relaxed">
-          Deleting your account will immediately and permanently erase your user profile, all saved keyword alert rules,
-          matched deal history, and registered push notification devices.
-          <strong>This action is irreversible.</strong>
+          {gettext(
+            "Deleting your account will immediately and permanently erase your user profile, all saved keyword alert rules, matched deal history, and registered push notification devices."
+          )}
+          <strong>{gettext("This action is irreversible.")}</strong>
         </p>
 
         <div class="pt-2">
@@ -387,7 +463,11 @@ defmodule DealScoutWeb.UserLive.Settings do
             id="delete_account_form"
             action={~p"/users/settings/delete-account"}
             method="post"
-            data-confirm="Are you sure you want to permanently delete your account and all your alert rules? This cannot be undone."
+            data-confirm={
+              gettext(
+                "Are you sure you want to permanently delete your account and all your alert rules? This cannot be undone."
+              )
+            }
           >
             <input type="hidden" name="_method" value="delete" />
             <%= if @current_user_has_password? do %>
@@ -395,10 +475,10 @@ defmodule DealScoutWeb.UserLive.Settings do
                 <.input
                   field={@delete_account_form[:current_password]}
                   type="password"
-                  label="Confirm your password to proceed"
+                  label={gettext("Confirm your password to proceed")}
                   name="user[current_password]"
                   id="delete_account_password"
-                  placeholder="Enter your current password"
+                  placeholder={gettext("Enter your current password")}
                   required
                 />
               </div>
@@ -409,7 +489,7 @@ defmodule DealScoutWeb.UserLive.Settings do
               id="delete_account_btn"
             >
               <.icon name="hero-trash" class="size-4" />
-              <span>Permanently Delete My Account</span>
+              <span>{gettext("Permanently Delete My Account")}</span>
             </.button>
           </.form>
         </div>
@@ -441,8 +521,14 @@ defmodule DealScoutWeb.UserLive.Settings do
     delivery_logs = Notifications.list_push_delivery_logs(scope, 8)
     has_password? = is_binary(user.hashed_password) and byte_size(user.hashed_password) > 0
 
+    current_locale =
+      Map.get(user, :locale) ||
+        Gettext.get_locale(DealScoutWeb.Gettext) ||
+        "de"
+
     socket =
       socket
+      |> assign(:current_locale, current_locale)
       |> assign(:current_email, user.email)
       |> assign(:email_form, to_form(email_changeset))
       |> assign(:password_form, to_form(password_changeset))
@@ -457,6 +543,25 @@ defmodule DealScoutWeb.UserLive.Settings do
       |> stream(:subscriptions, subscriptions)
 
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_event("save_locale", params, socket) do
+    locale =
+      case params do
+        %{"locale" => loc} when is_binary(loc) -> loc
+        %{"locale_form" => %{"locale" => loc}} when is_binary(loc) -> loc
+        _ -> "de"
+      end
+
+    if locale in ["de", "en"] do
+      user = socket.assigns.current_scope.user
+      Accounts.update_user_locale(user, locale)
+      path = ~p"/users/settings"
+      {:noreply, redirect(socket, to: ~p"/locale/#{locale}?redirect_to=#{path}")}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true

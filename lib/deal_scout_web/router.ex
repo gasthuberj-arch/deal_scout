@@ -11,6 +11,7 @@ defmodule DealScoutWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :fetch_current_scope_for_user
+    plug DealScoutWeb.Plugs.LocalePlug
   end
 
   pipeline :api do
@@ -93,6 +94,8 @@ defmodule DealScoutWeb.Router do
     pipe_through [:browser]
 
     get "/deals/:id/image", DealImageController, :show
+    get "/locale/:locale", LocaleController, :update
+    post "/locale/:locale", LocaleController, :update
 
     live_session :current_user,
       on_mount: [{DealScoutWeb.UserAuth, :mount_current_scope}] do

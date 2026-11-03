@@ -44,8 +44,11 @@ defmodule DealScoutWeb.ConnCase do
   It stores an updated connection and a registered user in the
   test context.
   """
+  # Default to English in test helper so pre-existing test suites asserting English text pass,
+  # while allowing individual tests to specify %{locale: "de"} in user_attrs.
   def register_and_log_in_user(%{conn: conn} = context) do
-    user = DealScout.AccountsFixtures.user_fixture()
+    user_attrs = Map.merge(%{locale: "en"}, Map.get(context, :user_attrs, %{}))
+    user = DealScout.AccountsFixtures.user_fixture(user_attrs)
     scope = DealScout.Accounts.Scope.for_user(user)
 
     opts =

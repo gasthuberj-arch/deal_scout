@@ -215,6 +215,146 @@ defmodule DealScout.Notifications.DispatcherTest do
     assert {:ok, _results} = DealScout.Notifications.send_test_notification(user)
   end
 
+  test "delivers single push with localized title", %{
+    user: user,
+    rule: rule,
+    match: match
+  } do
+    {:ok, rule} =
+      rule
+      |> Ecto.Changeset.change(notify_push: true)
+      |> Repo.update()
+
+    {rec_pub, rec_priv} = :crypto.generate_key(:ecdh, :secp256r1)
+    rec_auth = :crypto.strong_rand_bytes(16)
+    p256dh_b64 = Base.url_encode64(rec_pub, padding: false)
+    auth_b64 = Base.url_encode64(rec_auth, padding: false)
+
+    DealScout.Notifications.WebPush.TestTransport.reset()
+
+    Repo.insert!(%DealScout.Notifications.PushSubscription{
+      user_id: user.id,
+      endpoint: "https://fcm.googleapis.com/fcm/send/locale-single-token",
+      p256dh: p256dh_b64,
+      auth: auth_b64
+    })
+
+    match = %{match | alert_rule: rule}
+    assert {:ok, updated} = Dispatcher.dispatch(match)
+    assert updated.notified_via_push == true
+
+    [delivery | _] = DealScout.Notifications.WebPush.TestTransport.delivered_notifications()
+    payload = decrypt_payload(delivery.body, rec_pub, rec_priv, rec_auth)
+    assert payload["title"] == "🔥 Neuer Deal: PS5 Alert"
+  end
+
+  test "delivers batch push with localized title and pricing", %{
+    user: user,
+    rule: rule,
+    feed: feed,
+    merchant: merchant
+  } do
+    {:ok, rule} =
+      rule
+      |> Ecto.Changeset.change(notify_push: true)
+      |> Repo.update()
+
+    {rec_pub, rec_priv} = :crypto.generate_key(:ecdh, :secp256r1)
+    rec_auth = :crypto.strong_rand_bytes(16)
+    p256dh_b64 = Base.url_encode64(rec_pub, padding: false)
+    auth_b64 = Base.url_encode64(rec_auth, padding: false)
+
+    DealScout.Notifications.WebPush.TestTransport.reset()
+
+    Repo.insert!(%DealScout.Notifications.PushSubscription{
+      user_id: user.id,
+      endpoint: "https://fcm.googleapis.com/fcm/send/locale-batch-token",
+      p256dh: p256dh_b64,
+      auth: auth_b64
+    })
+
+    deal1 =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-batch-1",
+        title: "Deal 1",
+        url: "https://example.com/1",
+        clean_text: "Deal 1 text",
+        price: Decimal.new("299.00"),
+        raw_merchant: "MediaMarkt",
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    deal2 =
+      Repo.insert!(%Deal{
+        feed_id: feed.id,
+        merchant_id: merchant.id,
+        guid: "deal-batch-2",
+        title: "Deal 2",
+        url: "https://example.com/2",
+        clean_text: "Deal 2 text",
+        price: Decimal.new("399.00"),
+        raw_merchant: "MediaMarkt",
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+
+    match1 =
+      Repo.insert!(%UserMatch{
+        user_id: user.id,
+        deal_id: deal1.id,
+        alert_rule_id: rule.id,
+        notified_via_push: false
+      })
+
+    match2 =
+      Repo.insert!(%UserMatch{
+        user_id: user.id,
+        deal_id: deal2.id,
+        alert_rule_id: rule.id,
+        notified_via_push: false
+      })
+
+    :ok = Dispatcher.dispatch_batch(rule, [match1, match2])
+
+    [delivery | _] = DealScout.Notifications.WebPush.TestTransport.delivered_notifications()
+    payload = decrypt_payload(delivery.body, rec_pub, rec_priv, rec_auth)
+    assert payload["title"] == "🔥 2 neue Deals für 'PS5 Alert' (ab 299 €)"
+  end
+
+  defp decrypt_payload(encrypted_body, rec_pub, rec_priv, rec_auth) do
+    <<salt::binary-size(16), _rs::binary-size(4), id_len, local_pub::binary-size(id_len),
+      ct_and_tag::binary>> = encrypted_body
+
+    ct_len = byte_size(ct_and_tag) - 16
+    <<ciphertext::binary-size(^ct_len), tag::binary-size(16)>> = ct_and_tag
+
+    ecdh_secret = :crypto.compute_key(:ecdh, local_pub, rec_priv, :secp256r1)
+    prk_key = :crypto.mac(:hmac, :sha256, rec_auth, ecdh_secret)
+    key_info = "WebPush: info\0" <> rec_pub <> local_pub
+    t1 = :crypto.mac(:hmac, :sha256, prk_key, key_info <> <<1>>)
+    ikm = binary_part(t1, 0, 32)
+
+    prk = :crypto.mac(:hmac, :sha256, salt, ikm)
+
+    cek =
+      binary_part(
+        :crypto.mac(:hmac, :sha256, prk, "Content-Encoding: aes128gcm\0" <> <<1>>),
+        0,
+        16
+      )
+
+    nonce =
+      binary_part(:crypto.mac(:hmac, :sha256, prk, "Content-Encoding: nonce\0" <> <<1>>), 0, 12)
+
+    decrypted =
+      :crypto.crypto_one_time_aead(:aes_128_gcm, cek, nonce, ciphertext, <<>>, tag, false)
+
+    dec_len = byte_size(decrypted) - 1
+    <<dec_payload::binary-size(^dec_len), 2>> = decrypted
+    Jason.decode!(dec_payload)
+  end
+
   test "prunes expired subscriptions when push transport returns 410 Gone", %{
     user: user,
     rule: rule,

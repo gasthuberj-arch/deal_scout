@@ -11,6 +11,7 @@ defmodule DealScout.Notifications.Dispatcher do
   """
 
   import Ecto.Query, warn: false
+  use Gettext, backend: DealScoutWeb.Gettext
   require Logger
 
   alias DealScout.Accounts.UserNotifier
@@ -275,35 +276,48 @@ defmodule DealScout.Notifications.Dispatcher do
     touch_rule_last_notified(rule, now)
   end
 
-  defp deliver_single_push(%UserMatch{user: %{id: user_id}} = match) when not is_nil(user_id) do
+  defp deliver_single_push(%UserMatch{user: %{id: user_id} = user} = match)
+       when not is_nil(user_id) do
     deal = match.deal
     rule = match.alert_rule
-    price_str = if deal && deal.price, do: " · #{deal.price} €", else: ""
+    user_locale = user.locale || "de"
 
-    merchant_name =
-      if deal && deal.merchant, do: deal.merchant.name, else: (deal && deal.raw_merchant) || ""
+    payload =
+      Gettext.with_locale(DealScoutWeb.Gettext, user_locale, fn ->
+        price_str = if deal && deal.price, do: " · #{deal.price} €", else: ""
 
-    merchant_str = if merchant_name != "", do: " at #{merchant_name}", else: ""
+        merchant_name =
+          if deal && deal.merchant,
+            do: deal.merchant.name,
+            else: (deal && deal.raw_merchant) || ""
 
-    actions =
-      if deal && deal.idealo_url do
-        [%{action: "open_idealo", title: "View on Idealo"}]
-      else
-        []
-      end
+        merchant_str =
+          if merchant_name != "",
+            do: " " <> gettext("at %{merchant}", merchant: merchant_name),
+            else: ""
 
-    payload = %{
-      title: "🔥 Deal Alert: #{(rule && rule.name) || "Match"}",
-      body: "#{(deal && deal.title) || "Deal"}#{price_str}#{merchant_str}",
-      url: "/matches?highlight=#{match.id}",
-      icon: (deal && deal.image_url) || "/images/icon-192.png",
-      badge: "/images/badge-72.png",
-      idealo_url: deal && deal.idealo_url,
-      geizhals_url: deal && deal.geizhals_url,
-      actions: actions,
-      tag: "match-#{match.id}",
-      user_match_id: match.id
-    }
+        actions =
+          if deal && deal.idealo_url do
+            [%{action: "open_idealo", title: gettext("View on Idealo")}]
+          else
+            []
+          end
+
+        rule_name = (rule && rule.name) || "Match"
+
+        %{
+          title: gettext("🔥 Deal Alert: %{rule_name}", rule_name: rule_name),
+          body: "#{(deal && deal.title) || "Deal"}#{price_str}#{merchant_str}",
+          url: "/matches?highlight=#{match.id}",
+          icon: (deal && deal.image_url) || "/images/icon-192.png",
+          badge: "/images/badge-72.png",
+          idealo_url: deal && deal.idealo_url,
+          geizhals_url: deal && deal.geizhals_url,
+          actions: actions,
+          tag: "match-#{match.id}",
+          user_match_id: match.id
+        }
+      end)
 
     {:ok, count} = send_push_to_user(match.user, payload)
     count > 0
@@ -312,41 +326,58 @@ defmodule DealScout.Notifications.Dispatcher do
   defp deliver_single_push(_match), do: false
 
   defp build_batch_push_payload(rule, matches, first_match, deal_count) do
-    deal_titles =
-      matches
-      |> Enum.take(2)
-      |> Enum.map(fn m ->
-        price_str = if m.deal.price, do: " (#{m.deal.price} €)", else: ""
-        "#{m.deal.title}#{price_str}"
-      end)
-      |> Enum.join(", ")
+    user = first_match.user
+    user_locale = (user && user.locale) || "de"
 
-    prices = matches |> Enum.map(& &1.deal.price) |> Enum.reject(&is_nil/1)
+    Gettext.with_locale(DealScoutWeb.Gettext, user_locale, fn ->
+      deal_titles =
+        matches
+        |> Enum.take(2)
+        |> Enum.map(fn m ->
+          price_str = if m.deal.price, do: " (#{m.deal.price} €)", else: ""
+          "#{m.deal.title}#{price_str}"
+        end)
+        |> Enum.join(", ")
 
-    min_price =
-      case prices do
-        [] -> nil
-        _ -> Enum.min(prices, Decimal)
-      end
+      prices = matches |> Enum.map(& &1.deal.price) |> Enum.reject(&is_nil/1)
 
-    title =
-      if min_price do
-        "🔥 #{deal_count} new deals for '#{rule.name}' (from #{min_price} €)"
-      else
-        "🔥 #{deal_count} new deals for '#{rule.name}'"
-      end
+      min_price =
+        case prices do
+          [] -> nil
+          _ -> Enum.min(prices, Decimal)
+        end
 
-    %{
-      title: title,
-      body: "#{deal_titles}#{if deal_count > 2, do: " and #{deal_count - 2} more", else: ""}",
-      url: "/matches?highlight=#{first_match.id}",
-      icon: (first_match.deal && first_match.deal.image_url) || "/images/icon-192.png",
-      badge: "/images/badge-72.png",
-      idealo_url: first_match.deal && first_match.deal.idealo_url,
-      geizhals_url: first_match.deal && first_match.deal.geizhals_url,
-      tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}",
-      user_match_id: first_match.id
-    }
+      title =
+        if min_price do
+          gettext("🔥 %{count} new deals for '%{rule_name}' (from %{price} €)",
+            count: deal_count,
+            rule_name: rule.name,
+            price: min_price
+          )
+        else
+          gettext("🔥 %{count} new deals for '%{rule_name}'",
+            count: deal_count,
+            rule_name: rule.name
+          )
+        end
+
+      more_str =
+        if deal_count > 2,
+          do: " " <> gettext("and %{count} more", count: deal_count - 2),
+          else: ""
+
+      %{
+        title: title,
+        body: "#{deal_titles}#{more_str}",
+        url: "/matches?highlight=#{first_match.id}",
+        icon: (first_match.deal && first_match.deal.image_url) || "/images/icon-192.png",
+        badge: "/images/badge-72.png",
+        idealo_url: first_match.deal && first_match.deal.idealo_url,
+        geizhals_url: first_match.deal && first_match.deal.geizhals_url,
+        tag: "batch-rule-#{rule.id}-#{System.system_time(:second)}",
+        user_match_id: first_match.id
+      }
+    end)
   end
 
   defp record_cooldown_skipped(%AlertRule{user_id: user_id} = rule, matches)

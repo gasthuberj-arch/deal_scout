@@ -4,6 +4,7 @@ defmodule DealScoutWeb.PWAComponents do
   and iOS installation guidance.
   """
   use Phoenix.Component
+  use Gettext, backend: DealScoutWeb.Gettext
   import DealScoutWeb.CoreComponents
 
   attr :push_subscribed, :boolean, default: false
@@ -27,13 +28,15 @@ defmodule DealScoutWeb.PWAComponents do
               </div>
               <div>
                 <h3 class="font-bold text-sm sm:text-base text-base-content flex items-center gap-2">
-                  Get Deal Alarms on your Phone
+                  {gettext("Get Deal Alarms on your Phone")}
                   <%= if @is_ios && !@is_standalone do %>
-                    <span class="badge badge-xs badge-outline">iOS PWA</span>
+                    <span class="badge badge-xs badge-outline">{gettext("iOS PWA")}</span>
                   <% end %>
                 </h3>
                 <p class="text-xs sm:text-sm text-base-content/70 mt-0.5 max-w-xl">
-                  Receive instant mobile push notifications whenever a hot deal matches your alert rules—no app store download required.
+                  {gettext(
+                    "Receive instant mobile push notifications whenever a hot deal matches your alert rules—no app store download required."
+                  )}
                 </p>
               </div>
             </div>
@@ -42,9 +45,9 @@ defmodule DealScoutWeb.PWAComponents do
               <button
                 phx-click="dismiss_push_banner"
                 class="btn btn-ghost btn-xs text-base-content/60"
-                title="Dismiss"
+                title={gettext("Dismiss")}
               >
-                Later
+                {gettext("Later")}
               </button>
               <%= if @is_ios && !@is_standalone do %>
                 <button
@@ -52,7 +55,7 @@ defmodule DealScoutWeb.PWAComponents do
                   class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
                 >
                   <.icon name="hero-device-phone-mobile" class="size-4" />
-                  <span>Install on iPhone</span>
+                  <span>{gettext("Install on iPhone")}</span>
                 </button>
               <% else %>
                 <button
@@ -60,7 +63,7 @@ defmodule DealScoutWeb.PWAComponents do
                   class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
                 >
                   <.icon name="hero-bell" class="size-4" />
-                  <span>Enable Alarms</span>
+                  <span>{gettext("Enable Alarms")}</span>
                 </button>
               <% end %>
             </div>
@@ -78,9 +81,11 @@ defmodule DealScoutWeb.PWAComponents do
               <.icon name="hero-bolt" class="size-4 shrink-0" />
             </span>
             <div>
-              <span class="font-bold text-base-content">Instant Mobile Alarms:</span>
+              <span class="font-bold text-base-content">{gettext("Instant Mobile Alarms:")}</span>
               <span class="text-base-content/70">
-                To receive instant deal alerts while your phone screen is locked, ensure browser battery usage is set to <strong>Unrestricted</strong>.
+                {gettext(
+                  "To receive instant deal alerts while your phone screen is locked, ensure browser battery usage is set to"
+                )} <strong>{gettext("Unrestricted")}</strong>.
               </span>
             </div>
           </div>
@@ -90,14 +95,14 @@ defmodule DealScoutWeb.PWAComponents do
               phx-click="open_android_modal"
               class="btn btn-xs btn-outline btn-warning gap-1 font-semibold"
             >
-              <span>Setup Guide</span>
+              <span>{gettext("Setup Guide")}</span>
               <.icon name="hero-chevron-right" class="size-3" />
             </button>
             <button
               type="button"
               phx-click="dismiss_push_banner"
               class="btn btn-ghost btn-xs text-base-content/50"
-              title="Dismiss tip"
+              title={gettext("Dismiss tip")}
             >
               ✕
             </button>
@@ -105,7 +110,7 @@ defmodule DealScoutWeb.PWAComponents do
         </div>
       <% end %>
 
-      <!-- iOS Installation Instructions Modal -->
+      <%!-- iOS Installation Instructions Modal --%>
       <%= if @show_ios_modal do %>
         <div
           id="ios-install-modal"
@@ -118,22 +123,28 @@ defmodule DealScoutWeb.PWAComponents do
                   <div class="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                     <.icon name="hero-device-phone-mobile" class="size-5" />
                   </div>
-                  <h3 class="font-bold text-base text-base-content">Install DealScout on iOS</h3>
+                  <h3 class="font-bold text-base text-base-content">
+                    {gettext("Install DealScout on iOS")}
+                  </h3>
                 </div>
                 <button phx-click="close_ios_modal" class="btn btn-ghost btn-circle btn-sm">✕</button>
               </div>
 
               <p class="text-xs sm:text-sm text-base-content/80">
-                Apple requires Progressive Web Apps to be added to the Home Screen to deliver background push alerts. Follow these 3 easy steps:
+                {gettext(
+                  "Apple requires Progressive Web Apps to be added to the Home Screen to deliver background push alerts. Follow these 3 easy steps:"
+                )}
               </p>
 
               <div class="space-y-3 py-2 text-xs sm:text-sm">
                 <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
                   <span class="size-6 rounded-full bg-primary text-primary-content text-xs font-bold flex items-center justify-center shrink-0">1</span>
                   <div>
-                    <span class="font-semibold text-base-content">Tap the Share button</span>
+                    <span class="font-semibold text-base-content">{gettext("Tap the Share button")}</span>
                     <p class="text-base-content/70 text-xs mt-0.5">
-                      In Safari's bottom toolbar, tap the square icon with an arrow pointing up.
+                      {gettext(
+                        "In Safari's bottom toolbar, tap the square icon with an arrow pointing up."
+                      )}
                     </p>
                   </div>
                 </div>
@@ -141,9 +152,11 @@ defmodule DealScoutWeb.PWAComponents do
                 <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
                   <span class="size-6 rounded-full bg-primary text-primary-content text-xs font-bold flex items-center justify-center shrink-0">2</span>
                   <div>
-                    <span class="font-semibold text-base-content">Select "Add to Home Screen"</span>
+                    <span class="font-semibold text-base-content">{gettext(
+                      "Select \"Add to Home Screen\""
+                    )}</span>
                     <p class="text-base-content/70 text-xs mt-0.5">
-                      Scroll down in the share sheet and tap <strong>Add to Home Screen</strong>.
+                      {gettext("Scroll down in the share sheet and tap")} <strong>{gettext("Add to Home Screen")}</strong>.
                     </p>
                   </div>
                 </div>
@@ -151,23 +164,27 @@ defmodule DealScoutWeb.PWAComponents do
                 <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
                   <span class="size-6 rounded-full bg-primary text-primary-content text-xs font-bold flex items-center justify-center shrink-0">3</span>
                   <div>
-                    <span class="font-semibold text-base-content">Open DealScout from Home Screen</span>
+                    <span class="font-semibold text-base-content">{gettext(
+                      "Open DealScout from Home Screen"
+                    )}</span>
                     <p class="text-base-content/70 text-xs mt-0.5">
-                      Launch DealScout from your phone's Home Screen and tap <strong>Enable Alarms</strong>.
+                      {gettext("Launch DealScout from your phone's Home Screen and tap")} <strong>{gettext("Enable Alarms")}</strong>.
                     </p>
                   </div>
                 </div>
               </div>
 
               <div class="pt-2 flex justify-end">
-                <button phx-click="close_ios_modal" class="btn btn-primary btn-sm w-full">Got it</button>
+                <button phx-click="close_ios_modal" class="btn btn-primary btn-sm w-full">{gettext(
+                  "Got it"
+                )}</button>
               </div>
             </div>
           </div>
         </div>
       <% end %>
 
-      <!-- Android Battery Optimization Instructions Modal -->
+      <%!-- Android Battery Optimization Instructions Modal --%>
       <%= if @show_android_modal do %>
         <div
           id="android-battery-modal"
@@ -180,27 +197,32 @@ defmodule DealScoutWeb.PWAComponents do
                   <div class="size-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                     <.icon name="hero-bolt" class="size-5" />
                   </div>
-                  <h3 class="font-bold text-base text-base-content">Instant Android Deal Alarms</h3>
+                  <h3 class="font-bold text-base text-base-content">
+                    {gettext("Instant Android Deal Alarms")}
+                  </h3>
                 </div>
                 <button phx-click="close_android_modal" class="btn btn-ghost btn-circle btn-sm">✕</button>
               </div>
 
               <p class="text-xs sm:text-sm text-base-content/80 leading-relaxed">
-                By default, Android's <em>Doze Mode</em>
-                delays browser push alerts when your screen is locked. Setting battery usage to
-                <strong>Unrestricted</strong>
-                ensures you never miss a lightning deal:
+                {gettext("By default, Android's")} <em>{gettext("Doze Mode")}</em>
+                {gettext(
+                  "delays browser push alerts when your screen is locked. Setting battery usage to"
+                )}
+                <strong>{gettext("Unrestricted")}</strong>
+                {gettext("ensures you never miss a lightning deal:")}
               </p>
 
               <div class="space-y-3 py-2 text-xs sm:text-sm">
                 <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
                   <span class="size-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
                   <div>
-                    <span class="font-semibold text-base-content">Open App Info</span>
+                    <span class="font-semibold text-base-content">{gettext("Open App Info")}</span>
                     <p class="text-base-content/70 text-xs mt-0.5">
-                      Long-press the <strong>DealScout</strong>
-                      (or Chrome) icon on your home screen and tap <strong>App Info</strong>
-                      (or the ⓘ icon).
+                      {gettext("Long-press the")} <strong>DealScout</strong>
+                      {gettext("(or Chrome) icon on your home screen and tap")}
+                      <strong>{gettext("App Info")}</strong>
+                      {gettext("(or the ⓘ icon).")}
                     </p>
                   </div>
                 </div>
@@ -208,9 +230,12 @@ defmodule DealScoutWeb.PWAComponents do
                 <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
                   <span class="size-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
                   <div>
-                    <span class="font-semibold text-base-content">Tap "App Battery Usage"</span>
+                    <span class="font-semibold text-base-content">{gettext(
+                      "Tap \"App Battery Usage\""
+                    )}</span>
                     <p class="text-base-content/70 text-xs mt-0.5">
-                      Scroll down to <strong>Battery</strong> or <strong>App battery usage</strong>.
+                      {gettext("Scroll down to")}
+                      <strong>{gettext("Battery")}</strong> {gettext("or")} <strong>{gettext("App battery usage")}</strong>.
                     </p>
                   </div>
                 </div>
@@ -218,17 +243,21 @@ defmodule DealScoutWeb.PWAComponents do
                 <div class="flex items-start gap-3 bg-base-200/60 p-3 rounded-xl border border-base-300/50">
                   <span class="size-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">3</span>
                   <div>
-                    <span class="font-semibold text-base-content">Select "Unrestricted"</span>
+                    <span class="font-semibold text-base-content">{gettext("Select \"Unrestricted\"")}</span>
                     <p class="text-base-content/70 text-xs mt-0.5">
-                      Switch from <em>Optimized</em>
-                      to <strong>Unrestricted</strong>. Deal alerts will now vibrate immediately while locked!
+                      {gettext("Switch from")} <em>{gettext("Optimized")}</em>
+                      {gettext("to")} <strong>{gettext("Unrestricted")}</strong>. {gettext(
+                        "Deal alerts will now vibrate immediately while locked!"
+                      )}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div class="pt-2 flex justify-end">
-                <button phx-click="close_android_modal" class="btn btn-primary btn-sm w-full">Got it</button>
+                <button phx-click="close_android_modal" class="btn btn-primary btn-sm w-full">{gettext(
+                  "Got it"
+                )}</button>
               </div>
             </div>
           </div>

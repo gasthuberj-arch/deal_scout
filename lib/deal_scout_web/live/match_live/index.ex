@@ -15,7 +15,7 @@ defmodule DealScoutWeb.MatchLive.Index do
 
     socket =
       socket
-      |> assign(:page_title, "Matched Deals")
+      |> assign(:page_title, gettext("Matched Deals"))
       |> assign(:unread_only, false)
       |> assign(:sound_enabled, true)
       |> assign(:highlight_id, nil)
@@ -66,7 +66,7 @@ defmodule DealScoutWeb.MatchLive.Index do
 
     {:noreply,
      socket
-     |> put_flash(:info, "All matches marked as read.")
+     |> put_flash(:info, gettext("All matches marked as read."))
      |> load_matches()}
   end
 
@@ -101,7 +101,7 @@ defmodule DealScoutWeb.MatchLive.Index do
 
     {:noreply,
      socket
-     |> put_flash(:info, "New match: #{match.deal.title}")
+     |> put_flash(:info, gettext("New match: %{title}", title: match.deal.title))
      |> load_matches()}
   end
 
@@ -136,15 +136,15 @@ defmodule DealScoutWeb.MatchLive.Index do
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-200/50 p-6 rounded-2xl border border-base-300">
           <div>
             <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-3">
-              <span>Matched Deals</span>
+              <span>{gettext("Matched Deals")}</span>
               <%= if @unread_count > 0 do %>
                 <span class="badge badge-primary font-bold">
-                  {@unread_count} new
+                  {ngettext("%{count} new", "%{count} new", @unread_count, count: @unread_count)}
                 </span>
               <% end %>
             </h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Deals that matched your configured keyword alert criteria in real-time.
+              {gettext("Deals that matched your configured keyword alert criteria in real-time.")}
             </p>
           </div>
 
@@ -157,14 +157,14 @@ defmodule DealScoutWeb.MatchLive.Index do
                 @sound_enabled && "btn-neutral",
                 !@sound_enabled && "btn-ghost text-base-content/50"
               ]}
-              title="Toggle audio notification"
+              title={gettext("Toggle audio notification")}
             >
               <%= if @sound_enabled do %>
                 <.icon name="hero-speaker-wave" class="size-4 text-emerald-400" />
-                <span>Chime On</span>
+                <span>{gettext("Chime On")}</span>
               <% else %>
                 <.icon name="hero-speaker-x-mark" class="size-4" />
-                <span>Muted</span>
+                <span>{gettext("Muted")}</span>
               <% end %>
             </button>
 
@@ -177,7 +177,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                 !@unread_only && "btn-ghost"
               ]}
             >
-              {if @unread_only, do: "Show All", else: "Unread Only"}
+              {if @unread_only, do: gettext("Show All"), else: gettext("Unread Only")}
             </button>
 
             <%= if @unread_count > 0 do %>
@@ -185,7 +185,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                 phx-click="mark_all_read"
                 class="btn btn-xs sm:btn-sm btn-outline"
               >
-                Mark all read
+                {gettext("Mark all read")}
               </button>
             <% end %>
           </div>
@@ -197,9 +197,11 @@ defmodule DealScoutWeb.MatchLive.Index do
             <div class="size-14 mx-auto rounded-full bg-base-200 flex items-center justify-center text-base-content/50">
               <.icon name="hero-check" class="size-7" />
             </div>
-            <h2 class="text-lg font-bold">Inbox Zero</h2>
+            <h2 class="text-lg font-bold">{gettext("Inbox Zero")}</h2>
             <p class="text-sm text-base-content/70 max-w-md mx-auto">
-              No matching deals found for your current filter. As soon as a deal site publishes an item matching your keywords, it will pop up right here!
+              {gettext(
+                "No matching deals found for your current filter. As soon as a deal site publishes an item matching your keywords, it will pop up right here!"
+              )}
             </p>
           </div>
         <% else %>
@@ -228,11 +230,11 @@ defmodule DealScoutWeb.MatchLive.Index do
                       <div class="flex flex-wrap items-center gap-2 text-xs">
                         <%= if to_string(match.id) == to_string(@highlight_id) do %>
                           <span class="badge badge-primary badge-sm font-bold animate-pulse">
-                            Target Deal
+                            {gettext("Target Deal")}
                           </span>
                         <% end %>
                         <span class="badge badge-primary badge-sm font-semibold">
-                          Rule: {match.alert_rule.name}
+                          {gettext("Rule: %{name}", name: match.alert_rule.name)}
                         </span>
                         <% feed_slug = match.deal.feed && match.deal.feed.slug %>
                         <span class={[
@@ -248,14 +250,14 @@ defmodule DealScoutWeb.MatchLive.Index do
                           country_code = match.deal.country[:code] || match.deal.country["code"] %>
                           <span
                             class="badge badge-ghost badge-sm gap-1"
-                            title={"Origin: #{country_name}"}
+                            title={"#{gettext("Origin:")} #{country_name}"}
                           >
                             <span>{country_flag}</span>
                             <span>{country_code}</span>
                           </span>
                         <% end %>
                         <%= if !match.is_read do %>
-                          <span class="badge badge-xs badge-info font-bold uppercase">New</span>
+                          <span class="badge badge-xs badge-info font-bold uppercase">{gettext("New")}</span>
                         <% end %>
                         <span class="text-base-content/50 ml-auto">
                           {format_time_ago(match.inserted_at)}
@@ -295,7 +297,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                         <% end %>
                         <%= if match.deal.merchant do %>
                           <span class="text-base-content/70">
-                            via {match.deal.merchant.name}
+                            {gettext("via %{merchant}", merchant: match.deal.merchant.name)}
                           </span>
                         <% end %>
                         <%= if match.deal.temperature do %>
@@ -315,7 +317,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                         target="_blank"
                         rel="noopener noreferrer"
                         class="btn btn-xs btn-outline btn-warning gap-1 font-semibold"
-                        title="Compare price history and offers on Idealo"
+                        title={gettext("Compare price history and offers on Idealo")}
                       >
                         <.icon name="hero-arrow-top-right-on-square" class="size-3" />
                         <span>Idealo</span>
@@ -328,7 +330,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                         target="_blank"
                         rel="noopener noreferrer"
                         class="btn btn-xs btn-outline btn-info gap-1 font-semibold"
-                        title="Compare offers on Geizhals"
+                        title={gettext("Compare offers on Geizhals")}
                       >
                         <.icon name="hero-arrow-top-right-on-square" class="size-3" />
                         <span>Geizhals</span>
@@ -340,9 +342,9 @@ defmodule DealScoutWeb.MatchLive.Index do
                         phx-click="mark_read"
                         phx-value-id={match.id}
                         class="btn btn-xs btn-ghost"
-                        title="Mark as read"
+                        title={gettext("Mark as read")}
                       >
-                        Mark read
+                        {gettext("Mark read")}
                       </button>
                     <% end %>
 
@@ -352,7 +354,7 @@ defmodule DealScoutWeb.MatchLive.Index do
                       rel="noopener noreferrer"
                       class="btn btn-xs btn-primary gap-1"
                     >
-                      <span>Open Deal</span>
+                      <span>{gettext("Open Deal")}</span>
                       <.icon name="hero-arrow-top-right-on-square" class="size-3" />
                     </a>
                   </div>
@@ -370,10 +372,10 @@ defmodule DealScoutWeb.MatchLive.Index do
     diff_sec = DateTime.diff(DateTime.utc_now(), datetime, :second)
 
     cond do
-      diff_sec < 60 -> "just now"
-      diff_sec < 3600 -> "#{div(diff_sec, 60)}m ago"
-      diff_sec < 86400 -> "#{div(diff_sec, 3600)}h ago"
-      true -> "#{div(diff_sec, 86400)}d ago"
+      diff_sec < 60 -> gettext("just now")
+      diff_sec < 3600 -> gettext("%{count}m ago", count: div(diff_sec, 60))
+      diff_sec < 86400 -> gettext("%{count}h ago", count: div(diff_sec, 3600))
+      true -> gettext("%{count}d ago", count: div(diff_sec, 86400))
     end
   end
 end

@@ -129,6 +129,28 @@ defmodule DealScout.Accounts do
   end
 
   @doc """
+  Updates the user locale.
+
+  ## Examples
+
+      iex> update_user_locale(user, "en")
+      {:ok, %User{locale: "en"}}
+
+      iex> update_user_locale(user, "invalid")
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def update_user_locale(%User{} = user, locale) when is_binary(locale) do
+    update_user_locale(user, %{locale: locale})
+  end
+
+  def update_user_locale(%User{} = user, attrs) when is_map(attrs) do
+    user
+    |> User.locale_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Updates the user email using the given token.
 
   If the token matches, the user email is updated and the token is deleted.

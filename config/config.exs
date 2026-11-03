@@ -24,6 +24,11 @@ config :deal_scout,
   ecto_repos: [DealScout.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Configure Gettext
+config :deal_scout, DealScoutWeb.Gettext,
+  default_locale: "de",
+  locales: ~w(de en)
+
 # Configure the endpoint
 config :deal_scout, DealScoutWeb.Endpoint,
   url: [host: "localhost"],

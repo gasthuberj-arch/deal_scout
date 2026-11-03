@@ -9,6 +9,7 @@ defmodule DealScout.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
     field :is_admin, :boolean, default: false
+    field :locale, :string, default: "de"
 
     timestamps(type: :utc_datetime)
   end
@@ -62,8 +63,20 @@ defmodule DealScout.Accounts.User do
   """
   def registration_changeset(user, attrs, opts \\ []) do
     user
+    |> cast(attrs, [:locale])
+    |> validate_inclusion(:locale, ["de", "en"])
     |> email_changeset(attrs, opts)
     |> password_changeset(attrs, opts)
+  end
+
+  @doc """
+  A user changeset for changing the locale.
+  """
+  def locale_changeset(user, attrs, _opts \\ []) do
+    user
+    |> cast(attrs, [:locale])
+    |> validate_required([:locale])
+    |> validate_inclusion(:locale, ["de", "en"])
   end
 
   @doc """

@@ -143,11 +143,13 @@ defmodule DealScoutWeb.UserAuth do
   #     end
   #
   defp renew_session(conn, _user) do
+    locale = get_session(conn, :locale)
     delete_csrf_token()
 
     conn
     |> configure_session(renew: true)
     |> clear_session()
+    |> then(fn c -> if locale, do: put_session(c, :locale, locale), else: c end)
   end
 
   defp maybe_write_remember_me_cookie(conn, token, %{"remember_me" => "true"}, _),
@@ -273,6 +275,23 @@ defmodule DealScoutWeb.UserAuth do
 
         Scope.for_user(user)
       end)
+
+    current_scope = socket.assigns[:current_scope]
+
+    locale =
+      (current_scope && current_scope.user && current_scope.user.locale) ||
+        session["locale"] ||
+        session[:locale] ||
+        "de"
+
+    locale = if locale in ["de", "en"], do: locale, else: "de"
+
+    Gettext.put_locale(DealScoutWeb.Gettext, locale)
+
+    socket =
+      socket
+      |> Phoenix.Component.assign(:locale, locale)
+      |> Phoenix.Component.assign(:current_locale, locale)
 
     if Phoenix.LiveView.connected?(socket) do
       socket_id = socket.id || "#{inspect(self())}"

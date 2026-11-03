@@ -104,6 +104,34 @@ defmodule DealScout.AccountsTest do
       assert user.hashed_password
       assert DealScout.Accounts.User.valid_password?(user, password)
       assert user.confirmed_at
+      assert user.locale == "de"
+    end
+
+    test "defaults locale to de" do
+      email = unique_user_email()
+      password = valid_user_password()
+      {:ok, user} = Accounts.register_user(%{"email" => email, "password" => password})
+      assert user.locale == "de"
+    end
+
+    test "can register user with explicit en locale" do
+      email = unique_user_email()
+      password = valid_user_password()
+
+      {:ok, user} =
+        Accounts.register_user(%{"email" => email, "password" => password, "locale" => "en"})
+
+      assert user.locale == "en"
+    end
+
+    test "fails registration with invalid locale" do
+      email = unique_user_email()
+      password = valid_user_password()
+
+      {:error, changeset} =
+        Accounts.register_user(%{"email" => email, "password" => password, "locale" => "fr"})
+
+      assert %{locale: ["is invalid"]} = errors_on(changeset)
     end
   end
 
@@ -197,6 +225,24 @@ defmodule DealScout.AccountsTest do
 
       assert Repo.get!(User, user.id).email == user.email
       assert Repo.get_by(UserToken, user_id: user.id)
+    end
+  end
+
+  describe "update_user_locale/2" do
+    test "updates the user locale to en" do
+      user = user_fixture(%{locale: "de"})
+      assert user.locale == "de"
+
+      assert {:ok, updated_user} = Accounts.update_user_locale(user, "en")
+      assert updated_user.locale == "en"
+      assert Accounts.get_user!(user.id).locale == "en"
+    end
+
+    test "fails with invalid locale" do
+      user = user_fixture()
+      assert {:error, changeset} = Accounts.update_user_locale(user, "invalid")
+      assert %{locale: ["is invalid"]} = errors_on(changeset)
+      assert Accounts.get_user!(user.id).locale == "de"
     end
   end
 

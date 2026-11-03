@@ -22,7 +22,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
     socket =
       socket
-      |> assign(:page_title, "My Alert Keywords")
+      |> assign(:page_title, gettext("My Alert Keywords"))
       |> assign(:rules, rules)
       |> assign(:feeds, feeds)
       |> assign(:rule, nil)
@@ -56,7 +56,7 @@ defmodule DealScoutWeb.AlertLive.Index do
     changeset = Alerts.change_alert_rule(rule)
 
     socket
-    |> assign(:page_title, "New Alert Rule")
+    |> assign(:page_title, gettext("New Alert Rule"))
     |> assign(:rule, rule)
     |> assign(:form, to_form(changeset))
     |> assign(:backtest_result, nil)
@@ -68,7 +68,7 @@ defmodule DealScoutWeb.AlertLive.Index do
     changeset = Alerts.change_alert_rule(rule)
 
     socket
-    |> assign(:page_title, "Edit Alert Rule")
+    |> assign(:page_title, gettext("Edit Alert Rule"))
     |> assign(:rule, rule)
     |> assign(:form, to_form(changeset))
     |> assign(:backtest_result, nil)
@@ -77,7 +77,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(:page_title, "My Alert Keywords")
+    |> assign(:page_title, gettext("My Alert Keywords"))
     |> assign(:rule, nil)
     |> assign(:form, nil)
     |> assign(:backtest_result, nil)
@@ -136,7 +136,7 @@ defmodule DealScoutWeb.AlertLive.Index do
           {:ok, _rule} ->
             {:noreply,
              socket
-             |> put_flash(:info, "Alert rule created successfully.")
+             |> put_flash(:info, gettext("Alert rule created successfully."))
              |> push_navigate(to: ~p"/alerts")}
 
           {:error, %Ecto.Changeset{} = changeset} ->
@@ -148,7 +148,7 @@ defmodule DealScoutWeb.AlertLive.Index do
           {:ok, _rule} ->
             {:noreply,
              socket
-             |> put_flash(:info, "Alert rule updated successfully.")
+             |> put_flash(:info, gettext("Alert rule updated successfully."))
              |> push_navigate(to: ~p"/alerts")}
 
           {:error, %Ecto.Changeset{} = changeset} ->
@@ -189,7 +189,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
     {:noreply,
      socket
-     |> put_flash(:info, "Alert rule deleted.")
+     |> put_flash(:info, gettext("Alert rule deleted."))
      |> assign(:rules, rules)}
   end
 
@@ -278,9 +278,13 @@ defmodule DealScoutWeb.AlertLive.Index do
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-200/50 p-6 rounded-2xl border border-base-300">
           <div>
-            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Keyword Alert Rules</h1>
+            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              {gettext("Keyword Alert Rules")}
+            </h1>
             <p class="text-sm text-base-content/70 mt-1">
-              Enter product names (e.g. Google Pixel, Novablast 6) and separate alternatives with a comma or OR. When matching deals appear, you'll be alerted immediately on your phone.
+              {gettext(
+                "Enter product names (e.g. Google Pixel, Novablast 6) and separate alternatives with a comma or OR. When matching deals appear, you'll be alerted immediately on your phone."
+              )}
             </p>
           </div>
 
@@ -289,7 +293,7 @@ defmodule DealScoutWeb.AlertLive.Index do
             class="btn btn-primary btn-sm flex items-center gap-1 shadow-sm"
           >
             <.icon name="hero-plus" class="size-4" />
-            <span>Add Alert Rule</span>
+            <span>{gettext("Add Alert Rule")}</span>
           </.link>
         </div>
 
@@ -299,12 +303,14 @@ defmodule DealScoutWeb.AlertLive.Index do
             <div class="size-14 mx-auto rounded-full bg-primary/10 text-primary flex items-center justify-center">
               <.icon name="hero-bell" class="size-7" />
             </div>
-            <h2 class="text-lg font-bold">No Alert Rules Configured Yet</h2>
+            <h2 class="text-lg font-bold">{gettext("No Alert Rules Configured Yet")}</h2>
             <p class="text-sm text-base-content/70 max-w-md mx-auto">
-              Create an alert rule for products you are hunting (e.g. "RTX 4080", "OLED TV", "Lego Star Wars") to receive instant phone notifications.
+              {gettext(
+                "Create an alert rule for products you are hunting (e.g. \"RTX 4080\", \"OLED TV\", \"Lego Star Wars\") to receive instant phone notifications."
+              )}
             </p>
             <.link patch={~p"/alerts/new"} class="btn btn-primary btn-sm">
-              Create Your First Rule
+              {gettext("Create Your First Rule")}
             </.link>
           </div>
         <% else %>
@@ -325,27 +331,31 @@ defmodule DealScoutWeb.AlertLive.Index do
                       rule.is_active && "badge-success",
                       !rule.is_active && "badge-ghost"
                     ]}>
-                      {if rule.is_active, do: "Active", else: "Paused"}
+                      {if rule.is_active, do: gettext("Active"), else: gettext("Paused")}
                     </span>
                     <div class="flex items-center gap-1">
                       <button
                         phx-click="toggle_active"
                         phx-value-id={rule.id}
                         class="btn btn-ghost btn-xs"
-                        title={if rule.is_active, do: "Pause Alert", else: "Activate Alert"}
+                        title={
+                          if rule.is_active,
+                            do: gettext("Pause Alert"),
+                            else: gettext("Activate Alert")
+                        }
                       >
-                        {if rule.is_active, do: "Pause", else: "Resume"}
+                        {if rule.is_active, do: gettext("Pause"), else: gettext("Resume")}
                       </button>
                       <.link patch={~p"/alerts/#{rule.id}/edit"} class="btn btn-ghost btn-xs">
-                        Edit
+                        {gettext("Edit")}
                       </.link>
                       <button
                         phx-click="delete"
                         phx-value-id={rule.id}
-                        data-confirm="Are you sure you want to delete this alert rule?"
+                        data-confirm={gettext("Are you sure you want to delete this alert rule?")}
                         class="btn btn-ghost btn-xs text-error"
                       >
-                        Delete
+                        {gettext("Delete")}
                       </button>
                     </div>
                   </div>
@@ -360,7 +370,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                           class="size-4 shrink-0 mt-0.5 text-error"
                         />
                         <div>
-                          <span class="font-bold block">Circuit Breaker Auto-Paused</span>
+                          <span class="font-bold block">{gettext("Circuit Breaker Auto-Paused")}</span>
                           <span class="text-[11px] text-error/90 mt-0.5 block leading-relaxed">{rule.pause_reason}</span>
                         </div>
                       </div>
@@ -368,7 +378,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                     <div class="mt-2 space-y-1.5 text-xs">
                       <div>
-                        <span class="font-semibold text-base-content/60">Keywords:</span>
+                        <span class="font-semibold text-base-content/60">{gettext("Keywords:")}</span>
                         <span class="font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded ml-1 font-bold">
                           {rule.keywords}
                         </span>
@@ -376,7 +386,7 @@ defmodule DealScoutWeb.AlertLive.Index do
 
                       <%= if rule.negative_keywords && rule.negative_keywords != "" do %>
                         <div>
-                          <span class="font-semibold text-base-content/60">Exclude:</span>
+                          <span class="font-semibold text-base-content/60">{gettext("Exclude:")}</span>
                           <span class="font-mono bg-error/10 text-error px-1.5 py-0.5 rounded ml-1">
                             {rule.negative_keywords}
                           </span>
@@ -389,25 +399,25 @@ defmodule DealScoutWeb.AlertLive.Index do
                         <%= if rule.notify_push do %>
                           <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
                             <.icon name="hero-device-phone-mobile" class="size-3" />
-                            <span>Push</span>
+                            <span>{gettext("Push")}</span>
                           </span>
                         <% end %>
 
                         <%= if rule.notify_email do %>
                           <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
                             <.icon name="hero-envelope" class="size-3" />
-                            <span>Email</span>
+                            <span>{gettext("Email")}</span>
                           </span>
                         <% end %>
 
                         <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
                           <%= case rule.delivery_mode do %>
                             <% "instant" -> %>
-                              ⚡ Instant
+                              {"⚡ " <> gettext("Instant")}
                             <% "hourly_digest" -> %>
-                              ⏱️ Hourly Digest
+                              {"⏱️ " <> gettext("Hourly Digest")}
                             <% "daily_digest" -> %>
-                              📅 Daily Digest
+                              {"📅 " <> gettext("Daily Digest")}
                             <% other -> %>
                               {other}
                           <% end %>
@@ -416,49 +426,49 @@ defmodule DealScoutWeb.AlertLive.Index do
                         <!-- Country Filter -->
                         <%= if rule.country_filter == "de_only" do %>
                           <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/80 font-semibold">
-                            🇩🇪 DE Only
+                            {"🇩🇪 " <> gettext("DE Only")}
                           </span>
                         <% end %>
 
                         <%= if rule.country_filter == "eu_only" do %>
                           <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/80 font-semibold">
-                            🇪🇺 EU Only
+                            {"🇪🇺 " <> gettext("EU Only")}
                           </span>
                         <% end %>
 
                         <%= if rule.exclude_foreign_keyboards do %>
                           <span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold">
-                            ⌨️ DE Layout
+                            {"⌨️ " <> gettext("DE Layout")}
                           </span>
                         <% end %>
 
                         <%= if rule.merchant_filter == "verified_only" do %>
                           <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
-                            🛡️ Verified Stores
+                            {"🛡️ " <> gettext("Verified Stores")}
                           </span>
                         <% end %>
 
                         <%= if rule.cooldown_minutes > 0 do %>
                           <span class="px-2 py-0.5 rounded bg-base-200 text-base-content/70 font-mono text-[10px]">
-                            ⏳ {rule.cooldown_minutes}m cooldown
+                            {"⏳ " <> gettext("%{minutes}m cooldown", minutes: rule.cooldown_minutes)}
                           </span>
                         <% end %>
 
                         <%= if rule.max_price do %>
                           <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
-                            Max {rule.max_price} €
+                            {gettext("Max %{price} €", price: rule.max_price)}
                           </span>
                         <% end %>
 
                         <%= if rule.min_temperature do %>
                           <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold">
-                            🔥 ≥ {rule.min_temperature}°
+                            {"🔥 ≥ #{rule.min_temperature}°"}
                           </span>
                         <% end %>
 
                         <%= if rule.exclude_dropshippers do %>
                           <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold">
-                            🚫 No Dropshippers
+                            {"🚫 " <> gettext("No Dropshippers")}
                           </span>
                         <% end %>
 
@@ -492,13 +502,15 @@ defmodule DealScoutWeb.AlertLive.Index do
               <div class="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 shrink-0 bg-base-100">
                 <h3 class="font-bold text-base sm:text-lg text-base-content flex items-center gap-2">
                   <.icon name="hero-bell" class="size-5 text-primary" />
-                  <span>{if @live_action == :new, do: "Create Alert Rule", else: "Edit Alert Rule"}</span>
+                  <span>{if @live_action == :new,
+                    do: gettext("Create Alert Rule"),
+                    else: gettext("Edit Alert Rule")}</span>
                 </h3>
                 <.link
                   patch={~p"/alerts"}
                   id="close-rule-modal-btn"
                   class="btn btn-ghost btn-circle btn-sm min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 flex items-center justify-center"
-                  aria-label="Close"
+                  aria-label={gettext("Close")}
                 >
                   ✕
                 </.link>
@@ -522,8 +534,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                     field={@form[:name]}
                     id="alert-rule-name-input"
                     type="text"
-                    label="Alert Rule Name"
-                    placeholder="e.g. RTX 4080 GPU, OLED Monitor, Espresso Machine"
+                    label={gettext("Alert Rule Name")}
+                    placeholder={gettext("e.g. RTX 4080 GPU, OLED Monitor, Espresso Machine")}
                     autocomplete="off"
                     data-1p-ignore="true"
                     data-lpignore="true"
@@ -535,8 +547,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                       field={@form[:keywords]}
                       id="alert-rule-keywords-input"
                       type="text"
-                      label="Search Keywords"
-                      placeholder="e.g. Google Pixel, Novablast 6 or evo sl, RTX 4080"
+                      label={gettext("Search Keywords")}
+                      placeholder={gettext("e.g. Google Pixel, Novablast 6 or evo sl, RTX 4080")}
                       autocomplete="off"
                       data-1p-ignore="true"
                       data-lpignore="true"
@@ -552,7 +564,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                             class="mt-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20 text-xs flex flex-wrap items-center gap-1.5"
                           >
                             <span class="font-semibold text-base-content/70 shrink-0">
-                              Matches deal if it contains:
+                              {gettext("Matches deal if it contains:")}
                             </span>
                             <%= for {group, idx} <- Enum.with_index(groups) do %>
                               <%= if idx > 0 do %>
@@ -579,7 +591,9 @@ defmodule DealScoutWeb.AlertLive.Index do
                             id="keywords-live-preview"
                             class="mt-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20 text-xs flex flex-wrap items-center gap-1.5"
                           >
-                            <span class="font-semibold text-base-content/70 shrink-0">Matches logic:</span>
+                            <span class="font-semibold text-base-content/70 shrink-0">{gettext(
+                              "Matches logic:"
+                            )}</span>
                             <code class="font-mono text-[11px] font-bold text-primary">{formatted}</code>
                           </div>
                         <% _ -> %>
@@ -591,7 +605,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                       <div class="flex items-center justify-between font-semibold text-base-content">
                         <span class="flex items-center gap-1.5">
                           <.icon name="hero-information-circle" class="size-4 text-primary shrink-0" />
-                          <span>Search Operators & Grouping Syntax</span>
+                          <span>{gettext("Search Operators & Grouping Syntax")}</span>
                         </span>
                       </div>
                       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] leading-snug">
@@ -600,7 +614,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                             A B
                           </span>
                           <span>
-                            Words together match in any order — no quotes needed (e.g. <span class="font-mono font-semibold text-primary">Novablast 6</span>)
+                            {gettext("Words together match in any order — no quotes needed (e.g.")} <span class="font-mono font-semibold text-primary">Novablast 6</span>)
                           </span>
                         </div>
                         <div class="flex items-start gap-2">
@@ -608,9 +622,11 @@ defmodule DealScoutWeb.AlertLive.Index do
                             OR
                           </span>
                           <span>
-                            Comma <code class="font-mono font-bold text-base-content">,</code>
-                            or <code class="font-mono font-bold text-base-content">or</code>
-                            for alternatives (e.g. <span class="font-mono font-semibold text-primary">Laufschuh, Novablast 6</span>)
+                            {gettext("Comma")}
+                            <code class="font-mono font-bold text-base-content">,</code>
+                            {gettext("or")}
+                            <code class="font-mono font-bold text-base-content">or</code>
+                            {gettext("for alternatives (e.g.")} <span class="font-mono font-semibold text-primary">Laufschuh, Novablast 6</span>)
                           </span>
                         </div>
                         <div class="flex items-start gap-2">
@@ -618,7 +634,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                             ( )
                           </span>
                           <span>
-                            Parentheses to combine groups (e.g. <span class="font-mono font-semibold text-primary">(Fernseher or TV) 65</span>)
+                            {gettext("Parentheses to combine groups (e.g.")} <span class="font-mono font-semibold text-primary">(Fernseher or TV) 65</span>)
                           </span>
                         </div>
                         <div class="flex items-start gap-2">
@@ -626,7 +642,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                             "..."
                           </span>
                           <span>
-                            Quotes only for strict adjacent word order (e.g. <span class="font-mono font-semibold text-primary">"Smart TV"</span>)
+                            {gettext("Quotes only for strict adjacent word order (e.g.")} <span class="font-mono font-semibold text-primary">"Smart TV"</span>)
                           </span>
                         </div>
                       </div>
@@ -637,8 +653,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                     field={@form[:negative_keywords]}
                     id="alert-rule-negative-keywords-input"
                     type="text"
-                    label="Negative/Exclusion Keywords (optional, comma-separated)"
-                    placeholder="e.g. defekt, kühler, zubehör, suche"
+                    label={gettext("Negative/Exclusion Keywords (optional, comma-separated)")}
+                    placeholder={gettext("e.g. defekt, kühler, zubehör, suche")}
                     autocomplete="off"
                     data-1p-ignore="true"
                     data-lpignore="true"
@@ -647,7 +663,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                   <!-- Channels and Delivery Mode -->
                   <div class="p-4 bg-base-200/50 rounded-xl border border-base-300 space-y-3">
                     <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70">
-                      Notification Delivery & Channels
+                      {gettext("Notification Delivery & Channels")}
                     </h4>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -655,11 +671,11 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:delivery_mode]}
                         id="alert-rule-delivery-mode-select"
                         type="select"
-                        label="Delivery Mode"
+                        label={gettext("Delivery Mode")}
                         options={[
-                          {"⚡ Instant (Alert immediately on match)", "instant"},
-                          {"⏱️ Hourly Digest (Batch matches once/hr)", "hourly_digest"},
-                          {"📅 Daily Digest (Batch matches once/day)", "daily_digest"}
+                          {gettext("⚡ Instant (Alert immediately on match)"), "instant"},
+                          {gettext("⏱️ Hourly Digest (Batch matches once/hr)"), "hourly_digest"},
+                          {gettext("📅 Daily Digest (Batch matches once/day)"), "daily_digest"}
                         ]}
                       />
 
@@ -667,13 +683,13 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:cooldown_minutes]}
                         id="alert-rule-cooldown-select"
                         type="select"
-                        label="Alert Cooldown (prevent bursts)"
+                        label={gettext("Alert Cooldown (prevent bursts)")}
                         options={[
-                          {"Immediate (No cooldown)", 0},
-                          {"15 minutes cooldown", 15},
-                          {"30 minutes cooldown", 30},
-                          {"1 hour cooldown", 60},
-                          {"4 hours cooldown", 240}
+                          {gettext("Immediate (No cooldown)"), 0},
+                          {gettext("15 minutes cooldown"), 15},
+                          {gettext("30 minutes cooldown"), 30},
+                          {gettext("1 hour cooldown"), 60},
+                          {gettext("4 hours cooldown"), 240}
                         ]}
                       />
                     </div>
@@ -683,13 +699,13 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:notify_push]}
                         id="alert-rule-notify-push-check"
                         type="checkbox"
-                        label="📱 Mobile Push Notification"
+                        label={gettext("📱 Mobile Push Notification")}
                       />
                       <.input
                         field={@form[:notify_email]}
                         id="alert-rule-notify-email-check"
                         type="checkbox"
-                        label="✉️ Email Notification"
+                        label={gettext("✉️ Email Notification")}
                       />
                     </div>
                   </div>
@@ -697,7 +713,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                   <!-- Advanced Filters: Country, Keyboard, Merchant -->
                   <div class="p-4 bg-base-200/50 rounded-xl border border-base-300 space-y-3">
                     <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70">
-                      Smart Deal & Region Filters
+                      {gettext("Smart Deal & Region Filters")}
                     </h4>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -705,11 +721,11 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:country_filter]}
                         id="alert-rule-country-filter-select"
                         type="select"
-                        label="Origin Region"
+                        label={gettext("Origin Region")}
                         options={[
-                          {"All Regions (DE, FR, ES, IT, etc.)", "all"},
-                          {"🇩🇪 Germany Only (Exclude foreign imports)", "de_only"},
-                          {"🇪🇺 EU Friendly Only (DE, FR, ES, IT, etc.)", "eu_only"}
+                          {gettext("All Regions (DE, FR, ES, IT, etc.)"), "all"},
+                          {gettext("🇩🇪 Germany Only (Exclude foreign imports)"), "de_only"},
+                          {gettext("🇪🇺 EU Friendly Only (DE, FR, ES, IT, etc.)"), "eu_only"}
                         ]}
                       />
 
@@ -717,10 +733,11 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:merchant_filter]}
                         id="alert-rule-merchant-filter-select"
                         type="select"
-                        label="Merchant Trust Filter"
+                        label={gettext("Merchant Trust Filter")}
                         options={[
-                          {"All Merchants", "all"},
-                          {"🛡️ Verified Retailers Only (Amazon, MediaMarkt, etc.)", "verified_only"}
+                          {gettext("All Merchants"), "all"},
+                          {gettext("🛡️ Verified Retailers Only (Amazon, MediaMarkt, etc.)"),
+                           "verified_only"}
                         ]}
                       />
                     </div>
@@ -730,7 +747,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:exclude_foreign_keyboards]}
                         id="alert-rule-exclude-keyboards-check"
                         type="checkbox"
-                        label="⌨️ Exclude foreign keyboard layouts (AZERTY, QWERTY-ES)"
+                        label={gettext("⌨️ Exclude foreign keyboard layouts (AZERTY, QWERTY-ES)")}
                       />
                     </div>
                   </div>
@@ -742,8 +759,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                       id="alert-rule-max-price-input"
                       type="number"
                       step="0.01"
-                      label="Max Price in € (optional)"
-                      placeholder="e.g. 799.00"
+                      label={gettext("Max Price in € (optional)")}
+                      placeholder={gettext("e.g. 799.00")}
                       autocomplete="off"
                       data-1p-ignore="true"
                       data-lpignore="true"
@@ -753,10 +770,10 @@ defmodule DealScoutWeb.AlertLive.Index do
                       field={@form[:source_filter]}
                       id="alert-rule-source-filter-select"
                       type="select"
-                      label="Source Portal"
+                      label={gettext("Source Portal")}
                       options={[
-                        {"All Portals (incl. eBay)", "all"},
-                        {"🛒 eBay Sofort-Kauf Only", "ebay"}
+                        {gettext("All Portals (incl. eBay)"), "all"},
+                        {gettext("🛒 eBay Sofort-Kauf Only"), "ebay"}
                         | Enum.map(@feeds, &{&1.name, &1.slug})
                       ]}
                     />
@@ -767,8 +784,8 @@ defmodule DealScoutWeb.AlertLive.Index do
                       field={@form[:min_temperature]}
                       id="alert-rule-min-temperature-input"
                       type="number"
-                      label="Min. Community Temp (optional)"
-                      placeholder="e.g. 100 (ignores unrated deals)"
+                      label={gettext("Min. Community Temp (optional)")}
+                      placeholder={gettext("e.g. 100 (ignores unrated deals)")}
                       autocomplete="off"
                       data-1p-ignore="true"
                       data-lpignore="true"
@@ -779,7 +796,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                         field={@form[:exclude_dropshippers]}
                         id="alert-rule-exclude-dropshippers-check"
                         type="checkbox"
-                        label="Exclude dropshippers (Temu, Wish, Shein)"
+                        label={gettext("Exclude dropshippers (Temu, Wish, Shein)")}
                       />
                     </div>
                   </div>
@@ -788,7 +805,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     field={@form[:is_active]}
                     id="alert-rule-is-active-check"
                     type="checkbox"
-                    label="Active immediately"
+                    label={gettext("Active immediately")}
                   />
 
                   <!-- Historical Backtesting Engine Section -->
@@ -800,10 +817,12 @@ defmodule DealScoutWeb.AlertLive.Index do
                       <div>
                         <h4 class="font-bold text-xs uppercase tracking-wider text-base-content/70 flex items-center gap-1.5">
                           <.icon name="hero-beaker" class="size-4 text-primary" />
-                          <span>Historical Backtesting Engine</span>
+                          <span>{gettext("Historical Backtesting Engine")}</span>
                         </h4>
                         <p class="text-xs text-base-content/60 mt-0.5">
-                          Scan past indexed deals using fast FTS5 candidate jump to verify matches before saving.
+                          {gettext(
+                            "Scan past indexed deals using fast FTS5 candidate jump to verify matches before saving."
+                          )}
                         </p>
                       </div>
                       <button
@@ -812,11 +831,11 @@ defmodule DealScoutWeb.AlertLive.Index do
                         value="backtest"
                         id="backtest-rule-btn"
                         phx-click="backtest_rule"
-                        phx-disable-with="Testing..."
+                        phx-disable-with={gettext("Testing...")}
                         class="btn btn-sm btn-outline btn-primary w-full sm:w-auto min-h-11 sm:min-h-8 shrink-0 flex items-center justify-center gap-1.5 shadow-sm text-xs sm:text-xs font-semibold"
                       >
                         <.icon name="hero-beaker" class="size-4" />
-                        <span>Test Rule on Past Deals</span>
+                        <span>{gettext("Test Rule on Past Deals")}</span>
                       </button>
                     </div>
 
@@ -830,23 +849,28 @@ defmodule DealScoutWeb.AlertLive.Index do
                                 <div class="space-y-1 text-xs">
                                   <div class="font-medium text-base-content leading-relaxed">
                                     <span class="font-semibold text-emerald-700 dark:text-emerald-300">
-                                      Last matched on {format_deal_date(
-                                        @backtest_result.last_match.published_at ||
-                                          @backtest_result.last_match.inserted_at
-                                      )}:
+                                      {gettext("Last matched on %{date}:",
+                                        date:
+                                          format_deal_date(
+                                            @backtest_result.last_match.published_at ||
+                                              @backtest_result.last_match.inserted_at
+                                          )
+                                      )}
                                     </span>
                                     {@backtest_result.last_match.title}
                                     <span class="text-base-content/80">
-                                      ({format_deal_price(@backtest_result.last_match.price)} at {merchant_name(
-                                        @backtest_result.last_match
-                                      )})
+                                      ({format_deal_price(@backtest_result.last_match.price)} {gettext(
+                                        "at"
+                                      )} {merchant_name(@backtest_result.last_match)})
                                     </span>
                                   </div>
                                   <div class="text-[11px] text-base-content/60">
-                                    {@backtest_result.total_matches} {if @backtest_result.total_matches ==
-                                                                           1,
-                                                                         do: "match",
-                                                                         else: "matches"} found in database sample.
+                                    {ngettext(
+                                      "%{count} match found in database sample.",
+                                      "%{count} matches found in database sample.",
+                                      @backtest_result.total_matches,
+                                      count: @backtest_result.total_matches
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -858,7 +882,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                                     rel="noopener noreferrer"
                                     class="btn btn-xs btn-ghost text-primary hover:bg-primary/10 gap-1 inline-flex items-center"
                                   >
-                                    <span>View deal</span>
+                                    <span>{gettext("View deal")}</span>
                                     <.icon name="hero-arrow-top-right-on-square" class="size-3" />
                                   </a>
                                 </div>
@@ -870,10 +894,13 @@ defmodule DealScoutWeb.AlertLive.Index do
                                 <span class="text-base select-none shrink-0">⚡</span>
                                 <div class="text-xs space-y-1">
                                   <div class="font-semibold text-blue-700 dark:text-blue-300">
-                                    High volume rule: matched multiple recent deals.
+                                    {gettext("High volume rule: matched multiple recent deals.")}
                                   </div>
                                   <p class="text-base-content/80">
-                                    Consider adding a maximum price or specific model. ({@backtest_result.total_matches} matches found in sample).
+                                    {gettext(
+                                      "Consider adding a maximum price or specific model. (%{count} matches found in sample).",
+                                      count: @backtest_result.total_matches
+                                    )}
                                   </p>
                                 </div>
                               </div>
@@ -884,16 +911,19 @@ defmodule DealScoutWeb.AlertLive.Index do
                                     <span class="text-sm select-none shrink-0">✅</span>
                                     <div>
                                       <span class="font-semibold text-emerald-700 dark:text-emerald-300">
-                                        Last matched on {format_deal_date(
-                                          @backtest_result.last_match.published_at ||
-                                            @backtest_result.last_match.inserted_at
-                                        )}:
+                                        {gettext("Last matched on %{date}:",
+                                          date:
+                                            format_deal_date(
+                                              @backtest_result.last_match.published_at ||
+                                                @backtest_result.last_match.inserted_at
+                                            )
+                                        )}
                                       </span>
                                       {@backtest_result.last_match.title}
                                       <span class="text-base-content/80">
-                                        ({format_deal_price(@backtest_result.last_match.price)} at {merchant_name(
-                                          @backtest_result.last_match
-                                        )})
+                                        ({format_deal_price(@backtest_result.last_match.price)} {gettext(
+                                          "at"
+                                        )} {merchant_name(@backtest_result.last_match)})
                                       </span>
                                     </div>
                                   </div>
@@ -906,18 +936,20 @@ defmodule DealScoutWeb.AlertLive.Index do
                               <div class="text-xs space-y-1">
                                 <div class="font-semibold text-amber-700 dark:text-amber-300">
                                   <%= if (@backtest_result.total_matches == 0 and (@form[:keywords].value in [nil, ""] and @form[:name].value in [nil, ""])) do %>
-                                    Please enter keywords or an alert rule name first.
+                                    {gettext("Please enter keywords or an alert rule name first.")}
                                   <% else %>
-                                    No past deals matched this rule in the database.
+                                    {gettext("No past deals matched this rule in the database.")}
                                   <% end %>
                                 </div>
                                 <p class="text-base-content/70">
                                   <%= if (@form[:keywords].value in [nil, ""] and @form[:name].value in [nil, ""]) do %>
-                                    Type terms like <span class="font-semibold">OLED</span>, <span class="font-semibold">RTX 4080</span>, or
+                                    {gettext("Type terms like")} <span class="font-semibold">OLED</span>, <span class="font-semibold">RTX 4080</span>, {gettext(
+                                      "or"
+                                    )}
                                     <span class="font-semibold">Apple Watch</span>
-                                    above to scan past deals.
+                                    {gettext("above to scan past deals.")}
                                   <% else %>
-                                    (May be a rare item or check spelling/operators).
+                                    {gettext("(May be a rare item or check spelling/operators).")}
                                   <% end %>
                                 </p>
                               </div>
@@ -935,7 +967,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     id="cancel-rule-btn"
                     class="btn btn-ghost btn-sm min-h-11 sm:min-h-8 px-4 flex items-center justify-center font-medium"
                   >
-                    Cancel
+                    {gettext("Cancel")}
                   </.link>
                   <.button
                     type="submit"
@@ -945,7 +977,7 @@ defmodule DealScoutWeb.AlertLive.Index do
                     class="btn btn-primary btn-sm min-h-11 sm:min-h-8 px-5 flex items-center justify-center gap-1.5 shadow-sm font-semibold"
                   >
                     <.icon name="hero-check" class="size-4" />
-                    <span>Save Rule</span>
+                    <span>{gettext("Save Rule")}</span>
                   </.button>
                 </div>
               </.form>

@@ -84,12 +84,12 @@ defmodule DealScoutWeb.Layouts do
                       d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
                     />
                   </svg>
-                  Live Feed
+                  {gettext("Live Feed")}
                 </.link>
               </li>
               <li>
                 <.link href={~p"/analytics"} class="rounded-lg flex items-center gap-1.5">
-                  <.icon name="hero-chart-bar-square" class="size-4" /> Analytics
+                  <.icon name="hero-chart-bar-square" class="size-4" /> {gettext("Analytics")}
                 </.link>
               </li>
               <%= if @current_scope && @current_scope.user do %>
@@ -109,7 +109,7 @@ defmodule DealScoutWeb.Layouts do
                         d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
                       />
                     </svg>
-                    My Alert Keywords
+                    {gettext("Alerts")}
                   </.link>
                 </li>
                 <li>
@@ -128,7 +128,7 @@ defmodule DealScoutWeb.Layouts do
                         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    Matches
+                    {gettext("Matches")}
                   </.link>
                 </li>
               <% end %>
@@ -136,6 +136,7 @@ defmodule DealScoutWeb.Layouts do
           </div>
 
           <div class="navbar-end flex items-center gap-2">
+            <.locale_switcher />
             <.theme_toggle />
             <%= if @current_scope && @current_scope.user do %>
               <div class="dropdown dropdown-end">
@@ -156,22 +157,26 @@ defmodule DealScoutWeb.Layouts do
                     {@current_scope.user.email}
                   </li>
                   <div class="divider my-1"></div>
-                  <li><.link href={~p"/analytics"}>Deal Intelligence</.link></li>
-                  <li><.link href={~p"/alerts"}>My Alert Keywords</.link></li>
-                  <li><.link href={~p"/matches"}>Matched Deals</.link></li>
+                  <li><.link href={~p"/analytics"}>{gettext("Deal Intelligence")}</.link></li>
+                  <li><.link href={~p"/alerts"}>{gettext("Alerts")}</.link></li>
+                  <li><.link href={~p"/matches"}>{gettext("Matches")}</.link></li>
                   <%= if @current_scope.user.is_admin do %>
                     <li>
                       <.link href={~p"/admin/system"} class="text-error font-medium">
-                        <.icon name="hero-shield-check" class="size-3.5" /> Admin System Ops
+                        <.icon name="hero-shield-check" class="size-3.5" /> {gettext(
+                          "Admin System Ops"
+                        )}
                       </.link>
                     </li>
                     <li>
                       <.link href={~p"/admin/feedback"} class="text-error font-medium">
-                        <.icon name="hero-inbox-stack" class="size-3.5" /> Admin User Feedback
+                        <.icon name="hero-inbox-stack" class="size-3.5" /> {gettext(
+                          "Admin User Feedback"
+                        )}
                       </.link>
                     </li>
                   <% end %>
-                  <li><.link href={~p"/users/settings"}>Settings</.link></li>
+                  <li><.link href={~p"/users/settings"}>{gettext("Settings")}</.link></li>
                   <li>
                     <button
                       type="button"
@@ -179,7 +184,7 @@ defmodule DealScoutWeb.Layouts do
                       class="flex items-center gap-2 font-medium w-full text-left cursor-pointer"
                     >
                       <.icon name="hero-chat-bubble-bottom-center-text" class="size-4" />
-                      Send feedback
+                      {gettext("Send feedback")}
                     </button>
                   </li>
                   <li>
@@ -188,18 +193,20 @@ defmodule DealScoutWeb.Layouts do
                       phx-click={SupportModal.show_coffee_modal()}
                       class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium w-full text-left cursor-pointer"
                     >
-                      <span>☕</span> Buy a coffee
+                      <span>☕</span> {gettext("Buy a coffee")}
                     </button>
                   </li>
                   <div class="divider my-1"></div>
                   <li>
-                    <.link href={~p"/users/log-out"} method="delete" class="text-error">Log out</.link>
+                    <.link href={~p"/users/log-out"} method="delete" class="text-error">{gettext(
+                      "Log out"
+                    )}</.link>
                   </li>
                 </ul>
               </div>
             <% else %>
-              <.link href={~p"/users/log-in"} class="btn btn-ghost btn-sm">Log in</.link>
-              <.link href={~p"/users/register"} class="btn btn-primary btn-sm">Sign up</.link>
+              <.link href={~p"/users/log-in"} class="btn btn-ghost btn-sm">{gettext("Log in")}</.link>
+              <.link href={~p"/users/register"} class="btn btn-primary btn-sm">{gettext("Register")}</.link>
             <% end %>
           </div>
         </header>
@@ -251,6 +258,41 @@ defmodule DealScoutWeb.Layouts do
           <.icon name="hero-arrow-path" class="size-3 animate-spin text-base-content/60" />
         </div>
       </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders language switcher toggle (DE | EN).
+  """
+  def locale_switcher(assigns) do
+    current_locale = Gettext.get_locale(DealScoutWeb.Gettext)
+    assigns = assign(assigns, :current_locale, current_locale)
+
+    ~H"""
+    <div class="join border border-base-300 rounded-full bg-base-200/60 p-0.5 text-xs font-semibold">
+      <a
+        href={~p"/locale/de"}
+        class={[
+          "join-item px-2 py-0.5 rounded-full transition-colors text-[11px]",
+          @current_locale == "de" && "bg-primary text-primary-content shadow-xs font-bold",
+          @current_locale != "de" && "text-base-content/60 hover:text-base-content"
+        ]}
+        title="Deutsch"
+      >
+        DE
+      </a>
+      <a
+        href={~p"/locale/en"}
+        class={[
+          "join-item px-2 py-0.5 rounded-full transition-colors text-[11px]",
+          @current_locale == "en" && "bg-primary text-primary-content shadow-xs font-bold",
+          @current_locale != "en" && "text-base-content/60 hover:text-base-content"
+        ]}
+        title="English"
+      >
+        EN
+      </a>
     </div>
     """
   end
@@ -311,7 +353,7 @@ defmodule DealScoutWeb.Layouts do
         <div class="flex items-center gap-2">
           <span class="font-bold text-base-content/80">DealScout</span>
           <span>•</span>
-          <span>Private deal monitor for German &amp; EU portals</span>
+          <span>{gettext("Private deal monitor for German & EU portals")}</span>
         </div>
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-3">
@@ -319,14 +361,14 @@ defmodule DealScoutWeb.Layouts do
               href={~p"/impressum"}
               class="hover:underline hover:text-base-content transition-colors"
             >
-              Impressum
+              {gettext("Impressum")}
             </.link>
             <span>•</span>
             <.link
               href={~p"/privacy"}
               class="hover:underline hover:text-base-content transition-colors"
             >
-              Datenschutz
+              {gettext("Datenschutz")}
             </.link>
           </div>
           <button
@@ -335,7 +377,7 @@ defmodule DealScoutWeb.Layouts do
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 font-medium transition-colors cursor-pointer"
           >
             <span>☕</span>
-            <span>Support this project</span>
+            <span>{gettext("Support this project")}</span>
           </button>
         </div>
       </div>
