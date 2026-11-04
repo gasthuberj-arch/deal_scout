@@ -90,8 +90,8 @@ A compact term already rich in pretrained model priors (e.g. *tight*, *red*, *tr
 A single ingested product offer (`DealScout.Deals.Deal`) with title, clean description text, price, temperature score, merchant, source feed, and optional `canonical_deal_id` linking duplicate offers.
 
 **Deal ingestion**:
-The atomic pipeline (`DealScout.Deals.Ingestion`) that parses feed XML or candidate deal maps, normalizes attributes once, resolves or creates the Merchant, deduplicates against canonical Deals, inserts the Deal, updates Merchant statistics only on genuine inserts, enriches cross-border metadata, triggers Alert rule evaluation, and broadcasts new Deals.
-_Avoid_: Calling merchant creation or stat increments outside ingestion
+The atomic pipeline (`DealScout.Deals.Ingestion`) that parses feed XML or candidate deal maps, normalizes attributes once, resolves or creates the Merchant, deduplicates against canonical Deals, inserts the Deal, updates Merchant statistics only on genuine inserts, enriches cross-border metadata, triggers Alert rule evaluation, and broadcasts new Deals. Also provides single-pass ephemeral match-only candidate evaluation (`ingest_ephemeral/2`) for demand-driven feeds without secondary rule evaluation.
+_Avoid_: Calling merchant creation or stat increments outside ingestion, or running duplicate alert rule evaluation cycles on ingested deals
 
 **Deal stream filter**:
 The unified Deal query and live-stream predicate (`DealScout.Deals.list_deals/1` and `DealScout.Deals.matches_stream?/2`) that filters Deals by feed (ID or slug), merchant, dropshipper classification, minimum temperature, duplicate grouping, and **Keyword query** search identically across SQL/FTS5 and live PubSub events.
@@ -131,8 +131,8 @@ _Avoid_: Exposing raw `:persistent_term` maps or rule tuples across seams
 
 **Replica sync**:
 The real-time Litestream WAL/snapshot replication and atomic SQLite snapshot subsystem (`DealScout.Backup`) that authenticates backup clients, validates and streams missing replica frames, creates hot database snapshots, and reports replication lag.
-_Avoid_: Scattering filesystem and snapshot SQL across web channels and controllers
+_Avoid_: Scattering filesystem and snapshot SQL across web channels and controllers; coupling core domain contexts to HTTP response streaming or web adapters
 
 **Deal thumbnail proxy**:
-The same-origin media delivery subsystem (`DealScout.Deals.ThumbnailProxy` and `DealScoutWeb.DealImageController`) that reliably serves deal thumbnails to mobile and ad-blocked clients via `/deals/:id/image`, combining strong browser caching (24h Cache-Control and ETag), bounded in-memory caching (max 150 entries, <= 60 KB per thumbnail), short TTL (15m), and graceful client-side fallback to direct CDN URLs.
-_Avoid_: Unbounded caching of remote binaries or querying ETS with full-table heap copying
+The same-origin media delivery subsystem (`DealScout.Deals.ThumbnailProxy` and `DealScoutWeb.DealImageController`) that reliably serves deal thumbnails to mobile and ad-blocked clients via `/deals/:id/image`, combining strong browser caching (24h Cache-Control and ETag), bounded in-memory caching (max 150 entries, <= 60 KB per thumbnail), short TTL (15m), precomputed in-memory ETags with zero-copy conditional revalidation (`if_none_match`), and graceful client-side fallback to direct CDN URLs.
+_Avoid_: Unbounded caching of remote binaries, querying ETS with full-table heap copying, or copying binaries across process heaps on 304 Not Modified responses

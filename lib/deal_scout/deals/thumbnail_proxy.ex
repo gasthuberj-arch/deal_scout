@@ -45,23 +45,37 @@ defmodule DealScout.Deals.ThumbnailProxy do
 
   @doc """
   Fetches or serves a cached deal thumbnail.
+  Supports conditional requests via `if_none_match: etag` to avoid binary copying.
 
   Returns:
-  - `{:ok, content_type, body}` on cache hit or successful upstream proxying.
+  - `{:not_modified, etag}` when the cached thumbnail matches the client ETag.
+  - `{:ok, content_type, body, etag}` on cache hit or successful upstream proxying.
   - `{:redirect, external_url}` when upstream fails, times out, or concurrency is saturated.
   - `:not_found` when the deal does not exist or has no image URL.
   """
   @spec get_thumbnail(term(), keyword()) ::
-          {:ok, String.t(), binary()} | {:redirect, String.t()} | :not_found
+          {:not_modified, String.t()}
+          | {:ok, String.t(), binary(), String.t()}
+          | {:redirect, String.t()}
+          | :not_found
   def get_thumbnail(deal_id, opts \\ []) do
+    client_etag =
+      case Keyword.get(opts, :if_none_match) do
+        tag when is_binary(tag) -> String.trim(tag, "\"")
+        _ -> nil
+      end
+
     case normalize_id(deal_id) do
       nil ->
         :not_found
 
       id ->
-        case get_cached(id) do
-          {:ok, content_type, body} ->
-            {:ok, content_type, body}
+        case get_cached(id, client_etag) do
+          {:not_modified, etag} ->
+            {:not_modified, etag}
+
+          {:ok, content_type, body, etag} ->
+            {:ok, content_type, body, etag}
 
           :miss ->
             fetch_and_cache(id, opts)
@@ -158,34 +172,65 @@ defmodule DealScout.Deals.ThumbnailProxy do
   # Internal Cache & Concurrency Pipeline
   # ============================================================================
 
-  defp get_cached(deal_id) do
+  defp get_cached(deal_id, client_etag) do
     now = System.monotonic_time(:second)
 
-    case :ets.lookup(@table, deal_id) do
-      [{^deal_id, content_type, body, inserted_at}] ->
-        if now - inserted_at <= @ttl_seconds do
-          {:ok, content_type, body}
-        else
-          :ets.delete(@table, deal_id)
-          read_from_disk(deal_id)
-        end
+    if client_etag do
+      # Zero-copy 304 revalidation: inspect only inserted_at and etag metadata.
+      # Avoids copying large binary image bodies (up to 60 KB) into the calling process heap.
+      case :ets.select(@table, [{{deal_id, :_, :_, :"$1", :"$2"}, [], [{{:"$1", :"$2"}}]}]) do
+        [{inserted_at, etag}] ->
+          if now - inserted_at <= @ttl_seconds do
+            if client_etag == etag do
+              {:not_modified, etag}
+            else
+              lookup_full(deal_id, now)
+            end
+          else
+            :ets.delete(@table, deal_id)
+            read_from_disk(deal_id, client_etag)
+          end
 
-      _ ->
-        read_from_disk(deal_id)
+        [] ->
+          read_from_disk(deal_id, client_etag)
+      end
+    else
+      lookup_full(deal_id, now)
     end
   rescue
     _ -> :miss
   end
 
-  defp read_from_disk(deal_id) do
+  defp lookup_full(deal_id, now) do
+    case :ets.lookup(@table, deal_id) do
+      [{^deal_id, content_type, body, inserted_at, etag}] ->
+        if now - inserted_at <= @ttl_seconds do
+          {:ok, content_type, body, etag}
+        else
+          :ets.delete(@table, deal_id)
+          read_from_disk(deal_id, nil)
+        end
+
+      _ ->
+        read_from_disk(deal_id, nil)
+    end
+  end
+
+  defp read_from_disk(deal_id, client_etag) do
     file_path = disk_path(deal_id)
 
     case File.read(file_path) do
       {:ok, binary} ->
         case :binary.split(binary, "\n") do
           [content_type, body] when is_binary(body) and byte_size(body) <= @max_item_bytes ->
-            insert_ets(deal_id, content_type, body)
-            {:ok, content_type, body}
+            etag = Integer.to_string(:erlang.phash2(body), 16)
+            insert_ets(deal_id, content_type, body, etag)
+
+            if client_etag && client_etag == etag do
+              {:not_modified, etag}
+            else
+              {:ok, content_type, body, etag}
+            end
 
           _ ->
             File.rm(file_path)
@@ -225,12 +270,14 @@ defmodule DealScout.Deals.ThumbnailProxy do
       {:ok, %{status: 200, body: body} = resp}
       when is_binary(body) and byte_size(body) <= @max_item_bytes ->
         content_type = extract_content_type(resp)
-        _ = put_raw(deal_id, content_type, body)
-        {:ok, content_type, body}
+        etag = Integer.to_string(:erlang.phash2(body), 16)
+        _ = put_raw(deal_id, content_type, body, etag)
+        {:ok, content_type, body, etag}
 
       {:ok, %{status: 200, body: body} = resp} when is_binary(body) ->
         content_type = extract_content_type(resp)
-        {:ok, content_type, body}
+        etag = Integer.to_string(:erlang.phash2(body), 16)
+        {:ok, content_type, body, etag}
 
       _ ->
         {:redirect, url}
@@ -291,23 +338,24 @@ defmodule DealScout.Deals.ThumbnailProxy do
 
   defp extract_content_type(_), do: "image/jpeg"
 
-  defp put_raw(deal_id, content_type, body) when is_binary(body) do
+  defp put_raw(deal_id, content_type, body, etag \\ nil) when is_binary(body) do
     if byte_size(body) > @max_item_bytes do
       {:error, :too_large}
     else
-      insert_ets(deal_id, content_type, body)
+      tag = etag || Integer.to_string(:erlang.phash2(body), 16)
+      insert_ets(deal_id, content_type, body, tag)
       write_to_disk(deal_id, content_type, body)
       :ok
     end
   end
 
-  defp insert_ets(deal_id, content_type, body) do
+  defp insert_ets(deal_id, content_type, body, etag) do
     try do
       if :ets.info(@table, :size) >= @max_entries do
         prune_oldest()
       end
 
-      :ets.insert(@table, {deal_id, content_type, body, System.monotonic_time(:second)})
+      :ets.insert(@table, {deal_id, content_type, body, System.monotonic_time(:second), etag})
     rescue
       _ -> :ok
     end
@@ -341,15 +389,19 @@ defmodule DealScout.Deals.ThumbnailProxy do
   defp normalize_id(_), do: nil
 
   defp prune_oldest do
-    case :ets.select(@table, [{{:"$1", :_, :_, :"$2"}, [], [{{:"$1", :"$2"}}]}]) do
-      items when is_list(items) and length(items) > 0 ->
-        items
-        |> Enum.sort_by(fn {_id, inserted_at} -> inserted_at end)
-        |> Enum.take(div(@max_entries, 3))
-        |> Enum.each(fn {id, _} -> :ets.delete(@table, id) end)
+    items =
+      case :ets.select(@table, [
+             {{:"$1", :_, :_, :"$2", :_}, [], [{{:"$1", :"$2"}}]}
+           ]) do
+        matched when is_list(matched) -> matched
+        _ -> []
+      end
 
-      _ ->
-        :ok
+    if length(items) > 0 do
+      items
+      |> Enum.sort_by(fn {_id, inserted_at} -> inserted_at end)
+      |> Enum.take(div(@max_entries, 3))
+      |> Enum.each(fn {id, _} -> :ets.delete(@table, id) end)
     end
   rescue
     _ -> :ok
@@ -434,7 +486,7 @@ defmodule DealScout.Deals.ThumbnailProxy do
 
   defp sweep_expired do
     cutoff = System.monotonic_time(:second) - @ttl_seconds
-    :ets.select_delete(@table, [{{:_, :_, :_, :"$1"}, [{:<, :"$1", cutoff}], [true]}])
+    :ets.select_delete(@table, [{{:_, :_, :_, :"$1", :_}, [{:<, :"$1", cutoff}], [true]}])
     sweep_disk()
   rescue
     _ -> :ok

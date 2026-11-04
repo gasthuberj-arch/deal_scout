@@ -133,6 +133,77 @@ defmodule DealScout.KeywordEngine do
   end
 
   @doc """
+  Evaluates a list of candidate deals against a list of alert rules for keyword matching.
+  Encapsulates index freshness synchronization, Aho-Corasick prefiltering, and transparent
+  query AST fallback for uncompiled rules behind a single deep interface.
+
+  Returns `%{rule => [matching_deals]}`.
+  """
+  def candidates_for_rules(deals, rules, opts \\ []) when is_list(deals) and is_list(rules) do
+    if Keyword.get(opts, :ensure_fresh_index, true) do
+      ensure_fresh_index()
+    end
+
+    prefilter? = Keyword.get(opts, :prefilter, true)
+
+    {compiled_rules, candidates_by_deal_id} =
+      if prefilter? do
+        deal_items = Enum.map(deals, fn d -> %{id: d.id, text: searchable_text(d)} end)
+        prefilter_batch(deal_items)
+      else
+        {%{}, %{}}
+      end
+
+    Enum.reduce(rules, %{}, fn rule, acc ->
+      compiled? =
+        case Map.fetch(compiled_rules, rule.id) do
+          {:ok, compiled_keywords} when prefilter? and not is_nil(rule.id) ->
+            is_nil(compiled_keywords) or compiled_keywords == rule.keywords
+
+          _ ->
+            false
+        end
+
+      matching_deals =
+        if compiled? do
+          Enum.filter(deals, fn deal ->
+            candidate_ids = Map.get(candidates_by_deal_id, deal.id, MapSet.new())
+            MapSet.member?(candidate_ids, rule.id)
+          end)
+        else
+          case Query.parse(rule.keywords) do
+            {:ok, ast} ->
+              Enum.filter(deals, fn deal ->
+                Query.matches?(ast, searchable_text(deal))
+              end)
+
+            _ ->
+              []
+          end
+        end
+
+      Map.put(acc, rule, matching_deals)
+    end)
+  end
+
+  @doc """
+  Extracts normalized searchable text from a deal or deal-like map.
+  """
+  def searchable_text(%{title: title, clean_text: text}) when is_binary(text) and text != "" do
+    "#{title} #{text}"
+  end
+
+  def searchable_text(%{title: title, description: desc}) when is_binary(desc) and desc != "" do
+    "#{title} #{desc}"
+  end
+
+  def searchable_text(%{title: title}) when is_binary(title) do
+    title
+  end
+
+  def searchable_text(_), do: ""
+
+  @doc """
   Takes a batch of items: `[%{id: item_id, text: "title + description"}, ...]`
   Returns: `[{item_id, [{rule_id, user_id}, ...]}, ...]`
   """

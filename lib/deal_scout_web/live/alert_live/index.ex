@@ -3,7 +3,6 @@ defmodule DealScoutWeb.AlertLive.Index do
 
   alias DealScout.Alerts
   alias DealScout.Alerts.AlertRule
-  alias DealScout.Alerts.Backtest
   alias DealScout.Feeds
   alias DealScout.KeywordEngine.Query
   alias DealScoutWeb.PWAComponents
@@ -228,7 +227,7 @@ defmodule DealScoutWeb.AlertLive.Index do
   end
 
   defp do_backtest(rule_data, socket) do
-    result = Backtest.test_rule(rule_data)
+    result = Alerts.backtest_rule(rule_data)
 
     effective_query =
       case rule_data do

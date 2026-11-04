@@ -2,7 +2,7 @@ defmodule DealScout.Notifications.PushDeliveryLog do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses ~w(delivered expired http_error network_error no_subscriptions skipped_cooldown)
+  @statuses ~w(pending delivered expired http_error network_error no_subscriptions skipped_cooldown)
 
   schema "push_delivery_logs" do
     field :tracking_id, :string

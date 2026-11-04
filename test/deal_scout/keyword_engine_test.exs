@@ -150,5 +150,24 @@ defmodule DealScout.KeywordEngineTest do
 
       refute Map.has_key?(compiled_rules3, rule.id)
     end
+
+    test "candidates_for_rules/3 encapsulates prefiltering and fallback" do
+      rule1 = %DealScout.Alerts.AlertRule{id: 901, user_id: 1, keywords: "rtx 4080"}
+      rule_draft = %DealScout.Alerts.AlertRule{id: nil, user_id: 1, keywords: "playstation 5"}
+
+      KeywordEngine.compile_and_store([rule1])
+
+      d1 = %{id: 1, title: "Gigabyte RTX 4080 Gaming OC", clean_text: "Brand new"}
+      d2 = %{id: 2, title: "Sony PlayStation 5 Slim", clean_text: "Condition: new"}
+      d3 = %{id: 3, title: "Apple iPad Air M2", clean_text: "64GB Space Gray"}
+
+      candidates =
+        KeywordEngine.candidates_for_rules([d1, d2, d3], [rule1, rule_draft],
+          ensure_fresh_index: false
+        )
+
+      assert Map.get(candidates, rule1) == [d1]
+      assert Map.get(candidates, rule_draft) == [d2]
+    end
   end
 end

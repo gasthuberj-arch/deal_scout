@@ -34,7 +34,7 @@ defmodule DealScout.Alerts do
       |> Repo.insert()
 
     with {:ok, rule} <- result do
-      KeywordEngine.Server.mark_dirty()
+      KeywordEngine.mark_dirty()
       {:ok, rule}
     end
   end
@@ -46,7 +46,7 @@ defmodule DealScout.Alerts do
       |> Repo.update()
 
     with {:ok, updated_rule} <- result do
-      KeywordEngine.Server.mark_dirty()
+      KeywordEngine.mark_dirty()
       {:ok, updated_rule}
     end
   end
@@ -55,10 +55,17 @@ defmodule DealScout.Alerts do
     result = Repo.delete(rule)
 
     with {:ok, deleted_rule} <- result do
-      KeywordEngine.Server.mark_dirty()
+      KeywordEngine.mark_dirty()
       {:ok, deleted_rule}
     end
   end
+
+  @doc """
+  Runs historical backtesting for an alert rule (or draft parameter map) against past deals.
+  """
+  defdelegate backtest_rule(rule_or_params, opts \\ []),
+    to: DealScout.Alerts.Backtest,
+    as: :test_rule
 
   def change_alert_rule(%AlertRule{} = rule, attrs \\ %{}) do
     AlertRule.changeset(rule, attrs)

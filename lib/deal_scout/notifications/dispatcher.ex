@@ -382,15 +382,10 @@ defmodule DealScout.Notifications.Dispatcher do
 
   defp record_cooldown_skipped(%AlertRule{user_id: user_id} = rule, matches)
        when is_list(matches) and not is_nil(user_id) do
+    reason = "Suppressed by #{rule.cooldown_minutes}m rule cooldown window"
+
     Enum.each(matches, fn m ->
-      Notifications.record_push_delivery_log(%{
-        user_id: user_id,
-        user_match_id: m.id,
-        tracking_id: "skipped-cooldown-#{m.id}-#{System.system_time(:microsecond)}",
-        endpoint: nil,
-        status: "skipped_cooldown",
-        error_message: "Suppressed by #{rule.cooldown_minutes}m rule cooldown window"
-      })
+      Notifications.record_push_suppression(user_id, m.id, reason)
     end)
   end
 

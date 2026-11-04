@@ -19,6 +19,7 @@ defmodule DealScout.Deals.Ingestion do
   alias DealScout.Deals
   alias DealScout.Deals.{CrossBorder, Deal, Deduplicator, Merchant, MerchantGuard}
   alias DealScout.Feeds.Parser
+  alias DealScout.Feeds.Feed
   alias DealScout.Alerts
 
   @doc """
@@ -71,6 +72,178 @@ defmodule DealScout.Deals.Ingestion do
           other
       end
     end
+  end
+
+  @doc """
+  Evaluates candidate deal items in memory against alert rules, persisting only
+  those that match at least one rule (filter-first / match-only ingestion).
+  Bypasses secondary rule evaluation by recording matches directly.
+
+  Accepts either `(items, %Feed{} = feed, opts)` or `(items, opts)`.
+  Options:
+  - `:rules` - List of `AlertRule` structs to match against (defaults to all active rules).
+  - `:feed` - Feed struct to associate deals with (defaults to `DealScout.Feeds.ensure_ebay_feed()`).
+  - `:feed_slug` - Optional custom slug for merchant statistics (defaults to `feed.slug`).
+
+  Returns `{:ok, %{matched_deals: [Deal.t()], discarded_count: integer()}}`.
+  """
+  def ingest_ephemeral(items, feed_or_opts \\ [])
+
+  def ingest_ephemeral(items, %Feed{} = feed) when is_list(items) do
+    ingest_ephemeral(items, feed, [])
+  end
+
+  def ingest_ephemeral(items, opts) when is_list(items) and is_list(opts) do
+    feed = Keyword.get_lazy(opts, :feed, &DealScout.Feeds.ensure_ebay_feed/0)
+    ingest_ephemeral(items, feed, opts)
+  end
+
+  def ingest_ephemeral(items, %Feed{} = feed, opts) when is_list(items) and is_list(opts) do
+    rules =
+      case Keyword.get(opts, :rules) do
+        nil -> Alerts.list_active_rules()
+        explicit_rules -> explicit_rules
+      end
+
+    if items == [] or rules == [] do
+      {:ok, %{matched_deals: [], discarded_count: length(items)}}
+    else
+      normalized_items =
+        items
+        |> Enum.map(&normalize_candidate_attrs/1)
+        |> Enum.uniq_by(& &1.guid)
+
+      guids =
+        normalized_items
+        |> Enum.map(& &1.guid)
+        |> Enum.reject(&is_nil/1)
+
+      existing_guids =
+        if guids == [] do
+          MapSet.new()
+        else
+          Deal
+          |> where([d], d.guid in ^guids)
+          |> select([d], d.guid)
+          |> Repo.all()
+          |> MapSet.new()
+        end
+
+      unseen_items =
+        Enum.reject(normalized_items, fn item ->
+          is_nil(item.guid) or MapSet.member?(existing_guids, item.guid)
+        end)
+
+      deal_candidates =
+        Enum.map(unseen_items, fn item ->
+          build_in_memory_deal(item, feed)
+        end)
+
+      matches_by_rule =
+        Enum.reduce(rules, %{}, fn rule, acc ->
+          matching =
+            Enum.filter(deal_candidates, fn candidate ->
+              DealScout.Alerts.Matcher.matches?(candidate, rule)
+            end)
+
+          if matching != [] do
+            Map.put(acc, rule, matching)
+          else
+            acc
+          end
+        end)
+
+      matched_guids =
+        matches_by_rule
+        |> Map.values()
+        |> List.flatten()
+        |> Enum.map(& &1.guid)
+        |> MapSet.new()
+
+      matched_items =
+        Enum.filter(unseen_items, fn item ->
+          MapSet.member?(matched_guids, item.guid)
+        end)
+
+      feed_id = feed.id
+      feed_slug = Keyword.get(opts, :feed_slug, feed.slug || "custom")
+
+      persisted_deals =
+        Enum.reduce(matched_items, [], fn item, acc ->
+          case insert_single_deal(item, feed_id, feed_slug) do
+            {:ok, deal} ->
+              [deal | acc]
+
+            _ ->
+              acc
+          end
+        end)
+        |> Enum.reverse()
+
+      guid_to_persisted = Map.new(persisted_deals, fn d -> {d.guid, d} end)
+
+      persisted_matches_by_rule =
+        Enum.reduce(matches_by_rule, %{}, fn {rule, candidates}, acc ->
+          deals =
+            candidates
+            |> Enum.map(&Map.get(guid_to_persisted, &1.guid))
+            |> Enum.reject(&is_nil/1)
+
+          if deals != [] do
+            Map.put(acc, rule, deals)
+          else
+            acc
+          end
+        end)
+
+      if map_size(persisted_matches_by_rule) > 0 do
+        DealScout.Alerts.MatchRecorder.record_and_dispatch(persisted_matches_by_rule)
+
+        Enum.each(persisted_deals, fn deal ->
+          Phoenix.PubSub.broadcast(DealScout.PubSub, "deals:stream", {:new_deal, deal})
+        end)
+      end
+
+      discarded_count = length(items) - length(persisted_deals)
+      {:ok, %{matched_deals: persisted_deals, discarded_count: discarded_count}}
+    end
+  end
+
+  defp build_in_memory_deal(item, %Feed{} = feed) do
+    country =
+      Map.get(item, :country) ||
+        CrossBorder.detect_country(item) ||
+        %{
+          code: "DE",
+          country_code: "DE",
+          flag: "🇩🇪",
+          name: "Deutschland",
+          is_germany: true,
+          is_eu: true
+        }
+
+    keyboard_warning = Map.get(item, :keyboard_warning) || CrossBorder.keyboard_warning(item)
+    default_merchant = feed.name || "Custom"
+    merchant_name = Map.get(item, :merchant_name) || default_merchant
+
+    %Deal{
+      guid: Map.get(item, :guid),
+      title: Map.get(item, :title),
+      url: Map.get(item, :url),
+      price: Map.get(item, :price),
+      description: Map.get(item, :description),
+      clean_text: Map.get(item, :clean_text),
+      temperature: Map.get(item, :temperature) || 100,
+      raw_merchant: Map.get(item, :raw_merchant) || merchant_name,
+      image_url: Map.get(item, :image_url),
+      published_at:
+        Map.get(item, :published_at) || DateTime.utc_now() |> DateTime.truncate(:second),
+      country: country,
+      keyboard_warning: keyboard_warning,
+      feed_id: feed.id,
+      feed: feed,
+      merchant: %Merchant{name: merchant_name}
+    }
   end
 
   @doc """

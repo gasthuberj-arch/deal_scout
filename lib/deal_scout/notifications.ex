@@ -175,6 +175,18 @@ defmodule DealScout.Notifications do
             |> Map.put(:tracking_id, tracking_id)
             |> Map.put(:sent_at, now_ms)
 
+          # Pre-dispatch: persist tracking entry with status "pending" so device ACKs
+          # arriving immediately never miss the record in SQLite (race-free).
+          {:ok, pending_log} =
+            record_push_delivery_log(%{
+              user_id: user_id,
+              user_match_id: Map.get(payload, :user_match_id),
+              push_subscription_id: sub.id,
+              tracking_id: tracking_id,
+              endpoint: sub.endpoint,
+              status: "pending"
+            })
+
           start_mono = System.monotonic_time(:millisecond)
           send_res = WebPush.send_notification(sub, payload_with_meta)
           duration_ms = max(1, System.monotonic_time(:millisecond) - start_mono)
@@ -185,11 +197,8 @@ defmodule DealScout.Notifications do
               |> Ecto.Changeset.change(last_used_at: now)
               |> Repo.update()
 
-              log_push_attempt(
-                user_id,
-                sub,
-                payload,
-                tracking_id,
+              update_push_attempt(
+                pending_log,
                 "delivered",
                 201,
                 nil,
@@ -205,11 +214,8 @@ defmodule DealScout.Notifications do
                }}
 
             {:error, :subscription_expired} ->
-              log_push_attempt(
-                user_id,
-                sub,
-                payload,
-                tracking_id,
+              update_push_attempt(
+                pending_log,
                 "expired",
                 410,
                 "Push subscription expired or gone (HTTP 410). Device unregistered.",
@@ -226,11 +232,8 @@ defmodule DealScout.Notifications do
                }}
 
             {:error, {:http_error, status, body}} ->
-              log_push_attempt(
-                user_id,
-                sub,
-                payload,
-                tracking_id,
+              update_push_attempt(
+                pending_log,
                 "http_error",
                 status,
                 "Push gateway returned HTTP #{status}: #{inspect(body)}",
@@ -246,11 +249,8 @@ defmodule DealScout.Notifications do
                }}
 
             {:error, reason} ->
-              log_push_attempt(
-                user_id,
-                sub,
-                payload,
-                tracking_id,
+              update_push_attempt(
+                pending_log,
                 "network_error",
                 nil,
                 inspect(reason),
@@ -329,6 +329,22 @@ defmodule DealScout.Notifications do
   end
 
   @doc """
+  Records a push notification suppression log (e.g. when suppressed by rule cooldown).
+  Encapsulates tracking ID generation and status behind the notification seam.
+  """
+  def record_push_suppression(user_id, user_match_id, reason \\ nil) when is_integer(user_id) do
+    record_push_delivery_log(%{
+      user_id: user_id,
+      user_match_id: user_match_id,
+      tracking_id:
+        "skipped-cooldown-#{user_match_id || user_id}-#{System.system_time(:microsecond)}",
+      endpoint: nil,
+      status: "skipped_cooldown",
+      error_message: reason
+    })
+  end
+
+  @doc """
   Records a delivery receipt ping sent back from the Service Worker on the device.
   Measures latency on the server against `log.inserted_at` to eliminate client device clock skew.
   """
@@ -336,19 +352,7 @@ defmodule DealScout.Notifications do
       when is_binary(tracking_id) do
     query = from(l in PushDeliveryLog, where: l.tracking_id == ^tracking_id)
 
-    log =
-      case Repo.one(query) do
-        nil ->
-          # Device ACK can occasionally outpace the server committing the initial
-          # gateway delivery log to SQLite. A brief grace pause bridges this write lag.
-          Process.sleep(150)
-          Repo.one(query)
-
-        found ->
-          found
-      end
-
-    case log do
+    case Repo.one(query) do
       nil ->
         {:error, :not_found}
 
@@ -686,26 +690,17 @@ defmodule DealScout.Notifications do
     end
   end
 
-  defp log_push_attempt(
-         user_id,
-         sub,
-         payload,
-         tracking_id,
-         status,
-         http_status,
-         error_msg,
-         duration_ms
-       ) do
-    record_push_delivery_log(%{
-      user_id: user_id,
-      user_match_id: Map.get(payload, :user_match_id),
-      push_subscription_id: sub.id,
-      tracking_id: tracking_id,
-      endpoint: sub.endpoint,
+  defp update_push_attempt(pending_log, status, http_status, error_msg, duration_ms) do
+    # Fetch fresh in case client ACK already updated client_received_at while gateway request was in flight
+    current_log = Repo.get(PushDeliveryLog, pending_log.id) || pending_log
+
+    current_log
+    |> PushDeliveryLog.changeset(%{
       status: status,
       http_status: http_status,
       error_message: error_msg,
       gateway_duration_ms: duration_ms
     })
+    |> Repo.update()
   end
 end

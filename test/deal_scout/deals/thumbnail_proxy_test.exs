@@ -38,8 +38,10 @@ defmodule DealScout.Deals.ThumbnailProxyTest do
       payload = "fake-binary-png-data"
       assert :ok = ThumbnailProxy.put(deal.id, "image/png", payload)
 
-      assert {:ok, "image/png", ^payload} = ThumbnailProxy.get_thumbnail(deal.id)
-      assert {:ok, "image/png", ^payload} = ThumbnailProxy.get_thumbnail("#{deal.id}")
+      assert {:ok, "image/png", ^payload, etag1} = ThumbnailProxy.get_thumbnail(deal.id)
+      assert {:ok, "image/png", ^payload, etag2} = ThumbnailProxy.get_thumbnail("#{deal.id}")
+      assert is_binary(etag1) and etag1 != ""
+      assert etag1 == etag2
     end
 
     test "falls back to disk when ETS entry is missing or deleted", %{deal: deal} do
@@ -50,7 +52,7 @@ defmodule DealScout.Deals.ThumbnailProxyTest do
       :ets.delete(:deal_image_cache, deal.id)
 
       # Disk cache should repopulate ETS and return data
-      assert {:ok, "image/jpeg", ^payload} = ThumbnailProxy.get_thumbnail(deal.id)
+      assert {:ok, "image/jpeg", ^payload, _etag} = ThumbnailProxy.get_thumbnail(deal.id)
       assert ThumbnailProxy.size() > 0
     end
 
@@ -87,7 +89,7 @@ defmodule DealScout.Deals.ThumbnailProxyTest do
       })
 
       # Hits default adapter without passing ad-hoc fetcher
-      assert {:ok, "image/png", ^test_image} = ThumbnailProxy.get_thumbnail(deal.id)
+      assert {:ok, "image/png", ^test_image, _etag} = ThumbnailProxy.get_thumbnail(deal.id)
       assert ThumbnailProxy.size() > 0
     end
 
@@ -103,7 +105,7 @@ defmodule DealScout.Deals.ThumbnailProxyTest do
          }}
       end
 
-      assert {:ok, "image/jpeg", ^large_payload} =
+      assert {:ok, "image/jpeg", ^large_payload, _etag} =
                ThumbnailProxy.get_thumbnail(deal.id, fetcher: mock_fetcher)
 
       # Ensure it was not cached
@@ -193,6 +195,21 @@ defmodule DealScout.Deals.ThumbnailProxyTest do
 
       ThumbnailProxy.clear()
       assert ThumbnailProxy.size() == 0
+    end
+
+    test "get_thumbnail/2 returns {:not_modified, etag} when client ETag matches cached image" do
+      body = "pre-cached image binary bytes"
+      expected_etag = Integer.to_string(:erlang.phash2(body), 16)
+      ThumbnailProxy.put(42, "image/png", body)
+
+      assert {:not_modified, ^expected_etag} =
+               ThumbnailProxy.get_thumbnail(42, if_none_match: expected_etag)
+
+      assert {:not_modified, ^expected_etag} =
+               ThumbnailProxy.get_thumbnail(42, if_none_match: ~s("#{expected_etag}"))
+
+      assert {:ok, "image/png", ^body, ^expected_etag} =
+               ThumbnailProxy.get_thumbnail(42, if_none_match: "different_etag")
     end
   end
 end

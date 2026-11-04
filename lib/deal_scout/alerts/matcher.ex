@@ -27,44 +27,15 @@ defmodule DealScout.Alerts.Matcher do
   """
   @spec match_batch([Deal.t()], [AlertRule.t()], keyword()) :: {:ok, match_batch_result()}
   def match_batch(deals, rules, opts \\ []) when is_list(deals) and is_list(rules) do
-    if Keyword.get(opts, :ensure_fresh_index, true) do
-      KeywordEngine.Server.ensure_fresh_index()
-    end
-
-    prefilter? = Keyword.get(opts, :prefilter, true)
-
-    {compiled_rules, candidates_by_deal_id} =
-      if prefilter? do
-        deal_items =
-          Enum.map(deals, fn d -> %{id: d.id, text: searchable_text(d)} end)
-
-        KeywordEngine.prefilter_batch(deal_items)
-      else
-        {%{}, %{}}
-      end
+    keyword_candidates_by_rule = KeywordEngine.candidates_for_rules(deals, rules, opts)
 
     {matches_by_rule, paused_rules} =
       Enum.reduce(rules, {%{}, []}, fn rule, {acc_matches, acc_paused} ->
         eval_fn = fn ->
-          compiled? =
-            case Map.fetch(compiled_rules, rule.id) do
-              {:ok, compiled_keywords} when prefilter? and not is_nil(rule.id) ->
-                is_nil(compiled_keywords) or compiled_keywords == rule.keywords
+          candidate_deals = Map.get(keyword_candidates_by_rule, rule, [])
 
-              _ ->
-                false
-            end
-
-          Enum.filter(deals, fn deal ->
-            if compiled? do
-              candidate_ids = Map.get(candidates_by_deal_id, deal.id, MapSet.new())
-
-              MapSet.member?(candidate_ids, rule.id) and
-                matches_filters?(deal, rule) and
-                not_excluded?(deal, rule.negative_keywords)
-            else
-              matches?(deal, rule)
-            end
+          Enum.filter(candidate_deals, fn deal ->
+            matches_filters?(deal, rule) and not_excluded?(deal, rule.negative_keywords)
           end)
         end
 

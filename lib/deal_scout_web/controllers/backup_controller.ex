@@ -40,18 +40,10 @@ defmodule DealScoutWeb.BackupController do
   defp perform_backup(conn) do
     case Backup.create_sqlite_snapshot() do
       {:ok, %{path: backup_path, filename: filename}} ->
-        try do
-          conn
-          |> cleanup_on_send(backup_path)
-          |> put_resp_content_type("application/x-sqlite3")
-          |> put_resp_header(
-            "content-disposition",
-            "attachment; filename=\"#{filename}\""
-          )
-          |> send_file(200, backup_path)
-        after
-          File.rm(backup_path)
-        end
+        conn
+        |> put_resp_content_type("application/x-sqlite3")
+        |> put_resp_header("content-disposition", "attachment; filename=\"#{filename}\"")
+        |> stream_and_cleanup_snapshot(backup_path)
 
       {:error, _reason} ->
         conn
@@ -60,20 +52,31 @@ defmodule DealScoutWeb.BackupController do
     end
   end
 
-  defp cleanup_on_send(conn, path) do
-    parent = self()
+  defp stream_and_cleanup_snapshot(conn, backup_path) do
+    case conn.adapter do
+      {Plug.Adapters.Test.Conn, _} ->
+        # In test environments, send_file reads the file into memory synchronously.
+        conn = send_file(conn, 200, backup_path)
+        File.rm(backup_path)
+        conn
 
-    Plug.Conn.register_before_send(conn, fn conn ->
-      Task.start(fn ->
-        ref = Process.monitor(parent)
+      _ ->
+        parent = self()
 
-        receive do
-          {:DOWN, ^ref, :process, ^parent, _reason} ->
-            File.rm(path)
-        end
-      end)
+        conn
+        |> register_before_send(fn c ->
+          Task.start(fn ->
+            ref = Process.monitor(parent)
 
-      conn
-    end)
+            receive do
+              {:DOWN, ^ref, :process, ^parent, _reason} ->
+                File.rm(backup_path)
+            end
+          end)
+
+          c
+        end)
+        |> send_file(200, backup_path)
+    end
   end
 end
