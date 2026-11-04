@@ -11,7 +11,7 @@ defmodule DealScout.Analytics do
   alias DealScout.Analytics.Server
 
   @table :deal_scout_analytics_cache
-  @default_analytics_ttl_ms 60_000
+  @default_analytics_ttl_ms 15 * 60_000
 
   defdelegate warm_now(), to: Server
   defdelegate refresh_now(), to: Server
@@ -76,59 +76,48 @@ defmodule DealScout.Analytics do
     since_24h = DateTime.add(now, -24 * 3600, :second)
     since_1h = DateTime.add(now, -3600, :second)
 
-    stored_deals = Repo.aggregate(Deal, :count, :id) || 0
+    agg =
+      Repo.one(
+        from d in Deal,
+          select: %{
+            stored_deals: count(d.id),
+            deals_last_30d: filter(count(d.id), d.published_at >= ^since_30d),
+            deals_last_24h: filter(count(d.id), d.published_at >= ^since_24h),
+            deals_last_hour: filter(count(d.id), d.published_at >= ^since_1h),
+            stored_duplicates: filter(count(d.id), not is_nil(d.canonical_deal_id)),
+            duplicates_last_30d:
+              filter(
+                count(d.id),
+                not is_nil(d.canonical_deal_id) and d.published_at >= ^since_30d
+              ),
+            avg_temp: filter(avg(d.temperature), not is_nil(d.temperature)),
+            cross_border_count: filter(count(d.id), not is_nil(d.country)),
+            foreign_kb_count: filter(count(d.id), not is_nil(d.keyboard_warning))
+          }
+      ) || %{}
+
+    stored_deals = Map.get(agg, :stored_deals, 0)
     feed_deals_sum = Repo.aggregate(Feed, :sum, :total_deals_ingested) || 0
     total_deals = max(feed_deals_sum, stored_deals)
 
-    deals_last_30d =
-      Repo.one(
-        from d in Deal,
-          where: d.published_at >= ^since_30d,
-          select: count(d.id)
-      ) || 0
-
-    stored_duplicates =
-      Repo.one(
-        from d in Deal,
-          where: fragment("? IS NOT NULL", d.canonical_deal_id),
-          select: count(d.id)
-      ) || 0
-
-    duplicates_last_30d =
-      Repo.one(
-        from d in Deal,
-          where: fragment("? IS NOT NULL", d.canonical_deal_id) and d.published_at >= ^since_30d,
-          select: count(d.id)
-      ) || 0
-
+    deals_last_30d = Map.get(agg, :deals_last_30d, 0)
+    stored_duplicates = Map.get(agg, :stored_duplicates, 0)
+    duplicates_last_30d = Map.get(agg, :duplicates_last_30d, 0)
     feed_duplicates_sum = Repo.aggregate(Feed, :sum, :total_duplicates_ingested) || 0
     total_duplicates = max(feed_duplicates_sum, stored_duplicates)
 
     avg_temp =
-      case Repo.one(
-             from d in Deal,
-               where: fragment("? IS NOT NULL", d.temperature),
-               select: avg(d.temperature)
-           ) do
+      case Map.get(agg, :avg_temp) do
         nil -> 0.0
         %Decimal{} = dec -> Decimal.to_float(dec) |> Float.round(1)
         float when is_float(float) -> Float.round(float, 1)
         int when is_integer(int) -> int * 1.0
       end
 
-    deals_last_24h =
-      Repo.one(
-        from d in Deal,
-          where: d.published_at >= ^since_24h,
-          select: count(d.id)
-      ) || 0
-
-    deals_last_hour =
-      Repo.one(
-        from d in Deal,
-          where: d.published_at >= ^since_1h,
-          select: count(d.id)
-      ) || 0
+    deals_last_24h = Map.get(agg, :deals_last_24h, 0)
+    deals_last_hour = Map.get(agg, :deals_last_hour, 0)
+    cross_border_count = Map.get(agg, :cross_border_count, 0)
+    foreign_kb_count = Map.get(agg, :foreign_kb_count, 0)
 
     deals_per_hour =
       if deals_last_24h > 0 do
@@ -175,20 +164,6 @@ defmodule DealScout.Analytics do
         limit: 5
       )
       |> Repo.all()
-
-    cross_border_count =
-      Repo.one(
-        from d in Deal,
-          where: fragment("? IS NOT NULL", d.country),
-          select: count(d.id)
-      ) || 0
-
-    foreign_kb_count =
-      Repo.one(
-        from d in Deal,
-          where: fragment("? IS NOT NULL", d.keyboard_warning),
-          select: count(d.id)
-      ) || 0
 
     %{
       total_deals: total_deals,

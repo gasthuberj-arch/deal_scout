@@ -13,7 +13,7 @@ defmodule DealScout.Analytics.Server do
   alias DealScout.Analytics
 
   @table :deal_scout_analytics_cache
-  @default_interval_ms 60_000
+  @default_interval_ms 15 * 60_000
 
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)

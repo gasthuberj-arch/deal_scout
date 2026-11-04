@@ -21,7 +21,6 @@ defmodule DealScout.Application do
         {Phoenix.PubSub, name: DealScout.PubSub},
         DealScoutWeb.Presence,
         DealScout.Backup.Status,
-        DealScout.Backup.Watcher,
         DealScout.Admin.HealthMonitor,
         {Task.Supervisor, name: DealScout.Feeds.TaskSupervisor},
         # Internal Prometheus metrics listener on port 9091 (Fly internal 6PN scraper)

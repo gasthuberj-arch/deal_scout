@@ -16,6 +16,7 @@ swap_size_mb = 512
   PHX_SERVER = "true"
   DATABASE_PATH = "/data/deal_scout.db"
   PORT = "8080"
+  POOL_SIZE = "5"
   MALLOC_ARENA_MAX = "2"
   ERL_AFLAGS = "+sbwt none +sbwtdcpu none +sbwtdio none"
 

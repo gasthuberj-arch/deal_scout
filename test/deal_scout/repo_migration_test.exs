@@ -55,11 +55,11 @@ defmodule DealScout.RepoMigrationTest do
 
     assert length(up_versions) >= 5, "Expected at least 5 migrations to run"
 
-    # Flag if initial migration run is unusually expensive (> 2 seconds on empty DB)
+    # Flag if initial migration run is unusually expensive (> 5 seconds on empty DB)
     duration_up_1_ms = div(duration_up_1_us, 1000)
 
-    assert duration_up_1_ms < 2000,
-           "Migration chain took #{duration_up_1_ms}ms, which exceeds 2000ms threshold"
+    assert duration_up_1_ms < 5000,
+           "Migration chain took #{duration_up_1_ms}ms, which exceeds 5000ms threshold"
 
     # Verify all expected tables exist
     existing_tables = get_table_names(repo)

@@ -8,7 +8,9 @@ defmodule DealScoutWeb.BackupSocket do
 
   @impl true
   def connect(params, socket, connect_info) do
-    if authorized?(params, connect_info) do
+    enabled? = Application.get_env(:deal_scout, :backup_socket_enabled, true)
+
+    if enabled? and authorized?(params, connect_info) do
       client_id = Map.get(params, "client_id", "nas-backup-client")
       remote_ip = format_remote_ip(connect_info[:peer_data])
 
@@ -19,7 +21,10 @@ defmodule DealScoutWeb.BackupSocket do
 
       {:ok, socket}
     else
-      Logger.warning("[DealScout.BackupSocket] Unauthorized connection attempt rejected.")
+      Logger.warning(
+        "[DealScout.BackupSocket] Unauthorized or disabled connection attempt rejected."
+      )
+
       :error
     end
   end

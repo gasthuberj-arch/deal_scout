@@ -24,6 +24,11 @@ config :deal_scout, DealScoutWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 config :deal_scout,
+  backup_socket_enabled:
+    if(config_env() == :prod,
+      do: System.get_env("BACKUP_SOCKET_ENABLED", "false") == "true",
+      else: true
+    ),
   litestream_replica_dir: System.get_env("LITESTREAM_REPLICA_PATH", "/data/litestream"),
   backup_temp_dir:
     System.get_env(
@@ -81,13 +86,14 @@ if config_env() == :prod do
 
   config :deal_scout, DealScout.Repo,
     database: database_path,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
     cache_size: -8000,
     busy_timeout: 10_000,
     queue_target: 500,
     queue_interval: 2000,
     default_transaction_mode: :immediate,
     auto_vacuum: :incremental,
+    journal_size_limit: 16_777_216,
     temp_store: :memory
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
