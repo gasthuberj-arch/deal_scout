@@ -58,14 +58,34 @@ defmodule DealScout.Application do
 
   defp background_workers() do
     if Application.get_env(:deal_scout, :start_feed_poller, true) do
-      [
+      workers = [
         {DealScout.Feeds.Poller, []},
-        {DealScout.Feeds.Ebay.Poller, []},
-        {DealScout.Maintenance.Pruner, []},
-        {DealScout.Notifications.DigestWorker, []}
+        {DealScout.Maintenance.Pruner, []}
       ]
+
+      workers =
+        if DealScout.Feeds.Ebay.Config.enabled?() do
+          workers ++ [{DealScout.Feeds.Ebay.Poller, []}]
+        else
+          workers
+        end
+
+      workers =
+        if mailer_configured?() do
+          workers ++ [{DealScout.Notifications.DigestWorker, []}]
+        else
+          workers
+        end
+
+      workers
     else
       []
     end
+  end
+
+  defp mailer_configured?() do
+    mailer_config = Application.get_env(:deal_scout, DealScout.Mailer, [])
+    adapter = Keyword.get(mailer_config, :adapter)
+    adapter in [Swoosh.Adapters.Resend, Swoosh.Adapters.Test]
   end
 end
