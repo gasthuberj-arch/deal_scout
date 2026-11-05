@@ -17,7 +17,7 @@ defmodule DealScoutWeb.MatchLive.Index do
       socket
       |> assign(:page_title, gettext("Matched Deals"))
       |> assign(:unread_only, false)
-      |> assign(:sound_enabled, true)
+      |> assign(:sound_enabled, false)
       |> assign(:highlight_id, nil)
       |> assign(:matches, [])
       |> assign(:unread_count, 0)
@@ -151,6 +151,7 @@ defmodule DealScoutWeb.MatchLive.Index do
           <div class="flex flex-wrap items-center gap-2">
             <!-- Audio Chime Toggle -->
             <button
+              id="toggle-chime-btn"
               phx-click="toggle_sound"
               class={[
                 "btn btn-xs sm:btn-sm gap-1.5",

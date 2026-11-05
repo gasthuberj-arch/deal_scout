@@ -55,10 +55,10 @@ defmodule DealScoutWeb.MatchLiveTest do
     assert has_element?(index_live, "#match-#{match.id}", deal.title)
     assert has_element?(index_live, "#match-#{match.id}", rule.name)
 
-    # Toggle chime sound
-    assert has_element?(index_live, "button[phx-click='toggle_sound']", "Chime On")
-    index_live |> element("button[phx-click='toggle_sound']") |> render_click()
-    assert has_element?(index_live, "button[phx-click='toggle_sound']", "Muted")
+    # Toggle chime sound (starts muted by default)
+    assert has_element?(index_live, "#toggle-chime-btn", "Muted")
+    index_live |> element("#toggle-chime-btn") |> render_click()
+    assert has_element?(index_live, "#toggle-chime-btn", "Chime On")
 
     # Mark single match as read
     index_live
