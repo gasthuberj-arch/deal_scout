@@ -136,3 +136,11 @@ _Avoid_: Scattering filesystem and snapshot SQL across web channels and controll
 **Deal thumbnail proxy**:
 The same-origin media delivery subsystem (`DealScout.Deals.ThumbnailProxy` and `DealScoutWeb.DealImageController`) that reliably serves deal thumbnails to mobile and ad-blocked clients via `/deals/:id/image`, combining strong browser caching (24h Cache-Control and ETag), bounded in-memory caching (max 150 entries, <= 60 KB per thumbnail), short TTL (15m), precomputed in-memory ETags with zero-copy conditional revalidation (`if_none_match`), and graceful client-side fallback to direct CDN URLs.
 _Avoid_: Unbounded caching of remote binaries, querying ETS with full-table heap copying, or copying binaries across process heaps on 304 Not Modified responses
+
+**Demand intake**:
+The demand-driven polling and filter-first candidate evaluation subsystem (`DealScout.Feeds.Ebay`) that aggregates active alert rule keywords into boolean queries, polls upstream APIs, filters unseen candidates via in-memory cache (`SeenCache`), evaluates candidate deals under **Compute guard** in RAM, and persists only matching deals to SQLite with zero non-matching disk bloat.
+_Avoid_: Bypassing Compute guard or persisting unvetted candidates before match evaluation
+
+**System administration**:
+The operational posture and infrastructure maintenance subsystem (`DealScout.Admin`) that unifies BEAM VM memory, swap pressure, SQLite WAL size, feed backoffs, active alarms, and non-blocking recovery commands (`safe_checkpoint`, `safe_reclaim_memory`, `safe_retry_feed`) behind a single cohesive interface.
+_Avoid_: Coordinating multiple internal storage, memory, and poller modules directly within LiveView event handlers

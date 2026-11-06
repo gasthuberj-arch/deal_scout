@@ -1,11 +1,7 @@
 defmodule DealScoutWeb.Admin.SystemLive.Index do
   use DealScoutWeb, :live_view
 
-  alias DealScout.Analytics
-  alias DealScout.Notifications
-  alias DealScout.Feeds.Poller
-  alias DealScout.Alerts
-  alias DealScout.Admin.{SystemMetrics, HealthMonitor}
+  alias DealScout.Admin
   alias DealScoutWeb.PushNotificationHandler
 
   @impl true
@@ -16,50 +12,53 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
       DealScout.Backup.subscribe()
     end
 
-    ops = Analytics.get_system_ops_stats()
-    backup_status = DealScout.Backup.get_status()
-    auto_paused_rules = Alerts.list_auto_paused_rules()
-    slowest_rules = Alerts.list_slowest_rules(10)
-    system_metrics = SystemMetrics.get_metrics()
-    active_alarms = fetch_streamable_alarms()
-    push_metrics = Notifications.get_delivery_metrics(24)
+    overview = Admin.get_system_overview()
+    device_data = Admin.list_device_delivery_metrics("all")
 
     socket =
       socket
       |> PushNotificationHandler.init_push_assigns()
       |> assign(:page_title, "Admin System & Operational Health")
-      |> assign(:ops, ops)
-      |> assign(:backup, backup_status)
-      |> assign(:auto_paused_rules, auto_paused_rules)
-      |> assign(:slowest_rules, slowest_rules)
-      |> assign(:ebay_status, get_ebay_status())
-      |> assign(:system_metrics, system_metrics)
-      |> assign(:push_metrics, push_metrics)
-      |> assign(:active_alarms_count, length(active_alarms))
-      |> stream(:active_alarms, active_alarms)
-      |> load_device_metrics_stream("all")
+      |> assign(:ops, overview.ops)
+      |> assign(:backup, overview.backup)
+      |> assign(:auto_paused_rules, overview.auto_paused_rules)
+      |> assign(:slowest_rules, overview.slowest_rules)
+      |> assign(:ebay_status, overview.ebay_status)
+      |> assign(:system_metrics, overview.system_metrics)
+      |> assign(:push_metrics, overview.push_metrics)
+      |> assign(:active_alarms_count, overview.active_alarms_count)
+      |> assign(:device_filter, "all")
+      |> assign(:all_devices_count, device_data.all_count)
+      |> assign(:pending_devices_count, device_data.pending_count)
+      |> assign(:has_devices?, device_data.devices != [])
+      |> stream(:active_alarms, overview.active_alarms)
+      |> stream(:devices, device_data.devices)
 
     {:ok, socket}
   end
 
   @impl true
   def handle_info(%Phoenix.Socket.Broadcast{topic: "deals:presence"}, socket) do
-    ops = Analytics.get_system_ops_stats()
-    {:noreply, assign(socket, :ops, ops)}
+    overview = Admin.get_system_overview()
+    {:noreply, assign(socket, :ops, overview.ops)}
   end
 
   @impl true
   def handle_info(%Phoenix.Socket.Broadcast{topic: "admin:system"}, socket) do
-    active_alarms = fetch_streamable_alarms()
+    overview = Admin.get_system_overview()
     filter = socket.assigns[:device_filter] || "all"
+    device_data = Admin.list_device_delivery_metrics(filter)
 
     {:noreply,
      socket
-     |> assign(:system_metrics, SystemMetrics.get_metrics())
-     |> assign(:push_metrics, Notifications.get_delivery_metrics(24))
-     |> assign(:active_alarms_count, length(active_alarms))
-     |> stream(:active_alarms, active_alarms, reset: true)
-     |> load_device_metrics_stream(filter)}
+     |> assign(:system_metrics, overview.system_metrics)
+     |> assign(:push_metrics, overview.push_metrics)
+     |> assign(:active_alarms_count, overview.active_alarms_count)
+     |> assign(:all_devices_count, device_data.all_count)
+     |> assign(:pending_devices_count, device_data.pending_count)
+     |> assign(:has_devices?, device_data.devices != [])
+     |> stream(:active_alarms, overview.active_alarms, reset: true)
+     |> stream(:devices, device_data.devices, reset: true)}
   end
 
   @impl true
@@ -74,36 +73,44 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("refresh_metrics", _params, socket) do
-    ops = Analytics.get_system_ops_stats()
-    backup_status = DealScout.Backup.get_status()
-    system_metrics = SystemMetrics.get_metrics()
-    active_alarms = fetch_streamable_alarms()
-    push_metrics = Notifications.get_delivery_metrics(24)
+    overview = Admin.get_system_overview()
     filter = socket.assigns[:device_filter] || "all"
+    device_data = Admin.list_device_delivery_metrics(filter)
 
     {:noreply,
      socket
-     |> assign(:ops, ops)
-     |> assign(:backup, backup_status)
-     |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
-     |> assign(:slowest_rules, Alerts.list_slowest_rules(10))
-     |> assign(:ebay_status, get_ebay_status())
-     |> assign(:system_metrics, system_metrics)
-     |> assign(:push_metrics, push_metrics)
-     |> assign(:active_alarms_count, length(active_alarms))
-     |> stream(:active_alarms, active_alarms, reset: true)
-     |> load_device_metrics_stream(filter)
+     |> assign(:ops, overview.ops)
+     |> assign(:backup, overview.backup)
+     |> assign(:auto_paused_rules, overview.auto_paused_rules)
+     |> assign(:slowest_rules, overview.slowest_rules)
+     |> assign(:ebay_status, overview.ebay_status)
+     |> assign(:system_metrics, overview.system_metrics)
+     |> assign(:push_metrics, overview.push_metrics)
+     |> assign(:active_alarms_count, overview.active_alarms_count)
+     |> assign(:all_devices_count, device_data.all_count)
+     |> assign(:pending_devices_count, device_data.pending_count)
+     |> assign(:has_devices?, device_data.devices != [])
+     |> stream(:active_alarms, overview.active_alarms, reset: true)
+     |> stream(:devices, device_data.devices, reset: true)
      |> put_flash(:info, "System operations metrics updated.")}
   end
 
   @impl true
   def handle_event("set_device_filter", %{"filter" => filter}, socket) do
-    {:noreply, load_device_metrics_stream(socket, filter)}
+    device_data = Admin.list_device_delivery_metrics(filter)
+
+    {:noreply,
+     socket
+     |> assign(:device_filter, filter)
+     |> assign(:all_devices_count, device_data.all_count)
+     |> assign(:pending_devices_count, device_data.pending_count)
+     |> assign(:has_devices?, device_data.devices != [])
+     |> stream(:devices, device_data.devices, reset: true)}
   end
 
   @impl true
   def handle_event("safe_checkpoint", _params, socket) do
-    case SystemMetrics.safe_wal_checkpoint() do
+    case Admin.safe_checkpoint() do
       {:ok, %{status: status, log: log, checkpointed: cp}} ->
         flash_msg =
           case status do
@@ -117,14 +124,14 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
               "Checkpoint completed partially; database busy with active reader (#{cp} frames copied)."
           end
 
-        active_alarms = fetch_streamable_alarms()
+        overview = Admin.get_system_overview()
 
         {:noreply,
          socket
          |> put_flash(:info, flash_msg)
-         |> assign(:system_metrics, SystemMetrics.get_metrics())
-         |> assign(:active_alarms_count, length(active_alarms))
-         |> stream(:active_alarms, active_alarms, reset: true)}
+         |> assign(:system_metrics, overview.system_metrics)
+         |> assign(:active_alarms_count, overview.active_alarms_count)
+         |> stream(:active_alarms, overview.active_alarms, reset: true)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "WAL checkpoint failed: #{inspect(reason)}")}
@@ -133,9 +140,9 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("safe_reclaim_memory", _params, socket) do
-    case SystemMetrics.safe_reclaim_memory() do
+    case Admin.safe_reclaim_memory() do
       {:ok, %{reclaimed_processes: count}} ->
-        active_alarms = fetch_streamable_alarms()
+        overview = Admin.get_system_overview()
 
         {:noreply,
          socket
@@ -143,10 +150,10 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
            :info,
            "Released SQLite idle pager caches (PRAGMA shrink_memory) and garbage collected #{count} high-memory process(es)."
          )
-         |> assign(:system_metrics, SystemMetrics.get_metrics())
-         |> assign(:ops, Analytics.get_system_ops_stats())
-         |> assign(:active_alarms_count, length(active_alarms))
-         |> stream(:active_alarms, active_alarms, reset: true)}
+         |> assign(:system_metrics, overview.system_metrics)
+         |> assign(:ops, overview.ops)
+         |> assign(:active_alarms_count, overview.active_alarms_count)
+         |> stream(:active_alarms, overview.active_alarms, reset: true)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Memory reclamation failed: #{inspect(reason)}")}
@@ -155,15 +162,17 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("safe_refresh_cache", _params, socket) do
-    case SystemMetrics.safe_refresh_stream_cache() do
+    case Admin.safe_refresh_cache() do
       {:ok, :refreshed} ->
+        overview = Admin.get_system_overview()
+
         {:noreply,
          socket
          |> put_flash(
            :info,
            "StreamCache refreshed in-place with zero SQLite read stampedes."
          )
-         |> assign(:system_metrics, SystemMetrics.get_metrics())}
+         |> assign(:system_metrics, overview.system_metrics)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Cache refresh failed: #{inspect(reason)}")}
@@ -172,17 +181,16 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("safe_retry_feed", %{"id" => id}, socket) do
-    case SystemMetrics.safe_retry_feed(id) do
+    case Admin.safe_retry_feed(id) do
       {:ok, feed} ->
-        DealScout.Feeds.Poller.poll_now()
-        active_alarms = fetch_streamable_alarms()
+        overview = Admin.get_system_overview()
 
         {:noreply,
          socket
          |> put_flash(:info, "Backoff reset for #{feed.name}; poller cycle triggered.")
-         |> assign(:ops, Analytics.get_system_ops_stats())
-         |> assign(:active_alarms_count, length(active_alarms))
-         |> stream(:active_alarms, active_alarms, reset: true)}
+         |> assign(:ops, overview.ops)
+         |> assign(:active_alarms_count, overview.active_alarms_count)
+         |> stream(:active_alarms, overview.active_alarms, reset: true)}
 
       {:error, :rate_limited, until_dt} ->
         until_str = DateTime.to_iso8601(until_dt) |> String.slice(11..18)
@@ -201,22 +209,23 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("trigger_ebay_poll", _params, socket) do
-    if DealScout.Feeds.Ebay.Config.configured?() and DealScout.Feeds.Ebay.Config.enabled?() do
-      DealScout.Feeds.Ebay.Poller.poll_now()
-      {:noreply, put_flash(socket, :info, "Triggered immediate eBay Sofort-Kauf poll.")}
-    else
-      {:noreply,
-       put_flash(
-         socket,
-         :error,
-         "eBay integration is not configured. Set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
-       )}
+    case Admin.trigger_ebay_poll() do
+      {:ok, :triggered} ->
+        {:noreply, put_flash(socket, :info, "Triggered immediate eBay Sofort-Kauf poll.")}
+
+      {:error, :not_configured} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "eBay integration is not configured. Set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET."
+         )}
     end
   end
 
   @impl true
   def handle_event("trigger_poll", _params, socket) do
-    Poller.poll_now()
+    Admin.trigger_feed_poll()
 
     {:noreply,
      socket
@@ -225,32 +234,40 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
 
   @impl true
   def handle_event("resume_rule", %{"id" => id}, socket) do
-    rule = Alerts.get_alert_rule!(id)
-    {:ok, _} = Alerts.resume_rule(rule)
-    active_alarms = fetch_streamable_alarms()
+    case Admin.resume_rule(id) do
+      {:ok, rule} ->
+        overview = Admin.get_system_overview()
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Alert rule \"#{rule.name}\" resumed successfully.")
-     |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
-     |> assign(:slowest_rules, Alerts.list_slowest_rules(10))
-     |> assign(:active_alarms_count, length(active_alarms))
-     |> stream(:active_alarms, active_alarms, reset: true)}
+        {:noreply,
+         socket
+         |> put_flash(:info, "Alert rule \"#{rule.name}\" resumed successfully.")
+         |> assign(:auto_paused_rules, overview.auto_paused_rules)
+         |> assign(:slowest_rules, overview.slowest_rules)
+         |> assign(:active_alarms_count, overview.active_alarms_count)
+         |> stream(:active_alarms, overview.active_alarms, reset: true)}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
   def handle_event("pause_rule", %{"id" => id}, socket) do
-    rule = Alerts.get_alert_rule!(id)
-    {:ok, _} = Alerts.pause_rule(rule, "Manually paused by administrator")
-    active_alarms = fetch_streamable_alarms()
+    case Admin.pause_rule(id) do
+      {:ok, rule} ->
+        overview = Admin.get_system_overview()
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Alert rule \"#{rule.name}\" paused.")
-     |> assign(:auto_paused_rules, Alerts.list_auto_paused_rules())
-     |> assign(:slowest_rules, Alerts.list_slowest_rules(10))
-     |> assign(:active_alarms_count, length(active_alarms))
-     |> stream(:active_alarms, active_alarms, reset: true)}
+        {:noreply,
+         socket
+         |> put_flash(:info, "Alert rule \"#{rule.name}\" paused.")
+         |> assign(:auto_paused_rules, overview.auto_paused_rules)
+         |> assign(:slowest_rules, overview.slowest_rules)
+         |> assign(:active_alarms_count, overview.active_alarms_count)
+         |> stream(:active_alarms, overview.active_alarms, reset: true)}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   # Push Notification delegation
@@ -1560,13 +1577,6 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   # Private Helpers
   # ============================================================================
 
-  defp fetch_streamable_alarms do
-    HealthMonitor.list_active_alarms()
-    |> Enum.map(fn alarm ->
-      Map.put(alarm, :id, to_string(alarm.type))
-    end)
-  end
-
   defp format_duration_ms(nil), do: "—"
   defp format_duration_ms(us) when is_integer(us) and us < 1_000, do: "#{us} µs"
   defp format_duration_ms(us) when is_integer(us), do: "#{Float.round(us / 1000, 2)} ms"
@@ -1578,35 +1588,4 @@ defmodule DealScoutWeb.Admin.SystemLive.Index do
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
   defp format_bytes(bytes), do: "#{Float.round(bytes / (1024 * 1024), 2)} MB"
-
-  defp get_ebay_status do
-    %{
-      configured: DealScout.Feeds.Ebay.Config.configured?(),
-      enabled: DealScout.Feeds.Ebay.Config.enabled?(),
-      marketplace: DealScout.Feeds.Ebay.Config.marketplace_id(),
-      seen_items: DealScout.Feeds.Ebay.SeenCache.size(),
-      poll_interval: DealScout.Feeds.Ebay.Config.poll_interval_seconds()
-    }
-  end
-
-  defp filter_devices(devices, "pending_only") when is_list(devices) do
-    Enum.filter(devices, &(&1.pending_count > 0))
-  end
-
-  defp filter_devices(devices, _all) when is_list(devices) do
-    devices
-  end
-
-  defp load_device_metrics_stream(socket, filter) do
-    all_devices = Notifications.get_device_delivery_metrics(:all, 24)
-    pending_count = Enum.count(all_devices, &(&1.pending_count > 0))
-    filtered = filter_devices(all_devices, filter)
-
-    socket
-    |> assign(:device_filter, filter)
-    |> assign(:all_devices_count, length(all_devices))
-    |> assign(:pending_devices_count, pending_count)
-    |> assign(:has_devices?, filtered != [])
-    |> stream(:devices, filtered, reset: true)
-  end
 end

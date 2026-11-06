@@ -139,19 +139,8 @@ defmodule DealScout.Deals.Ingestion do
           build_in_memory_deal(item, feed)
         end)
 
-      matches_by_rule =
-        Enum.reduce(rules, %{}, fn rule, acc ->
-          matching =
-            Enum.filter(deal_candidates, fn candidate ->
-              DealScout.Alerts.Matcher.matches?(candidate, rule)
-            end)
-
-          if matching != [] do
-            Map.put(acc, rule, matching)
-          else
-            acc
-          end
-        end)
+      {:ok, %{matches_by_rule: matches_by_rule}} =
+        DealScout.Alerts.Matcher.match_batch(deal_candidates, rules, opts)
 
       matched_guids =
         matches_by_rule

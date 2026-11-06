@@ -13,7 +13,8 @@ defmodule DealScout.Feeds.Ebay.Poller do
   use GenServer
   require Logger
 
-  alias DealScout.Feeds.Ebay.{Client, Config, Matcher, QueryAggregator, SeenCache}
+  alias DealScout.Feeds.Ebay
+  alias DealScout.Feeds.Ebay.{Client, Config, QueryAggregator, SeenCache}
 
   @default_backoff_seconds 300
 
@@ -53,7 +54,28 @@ defmodule DealScout.Feeds.Ebay.Poller do
   Returns the current poller status map.
   """
   def status do
-    GenServer.call(__MODULE__, :get_status)
+    if GenServer.whereis(__MODULE__) do
+      GenServer.call(__MODULE__, :get_status)
+    else
+      %{
+        enabled: Config.enabled?(),
+        last_poll_at: nil,
+        last_status: :idle,
+        consecutive_errors: 0,
+        backoff_until: nil,
+        poll_interval_seconds: Config.poll_interval_seconds()
+      }
+    end
+  catch
+    :exit, _ ->
+      %{
+        enabled: Config.enabled?(),
+        last_poll_at: nil,
+        last_status: :idle,
+        consecutive_errors: 0,
+        backoff_until: nil,
+        poll_interval_seconds: Config.poll_interval_seconds()
+      }
   end
 
   # ============================================================================
@@ -243,7 +265,7 @@ defmodule DealScout.Feeds.Ebay.Poller do
                 SeenCache.put_all(guid_list)
                 SeenCache.prune()
 
-                {:ok, match_res} = Matcher.evaluate_and_persist(unseen, opts)
+                {:ok, match_res} = Ebay.evaluate_and_persist(unseen, opts)
 
                 new_acc = %{
                   queries_run: acc.queries_run + 1,

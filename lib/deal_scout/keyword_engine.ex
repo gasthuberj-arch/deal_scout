@@ -148,7 +148,7 @@ defmodule DealScout.KeywordEngine do
 
     {compiled_rules, candidates_by_deal_id} =
       if prefilter? do
-        deal_items = Enum.map(deals, fn d -> %{id: d.id, text: searchable_text(d)} end)
+        deal_items = Enum.map(deals, fn d -> %{id: d.id || d.guid, text: searchable_text(d)} end)
         prefilter_batch(deal_items)
       else
         {%{}, %{}}
@@ -167,7 +167,7 @@ defmodule DealScout.KeywordEngine do
       matching_deals =
         if compiled? do
           Enum.filter(deals, fn deal ->
-            candidate_ids = Map.get(candidates_by_deal_id, deal.id, MapSet.new())
+            candidate_ids = Map.get(candidates_by_deal_id, deal.id || deal.guid, MapSet.new())
             MapSet.member?(candidate_ids, rule.id)
           end)
         else

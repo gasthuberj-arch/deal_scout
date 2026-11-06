@@ -1,13 +1,14 @@
-defmodule DealScout.Feeds.Ebay.MatcherTest do
+defmodule DealScout.Feeds.EbayTest do
   use DealScout.DataCase, async: false
 
   alias DealScout.AccountsFixtures
   alias DealScout.Alerts
   alias DealScout.Deals.Deal
-  alias DealScout.Feeds.Ebay.Matcher
+  alias DealScout.Feeds.Ebay
   alias DealScout.Repo
 
   setup do
+    Ebay.clear_seen_cache()
     user = AccountsFixtures.user_fixture()
     {:ok, user: user}
   end
@@ -33,7 +34,7 @@ defmodule DealScout.Feeds.Ebay.MatcherTest do
       published_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
 
-    assert {:ok, result} = Matcher.evaluate_and_persist([item])
+    assert {:ok, result} = Ebay.evaluate_and_persist([item])
     assert result.matched_deals == []
     assert result.discarded_count == 1
 
@@ -74,7 +75,7 @@ defmodule DealScout.Feeds.Ebay.MatcherTest do
       published_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
 
-    assert {:ok, result} = Matcher.evaluate_and_persist([matching_item, expensive_item])
+    assert {:ok, result} = Ebay.evaluate_and_persist([matching_item, expensive_item])
     assert length(result.matched_deals) == 1
     assert result.discarded_count == 1
 
@@ -121,7 +122,7 @@ defmodule DealScout.Feeds.Ebay.MatcherTest do
       published_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
 
-    assert {:ok, result} = Matcher.evaluate_and_persist([item])
+    assert {:ok, result} = Ebay.evaluate_and_persist([item])
     assert length(result.matched_deals) == 1
     [deal] = result.matched_deals
     assert deal.guid == "ebay-v1|3001|0"
@@ -139,9 +140,51 @@ defmodule DealScout.Feeds.Ebay.MatcherTest do
       clean_text: "Any Item"
     }
 
-    assert {:ok, result} = Matcher.evaluate_and_persist([item], rules: [])
+    assert {:ok, result} = Ebay.evaluate_and_persist([item], rules: [])
     assert result.matched_deals == []
     assert result.discarded_count == 1
     assert Repo.aggregate(Deal, :count) == 0
+  end
+
+  test "status/0 returns operational telemetry including seen cache count" do
+    status = Ebay.status()
+    assert is_map(status)
+    assert Map.has_key?(status, :enabled)
+    assert Map.has_key?(status, :seen_items)
+    assert status.seen_items == 0
+  end
+
+  test "enforces compute guard during in-memory candidate evaluation", %{user: user} do
+    # Create rule and test that duration override triggers auto-pause when enabled
+    {:ok, rule} =
+      Alerts.create_alert_rule(user, %{
+        name: "Slow Sniper Rule",
+        keywords: "MacBook",
+        source_filter: "all"
+      })
+
+    item = %{
+      guid: "ebay-v1|4001|0",
+      title: "Apple MacBook Pro M3 Max",
+      url: "https://www.ebay.de/itm/4001",
+      price: Decimal.new("2500.00"),
+      clean_text: "Apple MacBook Pro M3 Max",
+      published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+
+    # Pass duration_us exceeding the 30ms budget with auto_pause: true
+    assert {:ok, result} =
+             Ebay.evaluate_and_persist([item],
+               rules: [rule],
+               duration_us: 40_000,
+               auto_pause: true
+             )
+
+    # Rule got auto-paused by ComputeGuard!
+    paused_rule = Alerts.get_alert_rule!(rule.id)
+    assert paused_rule.is_active == false
+    assert paused_rule.pause_reason =~ "compute budget"
+    # Deal not persisted since rule was auto-paused
+    assert result.matched_deals == []
   end
 end
