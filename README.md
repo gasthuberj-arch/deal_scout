@@ -1,34 +1,41 @@
 # DealScout 🎯
 
-A real-time German RSS deal monitor and keyword alert system built with **Elixir, Phoenix LiveView, and SQLite**.
+A high-performance real-time German RSS deal monitor and keyword alert system built with **Elixir, Phoenix LiveView, and SQLite**.
 
-DealScout continuously monitors and aggregates the five largest German deal portals, parses deal prices and merchants, evaluates user keyword criteria in real-time, and streams instant alerts to the browser.
+DealScout continuously aggregates deals from major German deal portals, normalizes prices and merchant metadata in real time, evaluates user keyword rules via compiled in-memory automatons, and streams instant alerts to the browser.
 
 ---
 
-## ✨ Features
+## 📚 Documentation & Architecture Guides
 
-- **5 Preconfigured Deal Portals**:
-  - [MyDealz](https://www.mydealz.de/rss)
-  - [DealDoktor](https://www.dealdoktor.de/feed/)
-  - [MonsterDealz](https://www.monsterdealz.de/feed/)
-  - [Schnäppchenfuchs](https://schnaeppchenfuchs.com/rss)
-  - [Mein-Deal](https://www.mein-deal.com/feed/)
-- **Zero-Polling Client**: Uses Phoenix LiveView streams and PubSub. New deals and alert matches appear instantly without page refreshes.
-- **Advanced Keyword Alert Rules**:
-  - **Required Keywords**: Multi-token phrase and comma-separated OR matching (e.g., `RTX 4080, RTX 5080`).
-  - **Negative/Exclusion Keywords**: Ignore unwanted deals (e.g., `defekt, kühler, zubehör, suche`).
-  - **Max Price Threshold**: Alert only if price $\le$ your budget.
-  - **Source Filter**: Limit alerts to specific portals or watch all portals.
-- **Matched Deals Inbox & Web Audio Chime**:
-  - Dedicated inbox tracking unread matched deals.
-  - Optional browser synthesized audio chime (two-tone Web Audio API, zero audio assets needed).
-- **Invite-Gated Registration**: Built-in authentication (`phx.gen.auth`) protected by a secret invite code (`INVITE_CODE`) so you can share access with friends safely.
+| Document | Description |
+| :--- | :--- |
+| **[`GLOSSARY.md`](GLOSSARY.md)** | Canonical domain terms, architecture vocabulary, and naming rules |
+| **[`ROADMAP.md`](ROADMAP.md)** | Detailed feature roadmap and architecture specifications |
+| **[`AGENTS.md`](AGENTS.md)** | Guidelines, invariants, and context pointers for AI agents |
+| **[`docs/adr/`](docs/adr/)** | Architectural Decision Records (ADRs) |
+| **[`docs/fly-io-elixir-sqlite-optimization.md`](docs/fly-io-elixir-sqlite-optimization.md)** | Production guide for zero-cost Fly.io micro-VM SQLite deployment |
+
+---
+
+## ✨ Key Features
+
+- **Multi-Portal Aggregation**: Ingests feeds from [MyDealz](https://www.mydealz.de/rss), [DealDoktor](https://www.dealdoktor.de/feed/), [MonsterDealz](https://www.monsterdealz.de/feed/), [Schnäppchenfuchs](https://schnaeppchenfuchs.com/rss), and [Mein-Deal](https://www.mein-deal.com/feed/).
+- **Zero-Polling Real-Time Feed**: Powered by Phoenix LiveView streams and PubSub. New deals stream to the UI with constant memory footprint.
+- **Compiled Keyword Matching Engine**:
+  - Multi-token required phrases and comma-separated OR queries (e.g. `RTX 4080, RTX 5080`).
+  - Negative/exclusion keywords (e.g. `defekt, kühler, zubehör, suche`).
+  - Price ceilings and portal source filters.
+  - In-memory Aho-Corasick prefiltering and compute guard protection against pathological queries.
+- **Matched Deals Inbox & Web Audio Alerts**:
+  - Persistent inbox tracking unread matches.
+  - Browser-synthesized two-tone audio chime (Web Audio API, zero audio assets needed).
 - **Safe Homelab / NAS Backups**:
-  - Atomic hot SQLite snapshots via `VACUUM INTO` on `GET /api/admin/backup`.
-  - Protected with Bearer token authentication (`ADMIN_BACKUP_TOKEN`).
-  - Pull-based: Your locked-down homelab NAS or Tailscale node pulls daily snapshots with **zero open inbound ports**.
-- **Automated Retention**: Built-in maintenance worker automatically purges deals older than 30 days to keep the SQLite database lean.
+  - Hot SQLite snapshots via `VACUUM INTO` on `GET /api/admin/backup`.
+  - Bearer token authentication (`ADMIN_BACKUP_TOKEN`).
+  - Pull-based: Homelab or NAS pulls daily snapshots with **zero open inbound ports**.
+- **Automated Retention**: Built-in background worker purges deals older than 30 days to keep the SQLite database lean.
+- **Invite-Gated Registration**: Built-in authentication (`phx.gen.auth`) protected by a secret invite code (`INVITE_CODE`).
 
 ---
 
@@ -36,11 +43,12 @@ DealScout continuously monitors and aggregates the five largest German deal port
 
 | Layer | Technology | Rationale |
 | :--- | :--- | :--- |
-| **Backend** | Elixir 1.18+ / OTP 27 | Exceptional concurrency, GenServers, and fault tolerance |
-| **Web UI** | Phoenix 1.8 (LiveView + DaisyUI + Tailwind) | Reactive real-time frontend without JS framework fatigue |
-| **Storage** | SQLite3 (`ecto_sqlite3` + `exqlite`) | Zero setup, single-file database, fast and free |
-| **HTTP Client** | `Req` | Fast HTTP client with conditional requests (`ETag` / `If-Modified-Since`) |
-| **Parser** | `Floki` | Fast XML and HTML parsing, extracts clean text, prices, and thumbnails |
+| **Backend** | Elixir 1.18+ / OTP 27 | Fault-tolerant concurrency, GenServers, and real-time PubSub |
+| **Web UI** | Phoenix 1.8 (LiveView + Tailwind CSS v4) | Reactive UI without JS framework fatigue; DaisyUI for primitives |
+| **Storage** | SQLite3 (`ecto_sqlite3` + `exqlite`) | Single-file database, zero setup, fast and free |
+| **HTTP Client** | `Req` | Fast HTTP requests with conditional `ETag` and `If-Modified-Since` caching |
+| **Parser** | `Floki` | Fast XML and HTML parsing for deal descriptions and prices |
+| **Search & Index** | SQLite FTS5 + In-Memory Aho-Corasick | Hybrid historical backtesting and instant streaming matching |
 
 ---
 
@@ -48,7 +56,7 @@ DealScout continuously monitors and aggregates the five largest German deal port
 
 ### Prerequisites
 - Elixir 1.17+ and Erlang/OTP 27
-- Node.js is **not required** (esbuild & tailwind run standalone)
+- Node.js is **not required** (esbuild and tailwind run standalone)
 
 ### 1. Setup & Install Dependencies
 ```bash
@@ -56,50 +64,48 @@ cd ~/code/deal_scout
 mix setup
 ```
 
-### 2. Populate Deal Feeds
+### 2. Populate Deal Feeds & Seed Data
 ```bash
 mix run priv/repo/seeds.exs
 ```
 
-### 3. Start Phoenix Server
+### 3. Run Quality & Test Checks
+```bash
+mix precommit
+```
+
+### 4. Start Phoenix Server
 ```bash
 mix phx.server
 # or inside IEx:
 iex -S mix phx.server
 ```
 
-Now visit [`http://localhost:4000`](http://localhost:4000) in your browser.
-
-- Default invite code for new sign-ups: `dealscout2026`
-- To inspect outgoing confirmation emails in development: [`http://localhost:4000/dev/mailbox`](http://localhost:4000/dev/mailbox)
+Visit [`http://localhost:4000`](http://localhost:4000) in your browser.
+- Default invite code for registration: `dealscout2026`
+- Outgoing confirmation emails in dev: [`http://localhost:4000/dev/mailbox`](http://localhost:4000/dev/mailbox)
 
 ---
 
-## 🔒 Environment Variables
+## 🔒 Key Environment Variables
 
 | Variable | Default (Dev) | Description |
 | :--- | :--- | :--- |
 | `INVITE_CODE` | `dealscout2026` | Secret code required when creating a new user account |
 | `ADMIN_BACKUP_TOKEN` | *(required in prod)* | Bearer token for accessing `/api/admin/backup` |
-| `ADMIN_PASSWORD` | `dealscout2026!` (dev default) | Initial admin password used by `mix run priv/repo/seeds.exs` |
+| `ADMIN_PASSWORD` | `dealscout2026!` | Initial admin password used by `priv/repo/seeds.exs` |
 | `DATABASE_PATH` | `deal_scout_dev.db` (dev) / `/data/deal_scout.db` (prod) | Path to SQLite database file |
 | `COFFEE_URL` | `https://ko-fi.com` | Optional Ko-fi profile URL for the support modal |
-| `LEGAL_OPERATOR_NAME` | `DealScout Maintainer` | Name displayed on `/impressum` and `/privacy` |
-| `LEGAL_OPERATOR_EMAIL` | `support@example.com` | Public contact email displayed on `/impressum` and `/privacy` |
-| `LEGAL_OPERATOR_ADDRESS` | `Privates Open-Source-Projekt` | Postal address or project note displayed on `/impressum` |
-| `EBAY_CLIENT_ID` | *(optional)* | eBay Developer App ID (Client ID) for the Browse API sniper |
-| `EBAY_CLIENT_SECRET` | *(optional)* | eBay Developer App Cert (Client Secret) for OAuth2 authentication |
-| `EBAY_MARKETPLACE_ID` | `EBAY_DE` | eBay Marketplace identifier (e.g., `EBAY_DE`, `EBAY_AT`, `EBAY_US`) |
-| `EBAY_POLL_INTERVAL_SECONDS` | `60` | Polling interval in seconds for the eBay sniper worker |
-| `EBAY_ENABLED` | `true` | Set to `false` to disable the eBay background poller worker |
-| `SECRET_KEY_BASE` | *(generated in dev)* | Secret key for cookies and tokens (required in prod) |
+| `EBAY_CLIENT_ID` | *(optional)* | eBay Developer App ID for the eBay sniper poller |
+| `EBAY_CLIENT_SECRET` | *(optional)* | eBay Developer App Secret for OAuth2 authentication |
+| `EBAY_ENABLED` | `true` | Set to `false` to disable the eBay background poller |
 | `PHX_SERVER` | `true` | Enables HTTP server in production releases |
 
 ---
 
 ## 📦 Pull-Based Homelab / NAS Backups
 
-Since your homelab is locked down behind Tailscale without public inbound access, the homelab **initiates the backup pull**:
+Since a home NAS is typically behind NAT or Tailscale without public inbound ports, the NAS **initiates the backup pull**:
 
 1. Copy `scripts/pull-nas-backup.sh` to your NAS or homelab server.
 2. Configure your environment:
@@ -108,54 +114,41 @@ Since your homelab is locked down behind Tailscale without public inbound access
    export ADMIN_BACKUP_TOKEN="your-secure-token"
    export BACKUP_DIR="/volume1/backups/deal_scout"
    ```
-3. Run the script manually or add to `crontab` (e.g. daily at 3:00 AM):
+3. Run manually or schedule in `crontab` (e.g. daily at 3:00 AM):
    ```cron
    0 3 * * * /home/user/scripts/pull-nas-backup.sh >> /var/log/deal_scout_backup.log 2>&1
    ```
 
-The script requests an atomic hot SQLite snapshot (`VACUUM INTO`), saves it locally with timestamps, and automatically rotates snapshots older than 14 days.
+The script requests an atomic SQLite snapshot (`VACUUM INTO`), saves it locally with timestamps, and rotates snapshots older than 14 days.
 
 ---
 
-## ☁️ Deployment to Fly.io ($0 Free Allowance)
+## ☁️ Deployment to Fly.io
 
-DealScout is configured to run on Fly.io with a single 1GB persistent SQLite volume:
+DealScout runs on Fly.io with a single 1GB persistent SQLite volume:
 
-### 1. Launch Fly App
 ```bash
+# 1. Create app configuration
 fly launch --no-deploy
-```
 
-### 2. Create Persistent Volume for SQLite
-```bash
+# 2. Create persistent volume for SQLite in Frankfurt (fra)
 fly volumes create deal_scout_data --size 1 --region fra
-```
 
-### 3. Set Production Secrets
-```bash
+# 3. Set production secrets
 fly secrets set \
   SECRET_KEY_BASE="$(mix phx.gen.secret)" \
   INVITE_CODE="your-family-secret" \
   ADMIN_BACKUP_TOKEN="your-secure-backup-token"
-```
 
-### 4. Deploy
-```bash
+# 4. Deploy
 fly deploy
 ```
 
 ---
 
-## 📝 Design Decisions & Compromises Made
+## 📝 Key Architectural Decisions
 
-1. **SQLite over PostgreSQL**:
-   - *Rationale*: Zero server maintenance, zero running database daemons, runs entirely within the single Fly.io machine free allowance with a 1GB persistent volume.
-   - *Trade-off*: Multi-node horizontal scaling is not supported (DealScout runs as a single primary node). For personal and friend group use, a single BEAM node with SQLite easily handles tens of thousands of deals and concurrent WebSockets.
-2. **Pull-Based Backup over Push Replication**:
-   - *Rationale*: Accommodates homelabs locked down behind Tailscale with zero inbound ports. The NAS pulls atomic snapshots on a timer.
-   - *Trade-off*: Not continuous streaming WAL replication (like Litestream). Backups are periodic snapshots (e.g. daily), which is acceptable because deals are public/ephemeral and only user alert rules need disaster recovery.
-3. **HTTP Polling (2-min interval) over Web Scraping**:
-   - *Rationale*: Avoids Cloudflare/anti-bot bans from Pepper/MyDealz, preserves server bandwidth using conditional `ETag` and `If-Modified-Since` headers.
-   - *Trade-off*: 0 to 120-second latency after deal publication, and feed retention is limited to the last 20–50 deals published per portal.
-4. **Web Audio Synthesis over MP3/WAV Assets**:
-   - *Rationale*: Generates a crisp two-tone audio alert using standard browser Web Audio API oscillator nodes, requiring 0 external assets and 0 bandwidth.
+1. **SQLite over PostgreSQL**: Single-file storage running directly on the Fly.io micro-VM volume. Eliminates database daemon overhead and network latency. Multi-node write concurrency is unnecessary for single-instance deal monitoring.
+2. **Pull-Based Backup over Push Replication**: Allows firewalled homelabs to safely pull hot SQLite backups without exposing any ports.
+3. **HTTP Polling (2-min interval) with Conditional Headers**: Preserves feed bandwidth using `ETag` and `If-Modified-Since` headers while avoiding Cloudflare bans.
+4. **Web Audio Synthesis**: Browser Web Audio API oscillator creates audio chime without external MP3/WAV assets.
