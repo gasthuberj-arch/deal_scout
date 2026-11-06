@@ -15,6 +15,7 @@ defmodule DealScout.Admin.HealthMonitor do
 
   alias DealScout.Repo
   alias DealScout.Accounts
+  alias DealScout.Analytics
   alias DealScout.Notifications
   alias DealScout.Admin.SystemMetrics
   alias DealScout.Feeds.Feed
@@ -283,7 +284,7 @@ defmodule DealScout.Admin.HealthMonitor do
 
     # 6. Web push gateway failure or complete receipt blackout
     # Differentiates healthy client sleep/doze from actual gateway infrastructure breakdown.
-    push_metrics = Notifications.get_delivery_metrics(24)
+    push_metrics = Analytics.get_delivery_metrics(24)
     gateway_errors = push_metrics.http_error + push_metrics.network_error
 
     anomalies =

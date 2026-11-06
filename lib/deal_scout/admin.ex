@@ -14,7 +14,6 @@ defmodule DealScout.Admin do
   alias DealScout.Backup
   alias DealScout.Feeds.Ebay
   alias DealScout.Feeds.Poller
-  alias DealScout.Notifications
 
   @doc """
   Gathers the consolidated system operational overview in a single call.
@@ -32,7 +31,7 @@ defmodule DealScout.Admin do
       backup: Backup.get_status(),
       auto_paused_rules: Alerts.list_auto_paused_rules(),
       slowest_rules: Alerts.list_slowest_rules(10),
-      push_metrics: Notifications.get_delivery_metrics(24),
+      push_metrics: Analytics.get_delivery_metrics(24),
       ebay_status: get_ebay_status()
     }
   end
@@ -159,7 +158,7 @@ defmodule DealScout.Admin do
   Fetches device delivery metrics filtered by mode (`"all"` or `"pending_only"`).
   """
   def list_device_delivery_metrics(filter \\ "all") do
-    all_devices = Notifications.get_device_delivery_metrics(:all, 24)
+    all_devices = Analytics.get_device_delivery_metrics(:all, 24)
     pending_count = Enum.count(all_devices, &(&1.pending_count > 0))
 
     filtered =

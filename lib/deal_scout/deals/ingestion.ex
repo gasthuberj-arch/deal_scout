@@ -186,11 +186,7 @@ defmodule DealScout.Deals.Ingestion do
         end)
 
       if map_size(persisted_matches_by_rule) > 0 do
-        DealScout.Alerts.MatchRecorder.record_and_dispatch(persisted_matches_by_rule)
-
-        Enum.each(persisted_deals, fn deal ->
-          Phoenix.PubSub.broadcast(DealScout.PubSub, "deals:stream", {:new_deal, deal})
-        end)
+        Alerts.record_and_dispatch(persisted_matches_by_rule)
       end
 
       discarded_count = length(items) - length(persisted_deals)

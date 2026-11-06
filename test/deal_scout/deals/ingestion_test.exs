@@ -2,7 +2,7 @@ defmodule DealScout.Deals.IngestionTest do
   use DealScout.DataCase, async: true
 
   alias DealScout.Deals
-  alias DealScout.Deals.{Deal, Merchant, Ingestion, CrossBorderGuard}
+  alias DealScout.Deals.{Deal, Merchant, Ingestion, CrossBorder}
   alias DealScout.Feeds.Feed
   alias DealScout.Alerts
   alias DealScout.Alerts.UserMatch
@@ -165,9 +165,9 @@ defmodule DealScout.Deals.IngestionTest do
       assert deal.keyboard_warning != nil
       assert deal.keyboard_warning.layout =~ "AZERTY"
 
-      # CrossBorderGuard returns precomputed result without re-parsing regexes
-      assert CrossBorderGuard.detect_country(deal) == deal.country
-      assert CrossBorderGuard.keyboard_warning(deal) == deal.keyboard_warning
+      # CrossBorder returns precomputed result without re-parsing regexes
+      assert CrossBorder.detect_country(deal) == deal.country
+      assert CrossBorder.keyboard_warning(deal) == deal.keyboard_warning
     end
 
     test "handles malformed or invalid inputs gracefully", %{feed: feed} do

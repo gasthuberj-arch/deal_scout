@@ -4,6 +4,7 @@ defmodule DealScoutWeb.UserLive.Settings do
   on_mount {DealScoutWeb.UserAuth, :require_sudo_mode}
 
   alias DealScout.Accounts
+  alias DealScout.Analytics
   alias DealScout.Notifications
 
   @impl true
@@ -517,7 +518,7 @@ defmodule DealScoutWeb.UserLive.Settings do
     user = scope.user
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
-    subscriptions = Notifications.get_device_delivery_metrics(scope, 24)
+    subscriptions = Analytics.get_device_delivery_metrics(scope, 24)
     delivery_logs = Notifications.list_push_delivery_logs(scope, 8)
     has_password? = is_binary(user.hashed_password) and byte_size(user.hashed_password) > 0
 
@@ -576,7 +577,7 @@ defmodule DealScoutWeb.UserLive.Settings do
 
     case Notifications.create_or_update_push_subscription(scope, params) do
       {:ok, _sub} ->
-        reloaded_subs = Notifications.get_device_delivery_metrics(scope, 24)
+        reloaded_subs = Analytics.get_device_delivery_metrics(scope, 24)
 
         socket =
           socket
@@ -654,7 +655,7 @@ defmodule DealScoutWeb.UserLive.Settings do
 
     case Notifications.update_push_subscription_device_name(scope, sub_id, name) do
       {:ok, _updated} ->
-        devices = Notifications.get_device_delivery_metrics(scope, 24)
+        devices = Analytics.get_device_delivery_metrics(scope, 24)
         devices_by_id = Map.new(devices, &{&1.id, &1})
 
         {:noreply,
@@ -725,7 +726,7 @@ defmodule DealScoutWeb.UserLive.Settings do
         end
       end
 
-    reloaded_subs = Notifications.get_device_delivery_metrics(scope, 24)
+    reloaded_subs = Analytics.get_device_delivery_metrics(scope, 24)
     logs = Notifications.list_push_delivery_logs(scope, 8)
 
     {:noreply,
@@ -742,7 +743,7 @@ defmodule DealScoutWeb.UserLive.Settings do
 
     case Notifications.delete_user_push_subscription(scope, id) do
       {:ok, sub} ->
-        subs = Notifications.get_device_delivery_metrics(scope, 24)
+        subs = Analytics.get_device_delivery_metrics(scope, 24)
 
         {:noreply,
          socket

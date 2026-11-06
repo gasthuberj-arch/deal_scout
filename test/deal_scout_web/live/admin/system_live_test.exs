@@ -5,7 +5,7 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
   alias DealScout.AccountsFixtures
 
   setup do
-    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+    DealScout.Analytics.invalidate_delivery_metrics_cache(24)
     admin = AccountsFixtures.admin_fixture()
     regular_user = AccountsFixtures.user_fixture()
 
@@ -166,7 +166,7 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     conn: conn,
     admin: admin
   } do
-    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+    DealScout.Analytics.invalidate_delivery_metrics_cache(24)
 
     conn = log_in_user(conn, admin)
     {:ok, view, _html} = live(conn, ~p"/admin/system")
@@ -221,7 +221,7 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
     # Evaluate health monitor state
     DealScout.Admin.HealthMonitor.check_now()
 
-    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
+    DealScout.Analytics.invalidate_delivery_metrics_cache(24)
 
     conn = log_in_user(conn, admin)
     {:ok, view, _html} = live(conn, ~p"/admin/system")
@@ -261,8 +261,8 @@ defmodule DealScoutWeb.Admin.SystemLiveTest do
       inserted_at: now
     })
 
-    DealScout.Notifications.invalidate_delivery_metrics_cache(24)
-    DealScout.Notifications.invalidate_device_metrics_cache(24)
+    DealScout.Analytics.invalidate_delivery_metrics_cache(24)
+    DealScout.Analytics.invalidate_device_metrics_cache(24)
 
     conn = log_in_user(conn, admin)
     {:ok, view, _html} = live(conn, ~p"/admin/system")

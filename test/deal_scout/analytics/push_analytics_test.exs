@@ -1,15 +1,16 @@
-defmodule DealScout.Notifications.PushAnalyticsTest do
+defmodule DealScout.Analytics.PushAnalyticsTest do
   use DealScout.DataCase, async: false
 
   alias DealScout.Repo
   alias DealScout.Accounts.{Scope, User}
+  alias DealScout.Analytics
   alias DealScout.Notifications
   alias DealScout.Notifications.{PushDeliveryLog, PushSubscription}
   alias DealScout.Admin.HealthMonitor
 
   setup do
-    Notifications.invalidate_delivery_metrics_cache(24)
-    Notifications.invalidate_device_metrics_cache(24)
+    Analytics.invalidate_delivery_metrics_cache(24)
+    Analytics.invalidate_device_metrics_cache(24)
 
     user =
       Repo.insert!(%User{
@@ -69,7 +70,7 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
       inserted_at: two_days_ago
     })
 
-    metrics = Notifications.compute_delivery_metrics(24)
+    metrics = Analytics.compute_delivery_metrics(24)
 
     assert metrics.total == 3
     assert metrics.delivered_to_gateway == 2
@@ -116,15 +117,15 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
     Enum.chunk_every(entries, 500)
     |> Enum.each(&Repo.insert_all(PushDeliveryLog, &1))
 
-    Notifications.invalidate_delivery_metrics_cache(24)
+    Analytics.invalidate_delivery_metrics_cache(24)
 
     # Warmup query
-    _ = Notifications.compute_delivery_metrics(24)
+    _ = Analytics.compute_delivery_metrics(24)
 
     # Measure single-pass SQLite execution time
     {query_time_us, computed} =
       :timer.tc(fn ->
-        Notifications.compute_delivery_metrics(24)
+        Analytics.compute_delivery_metrics(24)
       end)
 
     query_ms = query_time_us / 1000
@@ -140,11 +141,11 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
 
     # Measure ETS cached access time
     # Prime cache
-    _ = Notifications.get_delivery_metrics(24)
+    _ = Analytics.get_delivery_metrics(24)
 
     {cache_time_us, cached} =
       :timer.tc(fn ->
-        Notifications.get_delivery_metrics(24)
+        Analytics.get_delivery_metrics(24)
       end)
 
     cache_ms = cache_time_us / 1000
@@ -219,24 +220,24 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
   end
 
   test "parse_user_agent/1 formats common browser and platform combinations" do
-    assert Notifications.parse_user_agent(
+    assert Analytics.parse_user_agent(
              "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
            ) == "Safari on iOS"
 
-    assert Notifications.parse_user_agent(
+    assert Analytics.parse_user_agent(
              "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.80 Mobile Safari/537.36"
            ) == "Chrome on Android"
 
-    assert Notifications.parse_user_agent(
+    assert Analytics.parse_user_agent(
              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0"
            ) == "Firefox on macOS"
 
-    assert Notifications.parse_user_agent(
+    assert Analytics.parse_user_agent(
              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.2420.65"
            ) == "Edge on Windows"
 
-    assert Notifications.parse_user_agent(nil) == "Web Browser"
-    assert Notifications.parse_user_agent("") == "Web Browser"
+    assert Analytics.parse_user_agent(nil) == "Web Browser"
+    assert Analytics.parse_user_agent("") == "Web Browser"
   end
 
   test "update_push_subscription_device_name/3 allows updating device nickname", %{user: user} do
@@ -327,7 +328,7 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
     end
 
     # Query global device metrics (admin mode)
-    metrics = Notifications.get_device_delivery_metrics(nil, 24)
+    metrics = Analytics.get_device_delivery_metrics(nil, 24)
 
     # Phone has 2 pending, Laptop has 0 pending. Phone must be sorted first!
     phone_metric = Enum.find(metrics, &(&1.subscription_id == sub_phone.id))
@@ -351,7 +352,7 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
 
     # Query scoped to user
     scope = %Scope{user: user}
-    user_metrics = Notifications.get_device_delivery_metrics(scope, 24)
+    user_metrics = Analytics.get_device_delivery_metrics(scope, 24)
     assert length(user_metrics) == 2
     assert hd(user_metrics).subscription_id == sub_phone.id
   end
@@ -402,16 +403,16 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
     {1500, nil} = Repo.insert_all(PushDeliveryLog, logs)
 
     # Invalidate cache
-    Notifications.invalidate_device_metrics_cache(24)
+    Analytics.invalidate_device_metrics_cache(24)
 
     # Warmup query
-    _ = Notifications.get_device_delivery_metrics(nil, 24)
-    Notifications.invalidate_device_metrics_cache(24)
+    _ = Analytics.get_device_delivery_metrics(nil, 24)
+    Analytics.invalidate_device_metrics_cache(24)
 
     # Measure uncached single-pass SQLite execution time on 1,500+ records
     {query_time_us, computed} =
       :timer.tc(fn ->
-        Notifications.get_device_delivery_metrics(nil, 24)
+        Analytics.get_device_delivery_metrics(nil, 24)
       end)
 
     query_ms = query_time_us / 1000
@@ -424,7 +425,7 @@ defmodule DealScout.Notifications.PushAnalyticsTest do
     # Measure ETS cached access time
     {cache_time_us, cached} =
       :timer.tc(fn ->
-        Notifications.get_device_delivery_metrics(nil, 24)
+        Analytics.get_device_delivery_metrics(nil, 24)
       end)
 
     cache_ms = cache_time_us / 1000

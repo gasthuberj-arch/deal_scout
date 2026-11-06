@@ -3,6 +3,7 @@ defmodule DealScout.Admin.HealthMonitorTest do
 
   alias DealScout.Admin.HealthMonitor
   alias DealScout.AccountsFixtures
+  alias DealScout.Analytics
   alias DealScout.Notifications
   alias DealScout.Notifications.WebPush.TestTransport
   alias DealScout.Feeds.Feed
@@ -253,7 +254,7 @@ defmodule DealScout.Admin.HealthMonitorTest do
         })
       end
 
-      Notifications.invalidate_delivery_metrics_cache(24)
+      Analytics.invalidate_delivery_metrics_cache(24)
 
       # Clear any previous deliveries
       TestTransport.reset()
@@ -290,7 +291,7 @@ defmodule DealScout.Admin.HealthMonitorTest do
         })
       end
 
-      Notifications.invalidate_delivery_metrics_cache(24)
+      Analytics.invalidate_delivery_metrics_cache(24)
 
       alarms = HealthMonitor.check_now(mon_name)
       assert Enum.find(alarms, &(&1.type == :push_delivery_degraded)) == nil
